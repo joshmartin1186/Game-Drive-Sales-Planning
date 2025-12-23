@@ -1,48 +1,93 @@
 export default function HomePage() {
   return (
     <div>
-      {/* Most basic Tailwind test */}
-      <div className="bg-red-500 p-8 m-4 text-white text-center">
-        <h1 className="text-4xl font-bold">🔥 TAILWIND TEST 🔥</h1>
-        <p className="text-xl mt-4">If this has a red background and large text, Tailwind is working!</p>
+      {/* Direct CSS test - bypass Tailwind completely */}
+      <div style={{
+        backgroundColor: '#ef4444',
+        padding: '32px',
+        margin: '16px',
+        color: 'white',
+        textAlign: 'center',
+        borderRadius: '8px',
+        boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
+      }}>
+        <h1 style={{fontSize: '36px', fontWeight: 'bold'}}>
+          🔥 DIRECT CSS TEST 🔥
+        </h1>
+        <p style={{fontSize: '20px', marginTop: '16px'}}>
+          If this is red and styled, CSS works but Tailwind doesn't!
+        </p>
       </div>
 
-      {/* Secondary test */}
-      <div className="bg-blue-600 p-6 m-4 text-white rounded-lg shadow-lg">
-        <h2 className="text-2xl font-semibold">Secondary Test</h2>
-        <p className="mt-2">Blue background + rounded corners + shadow</p>
+      {/* Secondary CSS test */}
+      <div style={{
+        backgroundColor: '#2563eb',
+        padding: '24px',
+        margin: '16px',
+        color: 'white',
+        borderRadius: '12px'
+      }}>
+        <h2 style={{fontSize: '24px', fontWeight: '600'}}>Direct CSS Secondary Test</h2>
+        <p style={{marginTop: '8px'}}>Blue background with inline styles</p>
       </div>
 
-      {/* Grid test */}
-      <div className="grid grid-cols-3 gap-4 p-4">
-        <div className="bg-green-500 h-20 rounded flex items-center justify-center text-white font-bold">
-          Green
+      {/* CSS Grid test */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: '1fr 1fr 1fr',
+        gap: '16px',
+        padding: '16px'
+      }}>
+        <div style={{
+          backgroundColor: '#10b981',
+          height: '80px',
+          borderRadius: '8px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: 'white',
+          fontWeight: 'bold'
+        }}>
+          Green Box
         </div>
-        <div className="bg-yellow-500 h-20 rounded flex items-center justify-center text-white font-bold">
-          Yellow  
+        <div style={{
+          backgroundColor: '#eab308',
+          height: '80px',
+          borderRadius: '8px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: 'white',
+          fontWeight: 'bold'
+        }}>
+          Yellow Box
         </div>
-        <div className="bg-purple-500 h-20 rounded flex items-center justify-center text-white font-bold">
-          Purple
+        <div style={{
+          backgroundColor: '#8b5cf6',
+          height: '80px',
+          borderRadius: '8px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: 'white',
+          fontWeight: 'bold'
+        }}>
+          Purple Box
         </div>
       </div>
 
-      {/* Text size test */}
-      <div className="p-4 space-y-2">
-        <div className="text-xs">Extra Small Text (text-xs)</div>
-        <div className="text-sm">Small Text (text-sm)</div>
-        <div className="text-base">Base Text (text-base)</div>
-        <div className="text-lg">Large Text (text-lg)</div>
-        <div className="text-xl">Extra Large Text (text-xl)</div>
-        <div className="text-2xl font-bold">2XL Bold Text (text-2xl)</div>
-      </div>
-
-      {/* Debug info */}
-      <div className="p-4 bg-gray-100 border-l-4 border-blue-500 m-4">
-        <h3 className="font-bold text-lg">Debug Information</h3>
-        <ul className="mt-2 space-y-1 text-sm">
-          <li>• If you see styled boxes with colors: ✅ Tailwind is working</li>
-          <li>• If everything looks plain/unstyled: ❌ CSS compilation issue</li>
-          <li>• Red box should be very obvious if working</li>
+      {/* Diagnosis */}
+      <div style={{
+        padding: '16px',
+        backgroundColor: '#f3f4f6',
+        borderLeft: '4px solid #3b82f6',
+        margin: '16px'
+      }}>
+        <h3 style={{fontWeight: 'bold', fontSize: '18px'}}>Diagnosis</h3>
+        <ul style={{marginTop: '8px', fontSize: '14px', lineHeight: '1.5'}}>
+          <li>• If you see red/blue/colored boxes: ✅ CSS works, Tailwind is the problem</li>
+          <li>• If still plain text: ❌ Deeper CSS compilation issue</li>
+          <li>• This bypasses Tailwind completely using inline styles</li>
         </ul>
       </div>
     </div>
