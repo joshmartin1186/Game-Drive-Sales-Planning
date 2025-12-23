@@ -1,0 +1,431 @@
+/* GameDrive Sales Planning - CSS Module */
+
+.container {
+  padding: 24px;
+  max-width: 1400px;
+  margin: 0 auto;
+  background-color: #f8fafc;
+  min-height: 100vh;
+}
+
+/* Stats Grid */
+.statsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 20px;
+  margin-bottom: 32px;
+}
+
+.statCard {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  border: 1px solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.statCard:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+.statIcon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  color: white;
+  font-weight: bold;
+}
+
+.statContent {
+  flex: 1;
+}
+
+.statContent h3 {
+  margin: 0 0 8px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.statValue {
+  margin: 0 0 4px 0;
+  font-size: 32px;
+  font-weight: 700;
+  color: #1e293b;
+  line-height: 1;
+}
+
+.statChange {
+  font-size: 14px;
+  color: #64748b;
+}
+
+/* Timeline Container */
+.timelineContainer {
+  background: white;
+  border-radius: 16px;
+  padding: 32px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  border: 1px solid #e2e8f0;
+  margin-bottom: 32px;
+}
+
+.timelineHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 2px solid #e2e8f0;
+}
+
+.timelineHeader h2 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.timelineControls {
+  display: flex;
+  gap: 12px;
+}
+
+.controlButton {
+  padding: 10px 16px;
+  border: 2px solid #3b82f6;
+  background: white;
+  color: #3b82f6;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.controlButton:hover {
+  background: #3b82f6;
+  color: white;
+  transform: translateY(-1px);
+}
+
+/* Month Grid */
+.monthGrid {
+  display: grid;
+  grid-template-columns: 200px repeat(12, 1fr);
+  gap: 1px;
+  margin-bottom: 16px;
+  background: #e2e8f0;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.monthHeader {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 12px 8px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.monthHeader:first-child {
+  background: #1e293b;
+}
+
+/* Game Rows */
+.gameRows {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: #e2e8f0;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.gameRow {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  background: white;
+  min-height: 80px;
+}
+
+.gameInfo {
+  display: flex;
+  align-items: center;
+  padding: 16px;
+  gap: 12px;
+  background: #f8fafc;
+  border-right: 1px solid #e2e8f0;
+}
+
+.gameIcon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  color: white;
+  font-size: 14px;
+}
+
+.gameName {
+  font-weight: 700;
+  font-size: 16px;
+  color: #1e293b;
+  margin-bottom: 2px;
+}
+
+.gameClient {
+  font-size: 12px;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.timelineRow {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 4px;
+  padding: 16px;
+  align-items: center;
+  position: relative;
+}
+
+/* Sale Blocks - CRITICAL: Angled design per GameDrive requirements */
+.saleBlock {
+  padding: 12px 8px;
+  border-radius: 8px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
+  position: relative;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  
+  /* Angled corners - GameDrive visual requirement */
+  clip-path: polygon(8px 0%, 100% 0%, calc(100% - 8px) 100%, 0% 100%);
+  
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.saleBlock:hover {
+  transform: scale(1.05) translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+  z-index: 10;
+  position: relative;
+}
+
+.cooldownBlock {
+  padding: 12px 8px;
+  border-radius: 4px;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 500;
+  opacity: 0.7;
+  border: 2px dashed #94a3b8;
+  color: #64748b;
+}
+
+/* Upcoming Sales */
+.upcomingContainer {
+  background: white;
+  border-radius: 16px;
+  padding: 32px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  border: 1px solid #e2e8f0;
+  margin-bottom: 32px;
+}
+
+.upcomingContainer h2 {
+  margin: 0 0 20px 0;
+  font-size: 20px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.salesGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 16px;
+}
+
+.saleCard {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 20px;
+  transition: all 0.2s ease;
+}
+
+.saleCard:hover {
+  border-color: #3b82f6;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
+}
+
+.saleHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.saleHeader strong {
+  font-size: 16px;
+  color: #1e293b;
+}
+
+.statusBadge {
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.planned {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.submitted {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.confirmed {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.saleDetails {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+  color: #64748b;
+}
+
+/* Platform Legend */
+.platformLegend {
+  background: white;
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  border: 1px solid #e2e8f0;
+  margin-bottom: 24px;
+}
+
+.platformLegend h3 {
+  margin: 0 0 16px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.legendGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+.legendItem {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 14px;
+  color: #64748b;
+}
+
+.legendColor {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+}
+
+/* Success Message */
+.successMessage {
+  background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+  border: 2px solid #10b981;
+  border-radius: 16px;
+  padding: 24px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.successIcon {
+  font-size: 32px;
+  line-height: 1;
+}
+
+.successMessage h3 {
+  margin: 0 0 8px 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: #065f46;
+}
+
+.successMessage p {
+  margin: 0;
+  font-size: 14px;
+  color: #047857;
+  line-height: 1.5;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .container {
+    padding: 16px;
+  }
+  
+  .timelineHeader {
+    flex-direction: column;
+    gap: 16px;
+    align-items: stretch;
+  }
+  
+  .timelineControls {
+    flex-direction: column;
+  }
+  
+  .monthGrid {
+    grid-template-columns: 150px repeat(12, 60px);
+    overflow-x: auto;
+  }
+  
+  .gameRow {
+    grid-template-columns: 150px 1fr;
+  }
+  
+  .timelineRow {
+    grid-template-columns: repeat(12, 60px);
+    overflow-x: auto;
+  }
+}
+
+@media (max-width: 480px) {
+  .statsGrid {
+    grid-template-columns: 1fr;
+  }
+  
+  .salesGrid {
+    grid-template-columns: 1fr;
+  }
+  
+  .legendGrid {
+    grid-template-columns: 1fr;
+  }
+}
