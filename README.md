@@ -1,8 +1,10 @@
-# GameDrive Sales Planning Tool
+# GameDrive Sales Planning Tool - Live Demo Active 🚀
 
 ## Overview
 
 Professional sales planning platform for game publishers managing Steam, PlayStation, Nintendo, Xbox, and Epic sales campaigns. Built specifically for Game Drive (Utrecht, Netherlands) with multi-client architecture and platform cooldown management.
+
+**🔥 LIVE DEMO: https://gamedrivesalesplanning-two.vercel.app/**
 
 ## Features
 
