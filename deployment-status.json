@@ -1,0 +1,11 @@
+{
+  "timestamp": "2025-12-23T20:46:00Z",
+  "deployment_test": "VERCEL_REBUILD_TRIGGER_123456",
+  "changes": [
+    "Added red deployment test banner",
+    "Simplified layout to test Tailwind",
+    "Updated README with live demo link"
+  ],
+  "expected_behavior": "Red banner should appear at top of page",
+  "status": "Testing if Vercel deployments are working"
+}
