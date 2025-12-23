@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Deployment Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            text-align: center;
+            padding: 50px;
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+        .banner {
+            background: #ff0000;
+            color: white;
+            padding: 20px;
+            font-size: 24px;
+            font-weight: bold;
+            border-radius: 10px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        }
+        .timestamp {
+            background: rgba(255,255,255,0.2);
+            padding: 15px;
+            border-radius: 10px;
+            font-size: 18px;
+        }
+    </style>
+</head>
+<body>
+    <div class="banner">
+        🚨 DEPLOYMENT TEST SUCCESSFUL 🚨<br>
+        If you see this, Vercel deployments are working!
+    </div>
+    <div class="timestamp">
+        Deployed: December 23, 2025 at 8:51 PM UTC<br>
+        Commit: 9f265dc (Fix import error)
+    </div>
+    <p>This test page proves that GitHub → Vercel deployments are functioning.</p>
+    <p>Next step: Debug why the main Next.js app isn't rendering properly.</p>
+</body>
+</html>
