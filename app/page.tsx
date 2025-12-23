@@ -1,4 +1,4 @@
-import { GanttChart } from './components/GanttChart'
+import GanttChart from './components/GanttChart'
 
 export default function HomePage() {
   return (
