@@ -21,7 +21,7 @@ export default function RootLayout({
       <head>
         <link rel="icon" href="/favicon.ico" />
       </head>
-      <body className={inter.className}>
+      <body className={`${inter.className} antialiased`}>
         <div className="min-h-screen bg-gray-50">
           {/* Top Navigation */}
           <Navbar />
