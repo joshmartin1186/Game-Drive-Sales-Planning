@@ -186,7 +186,7 @@ export default function GameDriveDashboard() {
           <div className={styles.statContent}>
             <h3>Products</h3>
             <p className={styles.statValue}>{products.length}</p>
-            <span className={styles.statChange}>Games &amp; DLCs</span>
+            <span className={styles.statChange}>Games and DLCs</span>
           </div>
         </div>
 
@@ -211,7 +211,7 @@ export default function GameDriveDashboard() {
         </div>
       </div>
 
-      {/* View Toggle & Actions */}
+      {/* View Toggle and Actions */}
       <div className={styles.toolbar}>
         <div className={styles.viewToggle}>
           <button 
@@ -255,6 +255,7 @@ export default function GameDriveDashboard() {
         ) : (
           <SalesTable
             sales={sales}
+            platforms={platforms}
             onDelete={handleSaleDelete}
           />
         )}
