@@ -103,7 +103,7 @@ export default function AddSaleModal({
         discount_percentage: discountPercentage,
         sale_name: saleName || 'Custom Sale',
         sale_type: saleType,
-        status: 'draft',
+        status: 'planned',
         goal_type: goalType || undefined,
         notes: notes || undefined
       })
