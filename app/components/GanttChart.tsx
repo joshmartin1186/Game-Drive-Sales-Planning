@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo, useRef, useCallback } from 'react'
-import { DndContext, DragEndEvent, DragStartEvent, DragMoveEvent, useSensor, useSensors, PointerSensor, DragOverlay } from '@dnd-kit/core'
+import { DndContext, DragEndEvent, DragStartEvent, useSensor, useSensors, PointerSensor, DragOverlay } from '@dnd-kit/core'
 import { format, addDays, differenceInDays, parseISO, startOfMonth, endOfMonth, eachDayOfInterval } from 'date-fns'
 import { Sale, Platform, Product, Game, Client, SaleWithDetails, TimelineEvent } from '@/lib/types'
 import { validateSale } from '@/lib/validation'
@@ -17,6 +17,7 @@ interface GanttChartProps {
   monthCount: number
   onSaleUpdate: (saleId: string, updates: Partial<Sale>) => Promise<void>
   onSaleDelete: (saleId: string) => Promise<void>
+  onSaleEdit: (sale: SaleWithDetails) => void
   allSales: SaleWithDetails[]
 }
 
@@ -33,18 +34,18 @@ export default function GanttChart({
   monthCount,
   onSaleUpdate,
   onSaleDelete,
+  onSaleEdit,
   allSales
 }: GanttChartProps) {
   const [draggedSale, setDraggedSale] = useState<SaleWithDetails | null>(null)
-  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
   const [validationError, setValidationError] = useState<string | null>(null)
-  const [hoveredDay, setHoveredDay] = useState<Date | null>(null)
+  const [optimisticUpdates, setOptimisticUpdates] = useState<Record<string, { startDate: string; endDate: string }>>({})
   const containerRef = useRef<HTMLDivElement>(null)
   
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
-        distance: 5,
+        distance: 8,
       },
     })
   )
@@ -101,19 +102,27 @@ export default function GanttChart({
     return daysDiff * DAY_WIDTH
   }, [])
   
-  const getDateFromPosition = useCallback((xPos: number): Date => {
-    const dayIndex = Math.round(xPos / DAY_WIDTH)
-    return addDays(days[0], Math.max(0, Math.min(dayIndex, totalDays - 1)))
-  }, [days, totalDays])
-  
+  // Get sales for a product, applying optimistic updates
   const getSalesForProduct = useCallback((productId: string) => {
-    return sales.filter(sale => sale.product_id === productId)
-  }, [sales])
+    return sales
+      .filter(sale => sale.product_id === productId)
+      .map(sale => {
+        const optimistic = optimisticUpdates[sale.id]
+        if (optimistic) {
+          return {
+            ...sale,
+            start_date: optimistic.startDate,
+            end_date: optimistic.endDate
+          }
+        }
+        return sale
+      })
+  }, [sales, optimisticUpdates])
   
   const getCooldownForSale = useCallback((sale: SaleWithDetails) => {
     if (!sale.platform) return null
     
-    if (sale.sale_type === 'seasonal' && sale.platform.special_sales_no_cooldown) {
+    if ((sale.sale_type === 'seasonal' || sale.sale_type === 'special') && sale.platform.special_sales_no_cooldown) {
       return null
     }
     
@@ -159,6 +168,8 @@ export default function GanttChart({
     const currentEnd = parseISO(draggedSale.end_date)
     const newStart = addDays(currentStart, daysMoved)
     const newEnd = addDays(currentEnd, daysMoved)
+    const newStartStr = format(newStart, 'yyyy-MM-dd')
+    const newEndStr = format(newEnd, 'yyyy-MM-dd')
     
     const platform = platforms.find(p => p.id === draggedSale.platform_id)
     if (!platform) {
@@ -171,8 +182,8 @@ export default function GanttChart({
       {
         product_id: draggedSale.product_id,
         platform_id: draggedSale.platform_id,
-        start_date: format(newStart, 'yyyy-MM-dd'),
-        end_date: format(newEnd, 'yyyy-MM-dd'),
+        start_date: newStartStr,
+        end_date: newEndStr,
         sale_type: draggedSale.sale_type
       },
       allSales,
@@ -187,12 +198,39 @@ export default function GanttChart({
       return
     }
     
-    await onSaleUpdate(draggedSale.id, {
-      start_date: format(newStart, 'yyyy-MM-dd'),
-      end_date: format(newEnd, 'yyyy-MM-dd')
-    })
+    // Optimistic update - immediately show new position
+    setOptimisticUpdates(prev => ({
+      ...prev,
+      [draggedSale.id]: { startDate: newStartStr, endDate: newEndStr }
+    }))
     
     setDraggedSale(null)
+    
+    try {
+      // Update in background
+      await onSaleUpdate(draggedSale.id, {
+        start_date: newStartStr,
+        end_date: newEndStr
+      })
+    } catch (err) {
+      // Revert optimistic update on error
+      setOptimisticUpdates(prev => {
+        const updated = { ...prev }
+        delete updated[draggedSale.id]
+        return updated
+      })
+      setValidationError('Failed to save - position reverted')
+      setTimeout(() => setValidationError(null), 3000)
+    }
+    
+    // Clear optimistic update after data refresh
+    setTimeout(() => {
+      setOptimisticUpdates(prev => {
+        const updated = { ...prev }
+        delete updated[draggedSale.id]
+        return updated
+      })
+    }, 500)
   }
   
   const totalWidth = totalDays * DAY_WIDTH
@@ -310,6 +348,7 @@ export default function GanttChart({
                                   sale={sale}
                                   left={left}
                                   width={width}
+                                  onEdit={onSaleEdit}
                                   onDelete={onSaleDelete}
                                 />
                               </div>
