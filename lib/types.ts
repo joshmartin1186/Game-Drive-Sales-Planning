@@ -46,8 +46,10 @@ export interface Sale {
   end_date: string
   discount_percentage?: number
   sale_name?: string
+  // Database constraint: 'custom' | 'seasonal' | 'festival' | 'special'
   sale_type: 'custom' | 'seasonal' | 'festival' | 'special'
-  status: 'draft' | 'planned' | 'submitted' | 'confirmed' | 'live' | 'ended'
+  // Database constraint: 'planned' | 'submitted' | 'confirmed' | 'live' | 'ended'
+  status: 'planned' | 'submitted' | 'confirmed' | 'live' | 'ended'
   goal_type?: 'acquisition' | 'visibility' | 'event' | 'revenue'
   notes?: string
   created_at: string
