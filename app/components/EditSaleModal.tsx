@@ -250,7 +250,7 @@ export default function EditSaleModal({
                 type="text" 
                 value={saleName}
                 onChange={e => setSaleName(e.target.value)}
-                placeholder="e.g., Winter Sale, Daily Deal"
+                placeholder="Custom Sale"
               />
             </div>
             
@@ -326,9 +326,8 @@ export default function EditSaleModal({
               type="button" 
               className={styles.deleteBtn} 
               onClick={handleDelete}
-              style={{ marginRight: 'auto', backgroundColor: '#ef4444' }}
             >
-              🗑️ Delete
+              Delete
             </button>
             <button type="button" className={styles.cancelBtn} onClick={onClose}>
               Cancel
