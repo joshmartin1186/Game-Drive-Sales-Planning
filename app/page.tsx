@@ -5,6 +5,7 @@ import { createClient } from '@supabase/supabase-js'
 import GanttChart from './components/GanttChart'
 import SalesTable from './components/SalesTable'
 import AddSaleModal from './components/AddSaleModal'
+import EditSaleModal from './components/EditSaleModal'
 import ProductManager from './components/ProductManager'
 import styles from './page.module.css'
 import { Sale, Platform, Product, Game, Client, SaleWithDetails } from '@/lib/types'
@@ -24,6 +25,7 @@ export default function GameDriveDashboard() {
   const [error, setError] = useState<string | null>(null)
   const [showAddModal, setShowAddModal] = useState(false)
   const [showProductManager, setShowProductManager] = useState(false)
+  const [editingSale, setEditingSale] = useState<SaleWithDetails | null>(null)
   const [viewMode, setViewMode] = useState<'gantt' | 'table'>('gantt')
   
   // Filter state
@@ -112,7 +114,15 @@ export default function GameDriveDashboard() {
     }
   }
 
+  // Optimistic update for sales - updates local state immediately
   async function handleSaleUpdate(saleId: string, updates: Partial<Sale>) {
+    // Optimistically update local state first
+    setSales(prev => prev.map(sale => 
+      sale.id === saleId 
+        ? { ...sale, ...updates }
+        : sale
+    ))
+    
     try {
       const { error } = await supabase
         .from('sales')
@@ -121,16 +131,41 @@ export default function GameDriveDashboard() {
       
       if (error) throw error
       
-      // Refresh data
-      await fetchData()
+      // Silently refresh to get any server-side changes
+      const { data: updatedSale } = await supabase
+        .from('sales')
+        .select(`
+          *,
+          product:products(
+            *,
+            game:games(
+              *,
+              client:clients(*)
+            )
+          ),
+          platform:platforms(*)
+        `)
+        .eq('id', saleId)
+        .single()
+      
+      if (updatedSale) {
+        setSales(prev => prev.map(sale => 
+          sale.id === saleId ? updatedSale : sale
+        ))
+      }
     } catch (err: any) {
       console.error('Error updating sale:', err)
       setError(err.message)
+      // Refresh data on error to restore correct state
+      await fetchData()
     }
   }
 
   async function handleSaleDelete(saleId: string) {
     if (!confirm('Are you sure you want to delete this sale?')) return
+    
+    // Optimistically remove from local state
+    setSales(prev => prev.filter(sale => sale.id !== saleId))
     
     try {
       const { error } = await supabase
@@ -139,25 +174,41 @@ export default function GameDriveDashboard() {
         .eq('id', saleId)
       
       if (error) throw error
-      
-      // Refresh data
-      await fetchData()
     } catch (err: any) {
       console.error('Error deleting sale:', err)
       setError(err.message)
+      // Refresh data on error to restore
+      await fetchData()
     }
   }
 
   async function handleSaleCreate(sale: Omit<Sale, 'id' | 'created_at'>) {
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('sales')
         .insert([sale])
+        .select(`
+          *,
+          product:products(
+            *,
+            game:games(
+              *,
+              client:clients(*)
+            )
+          ),
+          platform:platforms(*)
+        `)
+        .single()
       
       if (error) throw error
       
-      // Refresh data and close modal
-      await fetchData()
+      // Add to local state
+      if (data) {
+        setSales(prev => [...prev, data].sort((a, b) => 
+          new Date(a.start_date).getTime() - new Date(b.start_date).getTime()
+        ))
+      }
+      
       setShowAddModal(false)
     } catch (err: any) {
       console.error('Error creating sale:', err)
@@ -165,14 +216,20 @@ export default function GameDriveDashboard() {
     }
   }
 
+  function handleSaleEdit(sale: SaleWithDetails) {
+    setEditingSale(sale)
+  }
+
   async function handleClientCreate(client: Omit<Client, 'id' | 'created_at'>) {
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('clients')
         .insert([client])
+        .select()
+        .single()
       
       if (error) throw error
-      await fetchData()
+      if (data) setClients(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)))
     } catch (err: any) {
       console.error('Error creating client:', err)
       throw err
@@ -181,12 +238,14 @@ export default function GameDriveDashboard() {
 
   async function handleGameCreate(game: Omit<Game, 'id' | 'created_at'>) {
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('games')
         .insert([game])
+        .select(`*, client:clients(*)`)
+        .single()
       
       if (error) throw error
-      await fetchData()
+      if (data) setGames(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)))
     } catch (err: any) {
       console.error('Error creating game:', err)
       throw err
@@ -195,12 +254,14 @@ export default function GameDriveDashboard() {
 
   async function handleProductCreate(product: Omit<Product, 'id' | 'created_at'>) {
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('products')
         .insert([product])
+        .select(`*, game:games(*, client:clients(*))`)
+        .single()
       
       if (error) throw error
-      await fetchData()
+      if (data) setProducts(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)))
     } catch (err: any) {
       console.error('Error creating product:', err)
       throw err
@@ -217,7 +278,12 @@ export default function GameDriveDashboard() {
       if (error) throw error
       // Reset filter if deleted client was selected
       if (filterClientId === clientId) setFilterClientId('')
-      await fetchData()
+      setClients(prev => prev.filter(c => c.id !== clientId))
+      // Remove associated games, products, and sales from state
+      const deletedGameIds = games.filter(g => g.client_id === clientId).map(g => g.id)
+      setGames(prev => prev.filter(g => g.client_id !== clientId))
+      setProducts(prev => prev.filter(p => !deletedGameIds.includes(p.game_id)))
+      setSales(prev => prev.filter(s => !deletedGameIds.includes(s.product?.game_id || '')))
     } catch (err: any) {
       console.error('Error deleting client:', err)
       throw err
@@ -234,7 +300,11 @@ export default function GameDriveDashboard() {
       if (error) throw error
       // Reset filter if deleted game was selected
       if (filterGameId === gameId) setFilterGameId('')
-      await fetchData()
+      setGames(prev => prev.filter(g => g.id !== gameId))
+      // Remove associated products and sales
+      const deletedProductIds = products.filter(p => p.game_id === gameId).map(p => p.id)
+      setProducts(prev => prev.filter(p => p.game_id !== gameId))
+      setSales(prev => prev.filter(s => !deletedProductIds.includes(s.product_id)))
     } catch (err: any) {
       console.error('Error deleting game:', err)
       throw err
@@ -249,7 +319,8 @@ export default function GameDriveDashboard() {
         .eq('id', productId)
       
       if (error) throw error
-      await fetchData()
+      setProducts(prev => prev.filter(p => p.id !== productId))
+      setSales(prev => prev.filter(s => s.product_id !== productId))
     } catch (err: any) {
       console.error('Error deleting product:', err)
       throw err
@@ -449,6 +520,7 @@ export default function GameDriveDashboard() {
             monthCount={monthCount}
             onSaleUpdate={handleSaleUpdate}
             onSaleDelete={handleSaleDelete}
+            onSaleEdit={handleSaleEdit}
             allSales={sales}
           />
         ) : (
@@ -456,6 +528,7 @@ export default function GameDriveDashboard() {
             sales={filteredSales}
             platforms={platforms}
             onDelete={handleSaleDelete}
+            onEdit={handleSaleEdit}
           />
         )}
       </div>
@@ -486,6 +559,19 @@ export default function GameDriveDashboard() {
           existingSales={sales}
           onSave={handleSaleCreate}
           onClose={() => setShowAddModal(false)}
+        />
+      )}
+
+      {/* Edit Sale Modal */}
+      {editingSale && (
+        <EditSaleModal
+          sale={editingSale}
+          products={products}
+          platforms={platforms}
+          existingSales={sales}
+          onSave={handleSaleUpdate}
+          onDelete={handleSaleDelete}
+          onClose={() => setEditingSale(null)}
         />
       )}
 
