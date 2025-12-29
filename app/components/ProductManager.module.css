@@ -73,6 +73,64 @@
   font-size: 1rem;
 }
 
+/* Delete confirmation dialog */
+.confirmDelete {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  padding: 16px 24px;
+  margin: 16px 24px 0;
+  border-radius: 8px;
+}
+
+.confirmDelete p {
+  margin: 0 0 8px;
+  color: #991b1b;
+}
+
+.confirmDelete .warning {
+  font-size: 0.75rem;
+  color: #b91c1c;
+  margin-bottom: 12px;
+}
+
+.confirmActions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.cancelBtn {
+  padding: 8px 16px;
+  background: white;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.cancelBtn:hover {
+  background: #f3f4f6;
+}
+
+.deleteConfirmBtn {
+  padding: 8px 16px;
+  background: #dc2626;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.deleteConfirmBtn:hover:not(:disabled) {
+  background: #b91c1c;
+}
+
+.deleteConfirmBtn:disabled {
+  background: #f87171;
+  cursor: not-allowed;
+}
+
 .tabs {
   display: flex;
   gap: 4px;
@@ -120,7 +178,7 @@
   color: #6b7280;
 }
 
-.warning {
+.warningBox {
   background: #fef3c7;
   color: #92400e;
   padding: 16px;
@@ -214,6 +272,9 @@
   border-radius: 6px;
   margin-bottom: 8px;
   font-size: 0.875rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
 .list li:last-child {
@@ -222,6 +283,26 @@
 
 .list li strong {
   color: #1f2937;
+}
+
+.itemInfo {
+  flex: 1;
+}
+
+.deleteBtn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 1rem;
+  opacity: 0.6;
+  transition: all 0.2s;
+}
+
+.deleteBtn:hover {
+  background: #fee2e2;
+  opacity: 1;
 }
 
 .meta {
