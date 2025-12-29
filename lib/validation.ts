@@ -7,7 +7,7 @@ export function validateSale(
     platform_id: string
     start_date: string
     end_date: string
-    sale_type?: 'regular' | 'seasonal'
+    sale_type?: 'custom' | 'seasonal' | 'festival' | 'special'
   },
   existingSales: Sale[],
   platform: Platform,
@@ -39,8 +39,8 @@ export function validateSale(
     // Cooldown is from END of sale
     const cooldownDays = platform.cooldown_days
     
-    // If seasonal sale and platform allows no cooldown for special sales, skip cooldown check
-    if (newSale.sale_type === 'seasonal' && platform.special_sales_no_cooldown) {
+    // If seasonal/special sale and platform allows no cooldown for special sales, skip cooldown check
+    if ((newSale.sale_type === 'seasonal' || newSale.sale_type === 'special') && platform.special_sales_no_cooldown) {
       continue
     }
     
