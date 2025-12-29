@@ -56,8 +56,8 @@ export default function ProductManager({
     try {
       await onClientCreate({
         name: clientName.trim(),
-        email: clientEmail.trim() || null,
-        steam_api_key: null
+        email: clientEmail.trim() || undefined,
+        steam_api_key: undefined
       })
       setClientName('')
       setClientEmail('')
@@ -81,7 +81,7 @@ export default function ProductManager({
       await onGameCreate({
         name: gameName.trim(),
         client_id: gameClientId,
-        steam_app_id: steamAppId.trim() || null
+        steam_app_id: steamAppId.trim() || undefined
       })
       setGameName('')
       setSteamAppId('')
@@ -106,7 +106,7 @@ export default function ProductManager({
         name: productName.trim(),
         game_id: productGameId,
         product_type: productType,
-        steam_product_id: steamProductId.trim() || null
+        steam_product_id: steamProductId.trim() || undefined
       })
       setProductName('')
       setSteamProductId('')
