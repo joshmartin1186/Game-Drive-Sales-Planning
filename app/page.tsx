@@ -5,8 +5,9 @@ import { createClient } from '@supabase/supabase-js'
 import GanttChart from './components/GanttChart'
 import SalesTable from './components/SalesTable'
 import AddSaleModal from './components/AddSaleModal'
+import ProductManager from './components/ProductManager'
 import styles from './page.module.css'
-import { Sale, Platform, Product, Game, Client, SaleWithDetails, TimelineEvent } from '@/lib/types'
+import { Sale, Platform, Product, Game, Client, SaleWithDetails } from '@/lib/types'
 
 // Initialize Supabase client
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
@@ -15,11 +16,14 @@ const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
 export default function GameDriveDashboard() {
   const [sales, setSales] = useState<SaleWithDetails[]>([])
+  const [clients, setClients] = useState<Client[]>([])
+  const [games, setGames] = useState<(Game & { client: Client })[]>([])
   const [products, setProducts] = useState<(Product & { game: Game & { client: Client } })[]>([])
   const [platforms, setPlatforms] = useState<Platform[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [showAddModal, setShowAddModal] = useState(false)
+  const [showProductManager, setShowProductManager] = useState(false)
   const [viewMode, setViewMode] = useState<'gantt' | 'table'>('gantt')
 
   // Fetch all data on mount
@@ -40,6 +44,27 @@ export default function GameDriveDashboard() {
       
       if (platformsError) throw platformsError
       setPlatforms(platformsData || [])
+
+      // Fetch clients
+      const { data: clientsData, error: clientsError } = await supabase
+        .from('clients')
+        .select('*')
+        .order('name')
+      
+      if (clientsError) throw clientsError
+      setClients(clientsData || [])
+
+      // Fetch games with clients
+      const { data: gamesData, error: gamesError } = await supabase
+        .from('games')
+        .select(`
+          *,
+          client:clients(*)
+        `)
+        .order('name')
+      
+      if (gamesError) throw gamesError
+      setGames(gamesData || [])
 
       // Fetch products with games and clients
       const { data: productsData, error: productsError } = await supabase
@@ -133,6 +158,48 @@ export default function GameDriveDashboard() {
     } catch (err: any) {
       console.error('Error creating sale:', err)
       setError(err.message)
+    }
+  }
+
+  async function handleClientCreate(client: Omit<Client, 'id' | 'created_at'>) {
+    try {
+      const { error } = await supabase
+        .from('clients')
+        .insert([client])
+      
+      if (error) throw error
+      await fetchData()
+    } catch (err: any) {
+      console.error('Error creating client:', err)
+      throw err
+    }
+  }
+
+  async function handleGameCreate(game: Omit<Game, 'id' | 'created_at'>) {
+    try {
+      const { error } = await supabase
+        .from('games')
+        .insert([game])
+      
+      if (error) throw error
+      await fetchData()
+    } catch (err: any) {
+      console.error('Error creating game:', err)
+      throw err
+    }
+  }
+
+  async function handleProductCreate(product: Omit<Product, 'id' | 'created_at'>) {
+    try {
+      const { error } = await supabase
+        .from('products')
+        .insert([product])
+      
+      if (error) throw error
+      await fetchData()
+    } catch (err: any) {
+      console.error('Error creating product:', err)
+      throw err
     }
   }
 
@@ -232,6 +299,9 @@ export default function GameDriveDashboard() {
           <button className={styles.primaryBtn} onClick={() => setShowAddModal(true)}>
             + Add Sale
           </button>
+          <button className={styles.secondaryBtn} onClick={() => setShowProductManager(true)}>
+            ⚙️ Manage Products
+          </button>
           <button className={styles.secondaryBtn} onClick={fetchData}>
             🔄 Refresh
           </button>
@@ -287,6 +357,19 @@ export default function GameDriveDashboard() {
           existingSales={sales}
           onSave={handleSaleCreate}
           onClose={() => setShowAddModal(false)}
+        />
+      )}
+
+      {/* Product Manager Modal */}
+      {showProductManager && (
+        <ProductManager
+          clients={clients}
+          games={games}
+          products={products}
+          onClientCreate={handleClientCreate}
+          onGameCreate={handleGameCreate}
+          onProductCreate={handleProductCreate}
+          onClose={() => setShowProductManager(false)}
         />
       )}
     </div>
