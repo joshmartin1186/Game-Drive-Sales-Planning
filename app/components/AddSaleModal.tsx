@@ -16,6 +16,9 @@ interface AddSaleModalProps {
   initialProductId?: string
 }
 
+// Database constraint: 'custom' | 'seasonal' | 'festival' | 'special'
+type SaleType = 'custom' | 'seasonal' | 'festival' | 'special'
+
 export default function AddSaleModal({
   products,
   platforms,
@@ -33,7 +36,7 @@ export default function AddSaleModal({
   const [duration, setDuration] = useState(7)
   const [discountPercentage, setDiscountPercentage] = useState(50)
   const [saleName, setSaleName] = useState('')
-  const [saleType, setSaleType] = useState<'regular' | 'seasonal'>('regular')
+  const [saleType, setSaleType] = useState<SaleType>('custom')
   const [goalType, setGoalType] = useState<'acquisition' | 'visibility' | 'event' | 'revenue' | ''>('')
   const [notes, setNotes] = useState('')
   const [saving, setSaving] = useState(false)
@@ -239,13 +242,15 @@ export default function AddSaleModal({
               <label>Sale Type</label>
               <select 
                 value={saleType} 
-                onChange={e => setSaleType(e.target.value as 'regular' | 'seasonal')}
+                onChange={e => setSaleType(e.target.value as SaleType)}
               >
-                <option value="regular">Custom / Regular</option>
+                <option value="custom">Custom / Regular</option>
                 <option value="seasonal">Seasonal (Steam)</option>
+                <option value="festival">Festival</option>
+                <option value="special">Special Event</option>
               </select>
-              {saleType === 'seasonal' && selectedPlatform?.special_sales_no_cooldown && (
-                <span className={styles.hint}>✓ No cooldown for seasonal sales</span>
+              {(saleType === 'seasonal' || saleType === 'special') && selectedPlatform?.special_sales_no_cooldown && (
+                <span className={styles.hint}>✓ No cooldown for this sale type</span>
               )}
             </div>
           </div>
@@ -269,7 +274,7 @@ export default function AddSaleModal({
               <label>Cooldown Until</label>
               <input 
                 type="text" 
-                value={cooldownEndDate ? format(parseISO(cooldownEndDate), 'dd/MM/yyyy') : '-'}
+                value={cooldownEndDate ? format(parseISO(cooldownEndDate), 'MM/dd/yyyy') : '-'}
                 disabled
                 className={styles.disabled}
               />
