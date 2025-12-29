@@ -8,9 +8,10 @@ interface SalesTableProps {
   sales: SaleWithDetails[]
   platforms: Platform[]
   onDelete: (saleId: string) => Promise<void>
+  onEdit: (sale: SaleWithDetails) => void
 }
 
-export default function SalesTable({ sales, platforms, onDelete }: SalesTableProps) {
+export default function SalesTable({ sales, platforms, onDelete, onEdit }: SalesTableProps) {
   // Sort sales by start date
   const sortedSales = [...sales].sort((a, b) => 
     new Date(a.start_date).getTime() - new Date(b.start_date).getTime()
@@ -82,6 +83,12 @@ export default function SalesTable({ sales, platforms, onDelete }: SalesTablePro
     document.body.removeChild(link)
   }
   
+  const handleRowClick = (sale: SaleWithDetails, e: React.MouseEvent) => {
+    // Don't trigger edit if clicking on action buttons
+    if ((e.target as HTMLElement).closest('button')) return
+    onEdit(sale)
+  }
+  
   return (
     <div className={styles.container}>
       <div className={styles.header}>
@@ -122,7 +129,12 @@ export default function SalesTable({ sales, platforms, onDelete }: SalesTablePro
                 const cooldownUntil = calculateCooldownUntil(sale.end_date, sale.platform_id)
                 
                 return (
-                  <tr key={sale.id}>
+                  <tr 
+                    key={sale.id} 
+                    onClick={(e) => handleRowClick(sale, e)}
+                    className={styles.clickableRow}
+                    title="Click to edit"
+                  >
                     <td>{format(parseISO(sale.start_date), 'dd/MM/yyyy')}</td>
                     <td>{format(parseISO(sale.end_date), 'dd/MM/yyyy')}</td>
                     <td>{days}</td>
@@ -146,15 +158,28 @@ export default function SalesTable({ sales, platforms, onDelete }: SalesTablePro
                       {sale.discount_percentage ? `-${sale.discount_percentage}%` : '-'}
                     </td>
                     <td>
-                      <span className={`${styles.statusBadge} ${styles[sale.status || 'draft']}`}>
-                        {sale.status || 'draft'}
+                      <span className={`${styles.statusBadge} ${styles[sale.status || 'planned']}`}>
+                        {sale.status || 'planned'}
                       </span>
                     </td>
                     <td>{cooldownUntil}</td>
-                    <td>
+                    <td className={styles.actionCell}>
+                      <button 
+                        className={styles.editBtn}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          onEdit(sale)
+                        }}
+                        title="Edit sale"
+                      >
+                        ✏️
+                      </button>
                       <button 
                         className={styles.deleteBtn}
-                        onClick={() => onDelete(sale.id)}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          onDelete(sale.id)
+                        }}
                         title="Delete sale"
                       >
                         🗑
