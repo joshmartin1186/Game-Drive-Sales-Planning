@@ -106,9 +106,10 @@ export default function GameDriveDashboard() {
       if (salesError) throw salesError
       setSales(salesData || [])
 
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to load data'
       console.error('Error fetching data:', err)
-      setError(err.message || 'Failed to load data')
+      setError(errorMessage)
     } finally {
       setLoading(false)
     }
@@ -116,10 +117,10 @@ export default function GameDriveDashboard() {
 
   // Optimistic update for sales - updates local state immediately
   async function handleSaleUpdate(saleId: string, updates: Partial<Sale>) {
-    // Optimistically update local state first
+    // Optimistically update local state first - preserve product and platform
     setSales(prev => prev.map(sale => 
       sale.id === saleId 
-        ? { ...sale, ...updates }
+        ? { ...sale, ...updates } as SaleWithDetails
         : sale
     ))
     
@@ -153,9 +154,10 @@ export default function GameDriveDashboard() {
           sale.id === saleId ? updatedSale : sale
         ))
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to update sale'
       console.error('Error updating sale:', err)
-      setError(err.message)
+      setError(errorMessage)
       // Refresh data on error to restore correct state
       await fetchData()
     }
@@ -165,6 +167,7 @@ export default function GameDriveDashboard() {
     if (!confirm('Are you sure you want to delete this sale?')) return
     
     // Optimistically remove from local state
+    const previousSales = sales
     setSales(prev => prev.filter(sale => sale.id !== saleId))
     
     try {
@@ -174,11 +177,12 @@ export default function GameDriveDashboard() {
         .eq('id', saleId)
       
       if (error) throw error
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to delete sale'
       console.error('Error deleting sale:', err)
-      setError(err.message)
-      // Refresh data on error to restore
-      await fetchData()
+      setError(errorMessage)
+      // Restore on error
+      setSales(previousSales)
     }
   }
 
@@ -210,9 +214,10 @@ export default function GameDriveDashboard() {
       }
       
       setShowAddModal(false)
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to create sale'
       console.error('Error creating sale:', err)
-      setError(err.message)
+      setError(errorMessage)
     }
   }
 
@@ -230,7 +235,7 @@ export default function GameDriveDashboard() {
       
       if (error) throw error
       if (data) setClients(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)))
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Error creating client:', err)
       throw err
     }
@@ -246,7 +251,7 @@ export default function GameDriveDashboard() {
       
       if (error) throw error
       if (data) setGames(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)))
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Error creating game:', err)
       throw err
     }
@@ -262,7 +267,7 @@ export default function GameDriveDashboard() {
       
       if (error) throw error
       if (data) setProducts(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)))
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Error creating product:', err)
       throw err
     }
@@ -284,7 +289,7 @@ export default function GameDriveDashboard() {
       setGames(prev => prev.filter(g => g.client_id !== clientId))
       setProducts(prev => prev.filter(p => !deletedGameIds.includes(p.game_id)))
       setSales(prev => prev.filter(s => !deletedGameIds.includes(s.product?.game_id || '')))
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Error deleting client:', err)
       throw err
     }
@@ -305,7 +310,7 @@ export default function GameDriveDashboard() {
       const deletedProductIds = products.filter(p => p.game_id === gameId).map(p => p.id)
       setProducts(prev => prev.filter(p => p.game_id !== gameId))
       setSales(prev => prev.filter(s => !deletedProductIds.includes(s.product_id)))
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Error deleting game:', err)
       throw err
     }
@@ -321,7 +326,7 @@ export default function GameDriveDashboard() {
       if (error) throw error
       setProducts(prev => prev.filter(p => p.id !== productId))
       setSales(prev => prev.filter(s => s.product_id !== productId))
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Error deleting product:', err)
       throw err
     }
