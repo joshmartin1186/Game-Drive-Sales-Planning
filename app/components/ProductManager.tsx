@@ -11,6 +11,9 @@ interface ProductManagerProps {
   onClientCreate: (client: Omit<Client, 'id' | 'created_at'>) => Promise<void>
   onGameCreate: (game: Omit<Game, 'id' | 'created_at'>) => Promise<void>
   onProductCreate: (product: Omit<Product, 'id' | 'created_at'>) => Promise<void>
+  onClientDelete?: (id: string) => Promise<void>
+  onGameDelete?: (id: string) => Promise<void>
+  onProductDelete?: (id: string) => Promise<void>
   onClose: () => void
 }
 
@@ -23,11 +26,15 @@ export default function ProductManager({
   onClientCreate,
   onGameCreate,
   onProductCreate,
+  onClientDelete,
+  onGameDelete,
+  onProductDelete,
   onClose
 }: ProductManagerProps) {
   const [activeTab, setActiveTab] = useState<Tab>('clients')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [deleteConfirm, setDeleteConfirm] = useState<{ type: string; id: string; name: string } | null>(null)
   
   // Client form
   const [clientName, setClientName] = useState('')
@@ -117,18 +124,53 @@ export default function ProductManager({
     }
   }
 
+  const handleDelete = async () => {
+    if (!deleteConfirm) return
+    
+    setLoading(true)
+    setError(null)
+    
+    try {
+      if (deleteConfirm.type === 'client' && onClientDelete) {
+        await onClientDelete(deleteConfirm.id)
+      } else if (deleteConfirm.type === 'game' && onGameDelete) {
+        await onGameDelete(deleteConfirm.id)
+      } else if (deleteConfirm.type === 'product' && onProductDelete) {
+        await onProductDelete(deleteConfirm.id)
+      }
+      setDeleteConfirm(null)
+    } catch (err: any) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return (
     <div className={styles.overlay}>
       <div className={styles.modal}>
         <div className={styles.header}>
           <h2>Manage Products</h2>
-          <button className={styles.closeBtn} onClick={onClose}>x</button>
+          <button className={styles.closeBtn} onClick={onClose}>X</button>
         </div>
 
         {error && (
           <div className={styles.error}>
             {error}
             <button onClick={() => setError(null)}>x</button>
+          </div>
+        )}
+
+        {deleteConfirm && (
+          <div className={styles.confirmDelete}>
+            <p>Delete <strong>{deleteConfirm.name}</strong>?</p>
+            <p className={styles.warning}>This will also delete all related data (games, products, sales).</p>
+            <div className={styles.confirmActions}>
+              <button className={styles.cancelBtn} onClick={() => setDeleteConfirm(null)}>Cancel</button>
+              <button className={styles.deleteConfirmBtn} onClick={handleDelete} disabled={loading}>
+                {loading ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
           </div>
         )}
 
@@ -195,8 +237,19 @@ export default function ProductManager({
                   <ul>
                     {clients.map(client => (
                       <li key={client.id}>
-                        <strong>{client.name}</strong>
-                        {client.email && <span> - {client.email}</span>}
+                        <div className={styles.itemInfo}>
+                          <strong>{client.name}</strong>
+                          {client.email && <span> - {client.email}</span>}
+                        </div>
+                        {onClientDelete && (
+                          <button 
+                            className={styles.deleteBtn}
+                            onClick={() => setDeleteConfirm({ type: 'client', id: client.id, name: client.name })}
+                            title="Delete client"
+                          >
+                            🗑️
+                          </button>
+                        )}
                       </li>
                     ))}
                   </ul>
@@ -211,7 +264,7 @@ export default function ProductManager({
               <p className={styles.hint}>Games belong to clients. Add the client first if needed.</p>
               
               {clients.length === 0 ? (
-                <div className={styles.warning}>
+                <div className={styles.warningBox}>
                   Please add a client first before adding games.
                 </div>
               ) : (
@@ -264,9 +317,20 @@ export default function ProductManager({
                   <ul>
                     {games.map(game => (
                       <li key={game.id}>
-                        <strong>{game.name}</strong>
-                        <span className={styles.meta}> ({game.client?.name})</span>
-                        {game.steam_app_id && <span className={styles.meta}> - Steam: {game.steam_app_id}</span>}
+                        <div className={styles.itemInfo}>
+                          <strong>{game.name}</strong>
+                          <span className={styles.meta}> ({game.client?.name})</span>
+                          {game.steam_app_id && <span className={styles.meta}> - Steam: {game.steam_app_id}</span>}
+                        </div>
+                        {onGameDelete && (
+                          <button 
+                            className={styles.deleteBtn}
+                            onClick={() => setDeleteConfirm({ type: 'game', id: game.id, name: game.name })}
+                            title="Delete game"
+                          >
+                            🗑️
+                          </button>
+                        )}
                       </li>
                     ))}
                   </ul>
@@ -281,7 +345,7 @@ export default function ProductManager({
               <p className={styles.hint}>Products are specific SKUs: base game, DLCs, soundtracks, editions.</p>
               
               {games.length === 0 ? (
-                <div className={styles.warning}>
+                <div className={styles.warningBox}>
                   Please add a game first before adding products.
                 </div>
               ) : (
@@ -348,9 +412,20 @@ export default function ProductManager({
                   <ul>
                     {products.map(product => (
                       <li key={product.id}>
-                        <strong>{product.name}</strong>
-                        <span className={styles.badge}>{product.product_type}</span>
-                        <span className={styles.meta}> - {product.game?.name} ({product.game?.client?.name})</span>
+                        <div className={styles.itemInfo}>
+                          <strong>{product.name}</strong>
+                          <span className={styles.badge}>{product.product_type}</span>
+                          <span className={styles.meta}> - {product.game?.name} ({product.game?.client?.name})</span>
+                        </div>
+                        {onProductDelete && (
+                          <button 
+                            className={styles.deleteBtn}
+                            onClick={() => setDeleteConfirm({ type: 'product', id: product.id, name: product.name })}
+                            title="Delete product"
+                          >
+                            🗑️
+                          </button>
+                        )}
                       </li>
                     ))}
                   </ul>
