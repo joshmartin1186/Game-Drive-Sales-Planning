@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { createClient } from '@supabase/supabase-js'
 import GanttChart from './components/GanttChart'
 import SalesTable from './components/SalesTable'
@@ -25,6 +25,10 @@ export default function GameDriveDashboard() {
   const [showAddModal, setShowAddModal] = useState(false)
   const [showProductManager, setShowProductManager] = useState(false)
   const [viewMode, setViewMode] = useState<'gantt' | 'table'>('gantt')
+  
+  // Filter state
+  const [filterClientId, setFilterClientId] = useState<string>('')
+  const [filterGameId, setFilterGameId] = useState<string>('')
 
   // Fetch all data on mount
   useEffect(() => {
@@ -203,14 +207,101 @@ export default function GameDriveDashboard() {
     }
   }
 
-  // Calculate stats
-  const activeSales = sales.filter(s => s.status === 'live' || s.status === 'confirmed').length
+  async function handleClientDelete(clientId: string) {
+    try {
+      const { error } = await supabase
+        .from('clients')
+        .delete()
+        .eq('id', clientId)
+      
+      if (error) throw error
+      // Reset filter if deleted client was selected
+      if (filterClientId === clientId) setFilterClientId('')
+      await fetchData()
+    } catch (err: any) {
+      console.error('Error deleting client:', err)
+      throw err
+    }
+  }
+
+  async function handleGameDelete(gameId: string) {
+    try {
+      const { error } = await supabase
+        .from('games')
+        .delete()
+        .eq('id', gameId)
+      
+      if (error) throw error
+      // Reset filter if deleted game was selected
+      if (filterGameId === gameId) setFilterGameId('')
+      await fetchData()
+    } catch (err: any) {
+      console.error('Error deleting game:', err)
+      throw err
+    }
+  }
+
+  async function handleProductDelete(productId: string) {
+    try {
+      const { error } = await supabase
+        .from('products')
+        .delete()
+        .eq('id', productId)
+      
+      if (error) throw error
+      await fetchData()
+    } catch (err: any) {
+      console.error('Error deleting product:', err)
+      throw err
+    }
+  }
+
+  // Filter games by selected client
+  const filteredGames = useMemo(() => {
+    if (!filterClientId) return games
+    return games.filter(g => g.client_id === filterClientId)
+  }, [games, filterClientId])
+
+  // Filter products by selected game or client
+  const filteredProducts = useMemo(() => {
+    let result = products
+    if (filterGameId) {
+      result = result.filter(p => p.game_id === filterGameId)
+    } else if (filterClientId) {
+      result = result.filter(p => p.game?.client_id === filterClientId)
+    }
+    return result
+  }, [products, filterClientId, filterGameId])
+
+  // Filter sales by selected game or client
+  const filteredSales = useMemo(() => {
+    let result = sales
+    if (filterGameId) {
+      result = result.filter(s => s.product?.game_id === filterGameId)
+    } else if (filterClientId) {
+      result = result.filter(s => s.product?.game?.client_id === filterClientId)
+    }
+    return result
+  }, [sales, filterClientId, filterGameId])
+
+  // Calculate stats from filtered data
+  const activeSales = filteredSales.filter(s => s.status === 'live' || s.status === 'confirmed').length
   const conflicts = 0 // TODO: Calculate actual conflicts
 
   // Timeline settings
   const timelineStart = new Date()
   timelineStart.setDate(1) // Start of current month
   const monthCount = 12
+
+  // Reset game filter when client changes
+  useEffect(() => {
+    if (filterClientId && filterGameId) {
+      const game = games.find(g => g.id === filterGameId)
+      if (game && game.client_id !== filterClientId) {
+        setFilterGameId('')
+      }
+    }
+  }, [filterClientId, filterGameId, games])
 
   if (loading) {
     return (
@@ -243,7 +334,7 @@ export default function GameDriveDashboard() {
           <div className={styles.statIcon} style={{backgroundColor: '#10b981'}}>📊</div>
           <div className={styles.statContent}>
             <h3>Total Sales</h3>
-            <p className={styles.statValue}>{sales.length}</p>
+            <p className={styles.statValue}>{filteredSales.length}</p>
             <span className={styles.statChange}>Across all platforms</span>
           </div>
         </div>
@@ -252,7 +343,7 @@ export default function GameDriveDashboard() {
           <div className={styles.statIcon} style={{backgroundColor: '#3b82f6'}}>🎮</div>
           <div className={styles.statContent}>
             <h3>Products</h3>
-            <p className={styles.statValue}>{products.length}</p>
+            <p className={styles.statValue}>{filteredProducts.length}</p>
             <span className={styles.statChange}>Games and DLCs</span>
           </div>
         </div>
@@ -276,6 +367,44 @@ export default function GameDriveDashboard() {
             <span className={styles.statChange}>{conflicts === 0 ? 'All platforms clear' : 'Needs attention'}</span>
           </div>
         </div>
+      </div>
+
+      {/* Filters */}
+      <div className={styles.filters}>
+        <div className={styles.filterGroup}>
+          <label>Client:</label>
+          <select 
+            value={filterClientId} 
+            onChange={(e) => setFilterClientId(e.target.value)}
+          >
+            <option value="">All Clients</option>
+            {clients.map(client => (
+              <option key={client.id} value={client.id}>{client.name}</option>
+            ))}
+          </select>
+        </div>
+        
+        <div className={styles.filterGroup}>
+          <label>Game:</label>
+          <select 
+            value={filterGameId} 
+            onChange={(e) => setFilterGameId(e.target.value)}
+          >
+            <option value="">All Games</option>
+            {filteredGames.map(game => (
+              <option key={game.id} value={game.id}>{game.name}</option>
+            ))}
+          </select>
+        </div>
+
+        {(filterClientId || filterGameId) && (
+          <button 
+            className={styles.clearFilters}
+            onClick={() => { setFilterClientId(''); setFilterGameId(''); }}
+          >
+            Clear Filters
+          </button>
+        )}
       </div>
 
       {/* View Toggle and Actions */}
@@ -312,8 +441,8 @@ export default function GameDriveDashboard() {
       <div className={styles.mainContent}>
         {viewMode === 'gantt' ? (
           <GanttChart
-            sales={sales}
-            products={products}
+            sales={filteredSales}
+            products={filteredProducts}
             platforms={platforms}
             events={[]}
             timelineStart={timelineStart}
@@ -324,7 +453,7 @@ export default function GameDriveDashboard() {
           />
         ) : (
           <SalesTable
-            sales={sales}
+            sales={filteredSales}
             platforms={platforms}
             onDelete={handleSaleDelete}
           />
@@ -369,6 +498,9 @@ export default function GameDriveDashboard() {
           onClientCreate={handleClientCreate}
           onGameCreate={handleGameCreate}
           onProductCreate={handleProductCreate}
+          onClientDelete={handleClientDelete}
+          onGameDelete={handleGameDelete}
+          onProductDelete={handleProductDelete}
           onClose={() => setShowProductManager(false)}
         />
       )}
