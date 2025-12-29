@@ -46,7 +46,7 @@ export interface Sale {
   end_date: string
   discount_percentage?: number
   sale_name?: string
-  sale_type: 'regular' | 'seasonal'
+  sale_type: 'custom' | 'seasonal' | 'festival' | 'special'
   status: 'draft' | 'planned' | 'submitted' | 'confirmed' | 'live' | 'ended'
   goal_type?: 'acquisition' | 'visibility' | 'event' | 'revenue'
   notes?: string
