@@ -1,254 +1,263 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+import { createClient } from '@supabase/supabase-js'
+import GanttChart from './components/GanttChart'
+import SalesTable from './components/SalesTable'
+import AddSaleModal from './components/AddSaleModal'
 import styles from './page.module.css'
+import { Sale, Platform, Product, Game, Client, SaleWithDetails, TimelineEvent } from '@/lib/types'
+
+// Initialize Supabase client
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
+const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
 export default function GameDriveDashboard() {
-  // Sample data representing Game Drive's current clients and games
-  const clients = [
-    {
-      id: 1,
-      name: 'TMG',
-      games: ['shapez', 'shapez 2', 'Puzzle DLC']
-    },
-    {
-      id: 2, 
-      name: 'WeirdBeard',
-      games: ['Tricky Towers', 'Tricky Towers DLC']
-    },
-    {
-      id: 3,
-      name: 'tobspr',
-      games: ['shapez', 'shapez Soundtrack']
-    }
-  ]
+  const [sales, setSales] = useState<SaleWithDetails[]>([])
+  const [products, setProducts] = useState<(Product & { game: Game & { client: Client } })[]>([])
+  const [platforms, setPlatforms] = useState<Platform[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [showAddModal, setShowAddModal] = useState(false)
+  const [viewMode, setViewMode] = useState<'gantt' | 'table'>('gantt')
 
-  const platforms = [
-    { name: 'Steam', color: '#1b2838', cooldown: 30 },
-    { name: 'PlayStation', color: '#0070d1', cooldown: 42 },
-    { name: 'Xbox', color: '#107c10', cooldown: 28 },
-    { name: 'Nintendo', color: '#e60012', cooldown: 56 },
-    { name: 'Epic', color: '#000000', cooldown: 14 }
-  ]
+  // Fetch all data on mount
+  useEffect(() => {
+    fetchData()
+  }, [])
 
-  // Sample upcoming sales (what would be in database)
-  const upcomingSales = [
-    {
-      game: 'shapez 2',
-      platform: 'Steam',
-      startDate: '2025-01-15',
-      discount: '40%',
-      status: 'confirmed'
-    },
-    {
-      game: 'Tricky Towers',
-      platform: 'PlayStation', 
-      startDate: '2025-02-01',
-      discount: '35%',
-      status: 'submitted'
-    },
-    {
-      game: 'shapez',
-      platform: 'Xbox',
-      startDate: '2025-02-14',
-      discount: '50%',
-      status: 'planned'
+  async function fetchData() {
+    setLoading(true)
+    setError(null)
+    
+    try {
+      // Fetch platforms
+      const { data: platformsData, error: platformsError } = await supabase
+        .from('platforms')
+        .select('*')
+        .order('name')
+      
+      if (platformsError) throw platformsError
+      setPlatforms(platformsData || [])
+
+      // Fetch products with games and clients
+      const { data: productsData, error: productsError } = await supabase
+        .from('products')
+        .select(`
+          *,
+          game:games(
+            *,
+            client:clients(*)
+          )
+        `)
+        .order('name')
+      
+      if (productsError) throw productsError
+      setProducts(productsData || [])
+
+      // Fetch sales with product, game, client, and platform details
+      const { data: salesData, error: salesError } = await supabase
+        .from('sales')
+        .select(`
+          *,
+          product:products(
+            *,
+            game:games(
+              *,
+              client:clients(*)
+            )
+          ),
+          platform:platforms(*)
+        `)
+        .order('start_date')
+      
+      if (salesError) throw salesError
+      setSales(salesData || [])
+
+    } catch (err: any) {
+      console.error('Error fetching data:', err)
+      setError(err.message || 'Failed to load data')
+    } finally {
+      setLoading(false)
     }
-  ]
+  }
+
+  async function handleSaleUpdate(saleId: string, updates: Partial<Sale>) {
+    try {
+      const { error } = await supabase
+        .from('sales')
+        .update(updates)
+        .eq('id', saleId)
+      
+      if (error) throw error
+      
+      // Refresh data
+      await fetchData()
+    } catch (err: any) {
+      console.error('Error updating sale:', err)
+      setError(err.message)
+    }
+  }
+
+  async function handleSaleDelete(saleId: string) {
+    if (!confirm('Are you sure you want to delete this sale?')) return
+    
+    try {
+      const { error } = await supabase
+        .from('sales')
+        .delete()
+        .eq('id', saleId)
+      
+      if (error) throw error
+      
+      // Refresh data
+      await fetchData()
+    } catch (err: any) {
+      console.error('Error deleting sale:', err)
+      setError(err.message)
+    }
+  }
+
+  async function handleSaleCreate(sale: Omit<Sale, 'id' | 'created_at'>) {
+    try {
+      const { error } = await supabase
+        .from('sales')
+        .insert([sale])
+      
+      if (error) throw error
+      
+      // Refresh data and close modal
+      await fetchData()
+      setShowAddModal(false)
+    } catch (err: any) {
+      console.error('Error creating sale:', err)
+      setError(err.message)
+    }
+  }
+
+  // Calculate stats
+  const activeSales = sales.filter(s => s.status === 'live' || s.status === 'confirmed').length
+  const conflicts = 0 // TODO: Calculate actual conflicts
+
+  // Timeline settings
+  const timelineStart = new Date()
+  timelineStart.setDate(1) // Start of current month
+  const monthCount = 12
+
+  if (loading) {
+    return (
+      <div className={styles.container}>
+        <div className={styles.loading}>
+          <div className={styles.spinner}></div>
+          <p>Loading sales data...</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className={styles.container}>
-      
+      <header className={styles.header}>
+        <h1>GameDrive Sales Planning</h1>
+        <p>Interactive sales timeline with drag-and-drop scheduling</p>
+      </header>
+
+      {error && (
+        <div className={styles.errorBanner}>
+          <span>⚠️ {error}</span>
+          <button onClick={() => setError(null)}>×</button>
+        </div>
+      )}
+
       {/* Header Stats */}
       <div className={styles.statsGrid}>
         <div className={styles.statCard}>
-          <div className={styles.statIcon} style={{backgroundColor: '#10b981'}}>
-            📊
-          </div>
+          <div className={styles.statIcon} style={{backgroundColor: '#10b981'}}>📊</div>
           <div className={styles.statContent}>
-            <h3>Total Revenue</h3>
-            <p className={styles.statValue}>$42,500</p>
-            <span className={styles.statChange}>+12% vs last month</span>
-          </div>
-        </div>
-
-        <div className={styles.statCard}>
-          <div className={styles.statIcon} style={{backgroundColor: '#3b82f6'}}>
-            🎮
-          </div>
-          <div className={styles.statContent}>
-            <h3>Units Sold</h3>
-            <p className={styles.statValue}>1,247</p>
+            <h3>Total Sales</h3>
+            <p className={styles.statValue}>{sales.length}</p>
             <span className={styles.statChange}>Across all platforms</span>
           </div>
         </div>
 
         <div className={styles.statCard}>
-          <div className={styles.statIcon} style={{backgroundColor: '#8b5cf6'}}>
-            ⭐
-          </div>
+          <div className={styles.statIcon} style={{backgroundColor: '#3b82f6'}}>🎮</div>
           <div className={styles.statContent}>
-            <h3>Active Sales</h3>
-            <p className={styles.statValue}>5</p>
-            <span className={styles.statChange}>2 ending this week</span>
+            <h3>Products</h3>
+            <p className={styles.statValue}>{products.length}</p>
+            <span className={styles.statChange}>Games &amp; DLCs</span>
           </div>
         </div>
 
         <div className={styles.statCard}>
-          <div className={styles.statIcon} style={{backgroundColor: '#ef4444'}}>
-            ⚠️
+          <div className={styles.statIcon} style={{backgroundColor: '#8b5cf6'}}>⭐</div>
+          <div className={styles.statContent}>
+            <h3>Active Sales</h3>
+            <p className={styles.statValue}>{activeSales}</p>
+            <span className={styles.statChange}>Live or confirmed</span>
+          </div>
+        </div>
+
+        <div className={styles.statCard}>
+          <div className={styles.statIcon} style={{backgroundColor: conflicts > 0 ? '#ef4444' : '#22c55e'}}>
+            {conflicts > 0 ? '⚠️' : '✓'}
           </div>
           <div className={styles.statContent}>
             <h3>Conflicts</h3>
-            <p className={styles.statValue}>0</p>
-            <span className={styles.statChange}>All platforms clear</span>
+            <p className={styles.statValue}>{conflicts}</p>
+            <span className={styles.statChange}>{conflicts === 0 ? 'All platforms clear' : 'Needs attention'}</span>
           </div>
         </div>
       </div>
 
-      {/* Main Timeline */}
-      <div className={styles.timelineContainer}>
-        <div className={styles.timelineHeader}>
-          <h2>Sales Timeline - 12 Month View</h2>
-          <div className={styles.timelineControls}>
-            <button className={styles.controlButton}>Add Sale</button>
-            <button className={styles.controlButton}>Check Conflicts</button>
-            <button className={styles.controlButton}>Export Excel</button>
-          </div>
+      {/* View Toggle & Actions */}
+      <div className={styles.toolbar}>
+        <div className={styles.viewToggle}>
+          <button 
+            className={`${styles.toggleBtn} ${viewMode === 'gantt' ? styles.active : ''}`}
+            onClick={() => setViewMode('gantt')}
+          >
+            📅 Timeline
+          </button>
+          <button 
+            className={`${styles.toggleBtn} ${viewMode === 'table' ? styles.active : ''}`}
+            onClick={() => setViewMode('table')}
+          >
+            📋 Table
+          </button>
         </div>
-
-        {/* Month headers */}
-        <div className={styles.monthGrid}>
-          {['Jan 2025', 'Feb 2025', 'Mar 2025', 'Apr 2025', 'May 2025', 'Jun 2025', 
-           'Jul 2025', 'Aug 2025', 'Sep 2025', 'Oct 2025', 'Nov 2025', 'Dec 2025'].map((month, index) => (
-            <div key={month} className={styles.monthHeader}>
-              <strong>{month}</strong>
-            </div>
-          ))}
-        </div>
-
-        {/* Game rows with sales */}
-        <div className={styles.gameRows}>
-          
-          {/* shapez */}
-          <div className={styles.gameRow}>
-            <div className={styles.gameInfo}>
-              <div className={styles.gameIcon} style={{backgroundColor: '#f97316'}}>S</div>
-              <div>
-                <div className={styles.gameName}>shapez</div>
-                <div className={styles.gameClient}>tobspr Games</div>
-              </div>
-            </div>
-            <div className={styles.timelineRow}>
-              <div className={styles.saleBlock} style={{
-                gridColumnStart: 3,
-                gridColumnEnd: 5,
-                backgroundColor: '#1b2838',
-                color: 'white'
-              }}>
-                Steam 50%<br/>
-                <small>Mar 15-28</small>
-              </div>
-              <div className={styles.cooldownBlock} style={{
-                gridColumnStart: 5,
-                gridColumnEnd: 7,
-                backgroundColor: '#1b283850'
-              }}>
-                Cooldown
-              </div>
-              <div className={styles.saleBlock} style={{
-                gridColumnStart: 8,
-                gridColumnEnd: 10,
-                backgroundColor: '#107c10',
-                color: 'white'
-              }}>
-                Xbox 30%<br/>
-                <small>Aug 1-14</small>
-              </div>
-            </div>
-          </div>
-
-          {/* shapez 2 */}
-          <div className={styles.gameRow}>
-            <div className={styles.gameInfo}>
-              <div className={styles.gameIcon} style={{backgroundColor: '#8b5cf6'}}>S2</div>
-              <div>
-                <div className={styles.gameName}>shapez 2</div>
-                <div className={styles.gameClient}>tobspr Games</div>
-              </div>
-            </div>
-            <div className={styles.timelineRow}>
-              <div className={styles.saleBlock} style={{
-                gridColumnStart: 2,
-                gridColumnEnd: 3,
-                backgroundColor: '#1b2838',
-                color: 'white'
-              }}>
-                Steam 40%<br/>
-                <small>Jan 15-21</small>
-              </div>
-              <div className={styles.saleBlock} style={{
-                gridColumnStart: 6,
-                gridColumnEnd: 8,
-                backgroundColor: '#0070d1',
-                color: 'white'
-              }}>
-                PS 25%<br/>
-                <small>Jun 1-7</small>
-              </div>
-            </div>
-          </div>
-
-          {/* Tricky Towers */}
-          <div className={styles.gameRow}>
-            <div className={styles.gameInfo}>
-              <div className={styles.gameIcon} style={{backgroundColor: '#eab308'}}>TT</div>
-              <div>
-                <div className={styles.gameName}>Tricky Towers</div>
-                <div className={styles.gameClient}>WeirdBeard</div>
-              </div>
-            </div>
-            <div className={styles.timelineRow}>
-              <div className={styles.saleBlock} style={{
-                gridColumnStart: 4,
-                gridColumnEnd: 6,
-                backgroundColor: '#0070d1',
-                color: 'white'
-              }}>
-                PS 35%<br/>
-                <small>Apr 10-24</small>
-              </div>
-              <div className={styles.saleBlock} style={{
-                gridColumnStart: 9,
-                gridColumnEnd: 11,
-                backgroundColor: '#000000',
-                color: 'white'
-              }}>
-                Epic 45%<br/>
-                <small>Sep 5-12</small>
-              </div>
-            </div>
-          </div>
+        
+        <div className={styles.actions}>
+          <button className={styles.primaryBtn} onClick={() => setShowAddModal(true)}>
+            + Add Sale
+          </button>
+          <button className={styles.secondaryBtn} onClick={fetchData}>
+            🔄 Refresh
+          </button>
         </div>
       </div>
 
-      {/* Upcoming Sales */}
-      <div className={styles.upcomingContainer}>
-        <h2>Upcoming Sales</h2>
-        <div className={styles.salesGrid}>
-          {upcomingSales.map((sale, index) => (
-            <div key={index} className={styles.saleCard}>
-              <div className={styles.saleHeader}>
-                <strong>{sale.game}</strong>
-                <span className={`${styles.statusBadge} ${styles[sale.status]}`}>
-                  {sale.status}
-                </span>
-              </div>
-              <div className={styles.saleDetails}>
-                <div>Platform: <strong>{sale.platform}</strong></div>
-                <div>Discount: <strong>{sale.discount}</strong></div>
-                <div>Start: <strong>{sale.startDate}</strong></div>
-              </div>
-            </div>
-          ))}
-        </div>
+      {/* Main Content */}
+      <div className={styles.mainContent}>
+        {viewMode === 'gantt' ? (
+          <GanttChart
+            sales={sales}
+            products={products}
+            platforms={platforms}
+            events={[]}
+            timelineStart={timelineStart}
+            monthCount={monthCount}
+            onSaleUpdate={handleSaleUpdate}
+            onSaleDelete={handleSaleDelete}
+            allSales={sales}
+          />
+        ) : (
+          <SalesTable
+            sales={sales}
+            onDelete={handleSaleDelete}
+          />
+        )}
       </div>
 
       {/* Platform Legend */}
@@ -256,30 +265,29 @@ export default function GameDriveDashboard() {
         <h3>Platform Cooldown Periods</h3>
         <div className={styles.legendGrid}>
           {platforms.map((platform) => (
-            <div key={platform.name} className={styles.legendItem}>
+            <div key={platform.id} className={styles.legendItem}>
               <div 
                 className={styles.legendColor}
-                style={{backgroundColor: platform.color}}
+                style={{backgroundColor: platform.color_hex}}
               ></div>
               <span>
-                <strong>{platform.name}</strong>: {platform.cooldown} days cooldown
+                <strong>{platform.name}</strong>: {platform.cooldown_days} days cooldown
               </span>
             </div>
           ))}
         </div>
       </div>
 
-      {/* Success Message */}
-      <div className={styles.successMessage}>
-        <div className={styles.successIcon}>✅</div>
-        <div>
-          <h3>CSS Pipeline Working!</h3>
-          <p>
-            GameDrive sales planning interface successfully deployed. 
-            Next: Add interactive drag-and-drop functionality and Supabase integration.
-          </p>
-        </div>
-      </div>
+      {/* Add Sale Modal */}
+      {showAddModal && (
+        <AddSaleModal
+          products={products}
+          platforms={platforms}
+          existingSales={sales}
+          onSave={handleSaleCreate}
+          onClose={() => setShowAddModal(false)}
+        />
+      )}
     </div>
   )
 }
