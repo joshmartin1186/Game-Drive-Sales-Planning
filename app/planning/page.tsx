@@ -6,6 +6,7 @@ import { Sale, Platform, Product, Game, Client, SaleWithDetails, TimelineEvent }
 import GanttChart from '../components/GanttChart'
 import SalesTable from '../components/SalesTable'
 import AddSaleModal from '../components/AddSaleModal'
+import EditSaleModal from '../components/EditSaleModal'
 import styles from './planning.module.css'
 
 export default function PlanningPage() {
@@ -16,6 +17,7 @@ export default function PlanningPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [showAddModal, setShowAddModal] = useState(false)
+  const [editingSale, setEditingSale] = useState<SaleWithDetails | null>(null)
   const [selectedClient, setSelectedClient] = useState<string>('all')
   const [clients, setClients] = useState<Client[]>([])
   
@@ -96,6 +98,13 @@ export default function PlanningPage() {
   }, [fetchData])
   
   const handleSaleUpdate = async (saleId: string, updates: Partial<Sale>) => {
+    // Optimistically update local state
+    setSales(prev => prev.map(sale => 
+      sale.id === saleId 
+        ? { ...sale, ...updates } as SaleWithDetails
+        : sale
+    ))
+    
     try {
       const { error } = await supabase
         .from('sales')
@@ -104,24 +113,64 @@ export default function PlanningPage() {
       
       if (error) throw error
       
-      // Refresh data
-      await fetchData()
+      // Silently refresh to get server-side changes
+      const { data: updatedSale } = await supabase
+        .from('sales')
+        .select(`
+          *,
+          product:products (
+            *,
+            game:games (
+              *,
+              client:clients (*)
+            )
+          ),
+          platform:platforms (*)
+        `)
+        .eq('id', saleId)
+        .single()
+      
+      if (updatedSale) {
+        setSales(prev => prev.map(sale => 
+          sale.id === saleId ? updatedSale : sale
+        ))
+      }
     } catch (err) {
       console.error('Error updating sale:', err)
       setError(err instanceof Error ? err.message : 'Failed to update sale')
+      // Refresh data on error to restore correct state
+      await fetchData()
     }
   }
   
   const handleSaleCreate = async (sale: Omit<Sale, 'id' | 'created_at'>) => {
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('sales')
         .insert([sale])
+        .select(`
+          *,
+          product:products (
+            *,
+            game:games (
+              *,
+              client:clients (*)
+            )
+          ),
+          platform:platforms (*)
+        `)
+        .single()
       
       if (error) throw error
       
+      // Add to local state
+      if (data) {
+        setSales(prev => [...prev, data].sort((a, b) => 
+          new Date(a.start_date).getTime() - new Date(b.start_date).getTime()
+        ))
+      }
+      
       setShowAddModal(false)
-      await fetchData()
     } catch (err) {
       console.error('Error creating sale:', err)
       setError(err instanceof Error ? err.message : 'Failed to create sale')
@@ -131,6 +180,10 @@ export default function PlanningPage() {
   const handleSaleDelete = async (saleId: string) => {
     if (!confirm('Are you sure you want to delete this sale?')) return
     
+    // Optimistically remove from local state
+    const previousSales = sales
+    setSales(prev => prev.filter(sale => sale.id !== saleId))
+    
     try {
       const { error } = await supabase
         .from('sales')
@@ -138,12 +191,16 @@ export default function PlanningPage() {
         .eq('id', saleId)
       
       if (error) throw error
-      
-      await fetchData()
     } catch (err) {
       console.error('Error deleting sale:', err)
       setError(err instanceof Error ? err.message : 'Failed to delete sale')
+      // Restore on error
+      setSales(previousSales)
     }
+  }
+
+  const handleSaleEdit = (sale: SaleWithDetails) => {
+    setEditingSale(sale)
   }
   
   // Filter products and sales by selected client
@@ -210,7 +267,8 @@ export default function PlanningPage() {
           monthCount={monthCount}
           onSaleUpdate={handleSaleUpdate}
           onSaleDelete={handleSaleDelete}
-          allSales={sales} // For validation across all clients
+          onSaleEdit={handleSaleEdit}
+          allSales={sales}
         />
       </div>
       
@@ -220,6 +278,7 @@ export default function PlanningPage() {
           sales={filteredSales}
           platforms={platforms}
           onDelete={handleSaleDelete}
+          onEdit={handleSaleEdit}
         />
       </div>
       
@@ -230,6 +289,18 @@ export default function PlanningPage() {
           existingSales={sales}
           onSave={handleSaleCreate}
           onClose={() => setShowAddModal(false)}
+        />
+      )}
+
+      {editingSale && (
+        <EditSaleModal
+          sale={editingSale}
+          products={products}
+          platforms={platforms}
+          existingSales={sales}
+          onSave={handleSaleUpdate}
+          onDelete={handleSaleDelete}
+          onClose={() => setEditingSale(null)}
         />
       )}
     </div>
