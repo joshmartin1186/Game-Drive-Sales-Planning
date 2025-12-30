@@ -119,6 +119,21 @@ export default function GanttChart({
       })
   }, [sales, optimisticUpdates])
   
+  // Get unique platforms that have sales for a product
+  const getPlatformsForProduct = useCallback((productId: string) => {
+    const productSales = getSalesForProduct(productId)
+    const platformIds = [...new Set(productSales.map(s => s.platform_id))]
+    return platformIds
+      .map(id => platforms.find(p => p.id === id))
+      .filter((p): p is Platform => p !== undefined)
+      .sort((a, b) => a.name.localeCompare(b.name))
+  }, [getSalesForProduct, platforms])
+  
+  // Get sales for a specific product and platform
+  const getSalesForProductPlatform = useCallback((productId: string, platformId: string) => {
+    return getSalesForProduct(productId).filter(sale => sale.platform_id === platformId)
+  }, [getSalesForProduct])
+  
   const getCooldownForSale = useCallback((sale: SaleWithDetails) => {
     if (!sale.platform) return null
     
@@ -244,7 +259,7 @@ export default function GanttChart({
       )}
       
       <div className={styles.legend}>
-        <span className={styles.legendTitle}>Platforms:</span>
+        <span className={styles.legendTitle}>PLATFORMS:</span>
         {platforms.slice(0, 8).map(platform => (
           <div key={platform.id} className={styles.legendItem}>
             <span 
@@ -303,58 +318,92 @@ export default function GanttChart({
                   </div>
                   
                   {gameProducts.map(product => {
-                    const productSales = getSalesForProduct(product.id)
+                    const productPlatforms = getPlatformsForProduct(product.id)
+                    const hasSales = productPlatforms.length > 0
                     
                     return (
-                      <div key={product.id} className={styles.productRow}>
-                        <div className={styles.productLabel}>
-                          <span className={styles.productName}>{product.name}</span>
-                          <span className={styles.productType}>{product.product_type}</span>
+                      <div key={product.id} className={styles.productGroup}>
+                        {/* Product header row */}
+                        <div className={styles.productRow}>
+                          <div className={styles.productLabel}>
+                            <span className={styles.productName}>{product.name}</span>
+                            <span className={styles.productType}>{product.product_type}</span>
+                          </div>
+                          
+                          <div className={styles.timelineRow} style={{ width: totalWidth }}>
+                            {days.map((day, idx) => {
+                              const isWeekend = day.getDay() === 0 || day.getDay() === 6
+                              return (
+                                <div
+                                  key={idx}
+                                  className={`${styles.dayCell} ${isWeekend ? styles.weekendCell : ''}`}
+                                  style={{ left: idx * DAY_WIDTH, width: DAY_WIDTH }}
+                                />
+                              )
+                            })}
+                          </div>
                         </div>
                         
-                        <div className={styles.timelineRow} style={{ width: totalWidth }}>
-                          {days.map((day, idx) => {
-                            const isWeekend = day.getDay() === 0 || day.getDay() === 6
-                            return (
-                              <div
-                                key={idx}
-                                className={`${styles.dayCell} ${isWeekend ? styles.weekendCell : ''}`}
-                                style={{ left: idx * DAY_WIDTH, width: DAY_WIDTH }}
-                              />
-                            )
-                          })}
+                        {/* Platform sub-rows for products with sales */}
+                        {productPlatforms.map(platform => {
+                          const platformSales = getSalesForProductPlatform(product.id, platform.id)
                           
-                          {productSales.map(sale => {
-                            const left = getPositionForDate(sale.start_date)
-                            const width = getWidthForRange(sale.start_date, sale.end_date)
-                            const cooldown = getCooldownForSale(sale)
-                            
-                            return (
-                              <div key={sale.id}>
-                                {cooldown && (
-                                  <div
-                                    className={styles.cooldownBlock}
-                                    style={{
-                                      left: cooldown.left,
-                                      width: cooldown.width
-                                    }}
-                                    title={`Cooldown until ${format(cooldown.end, 'MMM d, yyyy')}`}
-                                  >
-                                    <span>COOLDOWN</span>
-                                  </div>
-                                )}
-                                
-                                <SaleBlock
-                                  sale={sale}
-                                  left={left}
-                                  width={width}
-                                  onEdit={onSaleEdit}
-                                  onDelete={onSaleDelete}
+                          return (
+                            <div key={`${product.id}-${platform.id}`} className={styles.platformRow}>
+                              <div className={styles.platformLabel}>
+                                <span 
+                                  className={styles.platformIndicator}
+                                  style={{ backgroundColor: platform.color_hex }}
                                 />
+                                <span className={styles.platformName}>{platform.name}</span>
                               </div>
-                            )
-                          })}
-                        </div>
+                              
+                              <div className={styles.timelineRow} style={{ width: totalWidth }}>
+                                {days.map((day, idx) => {
+                                  const isWeekend = day.getDay() === 0 || day.getDay() === 6
+                                  return (
+                                    <div
+                                      key={idx}
+                                      className={`${styles.dayCell} ${isWeekend ? styles.weekendCell : ''}`}
+                                      style={{ left: idx * DAY_WIDTH, width: DAY_WIDTH }}
+                                    />
+                                  )
+                                })}
+                                
+                                {platformSales.map(sale => {
+                                  const left = getPositionForDate(sale.start_date)
+                                  const width = getWidthForRange(sale.start_date, sale.end_date)
+                                  const cooldown = getCooldownForSale(sale)
+                                  
+                                  return (
+                                    <div key={sale.id}>
+                                      {cooldown && (
+                                        <div
+                                          className={styles.cooldownBlock}
+                                          style={{
+                                            left: cooldown.left,
+                                            width: cooldown.width
+                                          }}
+                                          title={`Cooldown until ${format(cooldown.end, 'MMM d, yyyy')}`}
+                                        >
+                                          <span>COOLDOWN</span>
+                                        </div>
+                                      )}
+                                      
+                                      <SaleBlock
+                                        sale={sale}
+                                        left={left}
+                                        width={width}
+                                        onEdit={onSaleEdit}
+                                        onDelete={onSaleDelete}
+                                      />
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            </div>
+                          )
+                        })}
                       </div>
                     )
                   })}
