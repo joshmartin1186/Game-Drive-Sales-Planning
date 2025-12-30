@@ -23,6 +23,7 @@
 | Edit/Delete Sales | ✅ Complete | 100% |
 | Filtering System | ✅ Complete | 100% |
 | UI/UX Polish | ✅ Complete | 100% |
+| Platform Sub-Rows | ✅ Complete | 100% |
 | Steam API Integration | 🔲 Pending | 0% |
 | Excel Export | 🔲 Pending | 0% |
 
@@ -61,7 +62,7 @@
 | Humble | 0 days | #cc3333 | 14 |
 | Fanatical | 0 days | #ff6600 | 14 |
 
-### Gantt Chart UI (Dec 26-27)
+### Gantt Chart UI (Dec 26-27, Dec 30)
 - [x] 12-month timeline with horizontal scroll
 - [x] Month/day headers with visual grid
 - [x] Game groupings with product rows
@@ -70,6 +71,14 @@
 - [x] Cooldown period visualization
 - [x] Status badges (Planned, Submitted, Confirmed, Live, Ended)
 - [x] Responsive design
+- [x] **Platform sub-rows** - Each product shows separate rows per platform with sales (Dec 30)
+
+### Platform Sub-Rows Feature (Dec 30) ✨ NEW
+- [x] Products with sales on multiple platforms now show separate platform rows
+- [x] Each platform row is indented under the product with colored indicator
+- [x] Sales on different platforms no longer overlap visually
+- [x] Platform rows only appear when that product has sales on that platform
+- [x] Structure: Product → Platform Sub-row → Sale blocks + Cooldowns
 
 ### CRUD Operations (Dec 27-28)
 - [x] Create sales via AddSaleModal
@@ -118,6 +127,11 @@
 - [x] Loading states and spinners
 - [x] Error handling with user feedback
 
+### Documentation (Dec 29-30)
+- [x] PROJECT_PROGRESS.md - Comprehensive progress tracker
+- [x] DEVELOPMENT_WORKFLOW.md - Feedback loops and best practices
+- [x] Updated README.md with docs references
+
 ---
 
 ## Technical Architecture
@@ -129,7 +143,7 @@ app/
 │   ├── AddSaleModal.tsx       # Create new sales
 │   ├── AddSaleModal.module.css
 │   ├── EditSaleModal.tsx      # Edit existing sales
-│   ├── GanttChart.tsx         # Main timeline view
+│   ├── GanttChart.tsx         # Main timeline view with platform sub-rows
 │   ├── GanttChart.module.css
 │   ├── SaleBlock.tsx          # Draggable sale blocks
 │   ├── SaleBlock.module.css
@@ -152,6 +166,9 @@ lib/
 ├── supabase.ts               # Supabase client
 ├── types.ts                  # TypeScript interfaces
 └── validation.ts             # Sale validation logic
+docs/
+├── PROJECT_PROGRESS.md       # This file
+└── DEVELOPMENT_WORKFLOW.md   # Dev patterns & feedback loops
 ```
 
 ### Key Design Decisions
@@ -159,6 +176,7 @@ lib/
 2. **Optimistic UI** - All operations update UI instantly, then sync with server
 3. **Type Safety** - Full TypeScript with proper interfaces for all data
 4. **Cascading Deletes** - Database-level cascades ensure data integrity
+5. **Platform Sub-Rows** - Dynamic rows per platform prevent visual overlap of concurrent sales
 
 ---
 
@@ -176,6 +194,8 @@ lib/
 - [x] Delete button styling inconsistent → Unified CSS classes
 - [x] Drag preview not showing → Fixed DnD overlay
 - [x] Status badges not visible → Added proper styling
+- [x] TypeScript Set iteration error → Used Array.from() instead of spread
+- [x] Multi-platform sales overlap → Added platform sub-rows
 
 ---
 
@@ -204,6 +224,21 @@ lib/
 
 ---
 
+## Session Log
+
+### Dec 29-30, 2024 - Session Summary
+**Accomplished:**
+1. Created comprehensive PROJECT_PROGRESS.md tracker
+2. Created DEVELOPMENT_WORKFLOW.md with feedback loop patterns
+3. Updated README.md with cleaner structure and docs links
+4. Added memory edits for key project patterns
+5. Implemented platform sub-rows feature for multi-platform sales
+6. Fixed TypeScript Set iteration error (Array.from vs spread)
+
+**Key Learning:** When a product has sales on multiple platforms, they need separate visual rows to prevent overlap. Platform sub-rows appear dynamically only when sales exist.
+
+---
+
 ## Client Communication Log
 
 ### Dec 22, 2024 - Discovery Call
@@ -218,6 +253,11 @@ lib/
 - Implemented bold fonts and vibrant colors
 - All core CRUD operations functional
 
+### Dec 30, 2024 - Platform Sub-Rows
+- User identified overlap issue with multi-platform sales
+- Implemented platform sub-rows to show each platform separately
+- Visual structure now supports concurrent sales across platforms
+
 ---
 
 ## Metrics
@@ -227,7 +267,7 @@ lib/
 - **API Endpoints:** 1 (sales CRUD)
 - **Database Tables:** 5
 - **Platforms Supported:** 17
-- **Lines of TypeScript:** ~3,500
+- **Lines of TypeScript:** ~4,000
 
 ### Performance
 - **Initial Load:** < 2s
@@ -244,4 +284,4 @@ lib/
 
 ---
 
-*Last Updated: December 29, 2024*
+*Last Updated: December 30, 2024*
