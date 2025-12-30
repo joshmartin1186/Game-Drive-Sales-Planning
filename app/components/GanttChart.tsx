@@ -122,7 +122,7 @@ export default function GanttChart({
   // Get unique platforms that have sales for a product
   const getPlatformsForProduct = useCallback((productId: string) => {
     const productSales = getSalesForProduct(productId)
-    const platformIds = [...new Set(productSales.map(s => s.platform_id))]
+    const platformIds = Array.from(new Set(productSales.map(s => s.platform_id)))
     return platformIds
       .map(id => platforms.find(p => p.id === id))
       .filter((p): p is Platform => p !== undefined)
