@@ -140,6 +140,11 @@
   margin-left: 0.5rem;
 }
 
+/* Product Group - wraps product header + platform sub-rows */
+.productGroup {
+  border-bottom: 1px solid #e2e8f0;
+}
+
 .productRow {
   display: flex;
   height: 40px;
@@ -176,6 +181,55 @@
   font-size: 0.625rem;
   color: #94a3b8;
   text-transform: uppercase;
+}
+
+/* Platform Sub-rows */
+.platformRow {
+  display: flex;
+  height: 36px;
+  border-bottom: 1px solid #f8fafc;
+  background: #fcfcfd;
+}
+
+.platformRow:hover {
+  background: #f8fafc;
+}
+
+.platformRow:last-child {
+  border-bottom: none;
+}
+
+.platformLabel {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 200px;
+  padding: 0 1rem 0 2rem; /* Extra left padding for indent */
+  background: #fcfcfd;
+  border-right: 1px solid #e2e8f0;
+  position: sticky;
+  left: 0;
+  z-index: 10;
+}
+
+.platformRow:hover .platformLabel {
+  background: #f8fafc;
+}
+
+.platformIndicator {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.platformName {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #64748b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .timelineRow {
