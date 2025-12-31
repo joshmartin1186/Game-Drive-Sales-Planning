@@ -12,6 +12,13 @@
   font-weight: 500;
 }
 
+/* Info message styling (for cascade shift notifications) */
+.validationError.infoMessage {
+  background: #eff6ff;
+  border-bottom: 1px solid #bfdbfe;
+  color: #2563eb;
+}
+
 .legend {
   display: flex;
   align-items: center;
@@ -50,10 +57,73 @@
   font-size: 0.625rem;
 }
 
+/* Scroll Grab Bar */
+.scrollGrabBar {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 16px;
+  background: linear-gradient(to bottom, #f8fafc, #f1f5f9);
+  border-bottom: 1px solid #e2e8f0;
+  cursor: grab;
+  user-select: none;
+}
+
+.scrollGrabBar:hover {
+  background: linear-gradient(to bottom, #f1f5f9, #e2e8f0);
+}
+
+.scrollGrabBar.grabbing {
+  background: linear-gradient(to bottom, #e2e8f0, #cbd5e1);
+  cursor: grabbing;
+}
+
+.scrollGrabTrack {
+  width: 100%;
+  height: 20px;
+  background: #e2e8f0;
+  border-radius: 12px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.scrollGrabThumb {
+  height: 100%;
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3);
+  transition: transform 0.1s, box-shadow 0.1s;
+}
+
+.scrollGrabThumb:hover {
+  box-shadow: 0 3px 8px rgba(59, 130, 246, 0.4);
+}
+
+.scrollGrabBar.grabbing .scrollGrabThumb {
+  transform: scale(1.02);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.5);
+}
+
+.scrollGrabIcon {
+  color: white;
+  font-size: 1rem;
+  font-weight: bold;
+}
+
+.scrollGrabHint {
+  font-size: 0.6875rem;
+  color: #94a3b8;
+}
+
 .scrollContainer {
   overflow-x: auto;
   overflow-y: auto;
-  max-height: calc(100vh - 300px);
+  max-height: calc(100vh - 350px);
 }
 
 .timeline {
