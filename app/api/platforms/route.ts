@@ -1,14 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
+// Create supabase client lazily inside handlers to avoid build-time errors
+function getSupabase() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  
+  if (!supabaseUrl || !supabaseKey) {
+    throw new Error('Missing Supabase environment variables')
+  }
+  
+  return createClient(supabaseUrl, supabaseKey)
+}
 
 // GET - Fetch all platforms with full configuration
 export async function GET() {
   try {
+    const supabase = getSupabase()
+    
     const { data, error } = await supabase
       .from('platforms')
       .select('*')
@@ -29,6 +38,7 @@ export async function GET() {
 // PUT - Update platform configuration
 export async function PUT(request: NextRequest) {
   try {
+    const supabase = getSupabase()
     const body = await request.json()
     const { id, ...updates } = body
     
