@@ -39,6 +39,12 @@ interface LaunchDateDragState {
   currentDayIndex: number
 }
 
+interface CascadeShift {
+  saleId: string
+  newStart: string
+  newEnd: string
+}
+
 const DAY_WIDTH = 28
 const ROW_HEIGHT = 40
 const HEADER_HEIGHT = 60
@@ -67,7 +73,9 @@ export default function GanttChart(props: GanttChartProps) {
   const [optimisticUpdates, setOptimisticUpdates] = useState<Record<string, { startDate: string; endDate: string }>>({})
   const [selection, setSelection] = useState<SelectionState | null>(null)
   const [launchDateDrag, setLaunchDateDrag] = useState<LaunchDateDragState | null>(null)
+  const [isGrabbing, setIsGrabbing] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
   
   // Refs for selection - store everything needed at mousedown time
   const selectionRef = useRef<{
@@ -81,6 +89,12 @@ export default function GanttChart(props: GanttChartProps) {
     productId: string
     originalDate: string
     startX: number
+  } | null>(null)
+  
+  // Ref for scroll grab
+  const scrollGrabRef = useRef<{
+    startX: number
+    startScrollLeft: number
   } | null>(null)
   
   const sensors = useSensors(
@@ -260,6 +274,57 @@ export default function GanttChart(props: GanttChartProps) {
     }
   }, [getPositionForDate, getWidthForRange])
   
+  // Calculate cascade shifts for sales that would conflict with a moved sale
+  const calculateCascadeShifts = useCallback((
+    movedSaleId: string,
+    newStart: Date,
+    newEnd: Date,
+    productId: string,
+    platformId: string,
+    cooldownDays: number
+  ): CascadeShift[] => {
+    const shifts: CascadeShift[] = []
+    
+    // Get all sales on this product+platform, sorted by start date
+    const otherSales = allSales
+      .filter(s => s.product_id === productId && s.platform_id === platformId && s.id !== movedSaleId)
+      .sort((a, b) => parseISO(a.start_date).getTime() - parseISO(b.start_date).getTime())
+    
+    if (otherSales.length === 0) return shifts
+    
+    // Calculate when the moved sale's cooldown ends
+    let currentCooldownEnd = addDays(newEnd, cooldownDays)
+    
+    // Find all sales that now conflict and need to shift
+    for (const sale of otherSales) {
+      const saleStart = parseISO(sale.start_date)
+      const saleEnd = parseISO(sale.end_date)
+      const saleDuration = differenceInDays(saleEnd, saleStart)
+      
+      // If this sale starts during the cooldown of the previous sale
+      if (saleStart < currentCooldownEnd && saleStart > newEnd) {
+        // Calculate how many days to shift
+        const shiftAmount = differenceInDays(currentCooldownEnd, saleStart) + 1
+        const newSaleStart = addDays(saleStart, shiftAmount)
+        const newSaleEnd = addDays(newSaleStart, saleDuration)
+        
+        shifts.push({
+          saleId: sale.id,
+          newStart: format(newSaleStart, 'yyyy-MM-dd'),
+          newEnd: format(newSaleEnd, 'yyyy-MM-dd')
+        })
+        
+        // Update cooldown end for next iteration
+        currentCooldownEnd = addDays(newSaleEnd, cooldownDays)
+      } else if (saleStart >= currentCooldownEnd) {
+        // No conflict, but update cooldown end in case there are more sales after
+        currentCooldownEnd = addDays(saleEnd, cooldownDays)
+      }
+    }
+    
+    return shifts
+  }, [allSales])
+  
   // Complete selection and open modal
   const completeSelection = useCallback((endDayIndex: number) => {
     if (!selectionRef.current) return
@@ -384,15 +449,50 @@ export default function GanttChart(props: GanttChartProps) {
     }
   }, [launchDateDrag, onLaunchDateChange, days])
   
+  // Scroll grab handlers
+  const handleScrollGrabStart = useCallback((e: React.MouseEvent) => {
+    if (e.button !== 0) return
+    if (!scrollContainerRef.current) return
+    
+    e.preventDefault()
+    
+    scrollGrabRef.current = {
+      startX: e.clientX,
+      startScrollLeft: scrollContainerRef.current.scrollLeft
+    }
+    setIsGrabbing(true)
+  }, [])
+  
+  const handleScrollGrabMove = useCallback((e: MouseEvent) => {
+    if (!scrollGrabRef.current || !scrollContainerRef.current) return
+    
+    const deltaX = e.clientX - scrollGrabRef.current.startX
+    scrollContainerRef.current.scrollLeft = scrollGrabRef.current.startScrollLeft - deltaX
+  }, [])
+  
+  const handleScrollGrabEnd = useCallback(() => {
+    scrollGrabRef.current = null
+    setIsGrabbing(false)
+  }, [])
+  
   // Window-level mouse handlers
   useEffect(() => {
     const handleWindowMouseMove = (e: MouseEvent) => {
+      if (scrollGrabRef.current) {
+        handleScrollGrabMove(e)
+        return
+      }
       if (launchDragRef.current) {
         handleLaunchDragMove(e)
       }
     }
     
     const handleWindowMouseUp = () => {
+      if (scrollGrabRef.current) {
+        handleScrollGrabEnd()
+        return
+      }
+      
       if (launchDragRef.current) {
         handleLaunchDragEnd()
         return
@@ -413,7 +513,7 @@ export default function GanttChart(props: GanttChartProps) {
       window.removeEventListener('mousemove', handleWindowMouseMove)
       window.removeEventListener('mouseup', handleWindowMouseUp, { capture: true })
     }
-  }, [completeSelection, handleLaunchDragMove, handleLaunchDragEnd])
+  }, [completeSelection, handleLaunchDragMove, handleLaunchDragEnd, handleScrollGrabMove, handleScrollGrabEnd])
   
   // Get selection visual properties
   const getSelectionStyle = useCallback((productId: string, platformId: string) => {
@@ -455,6 +555,15 @@ export default function GanttChart(props: GanttChartProps) {
     return { left, date: parseISO(product.launch_date), isDragging: false }
   }, [launchDateDrag, getDayIndexForDate, days])
   
+  // Calculate scroll thumb style
+  const scrollThumbStyle = useMemo(() => {
+    if (!scrollContainerRef.current) return { width: '20%', left: '0%' }
+    const totalWidth = totalDays * DAY_WIDTH
+    const containerWidth = scrollContainerRef.current.clientWidth || 800
+    const thumbWidthPercent = Math.max(10, Math.min(100, (containerWidth / totalWidth) * 100))
+    return { width: `${thumbWidthPercent}%` }
+  }, [totalDays])
+  
   const handleDragStart = (event: DragStartEvent) => {
     const saleId = event.active.id as string
     const sale = sales.find(s => s.id === saleId)
@@ -492,6 +601,20 @@ export default function GanttChart(props: GanttChartProps) {
       return
     }
     
+    // Calculate cascade shifts for conflicting sales
+    const cascadeShifts = calculateCascadeShifts(
+      draggedSale.id,
+      newStart,
+      newEnd,
+      draggedSale.product_id,
+      draggedSale.platform_id,
+      platform.cooldown_days
+    )
+    
+    // Exclude cascade-shifted sales from validation
+    const cascadeIds = new Set(cascadeShifts.map(s => s.saleId))
+    const salesForValidation = allSales.filter(s => !cascadeIds.has(s.id))
+    
     const validation = validateSale(
       {
         product_id: draggedSale.product_id,
@@ -500,7 +623,7 @@ export default function GanttChart(props: GanttChartProps) {
         end_date: newEndStr,
         sale_type: draggedSale.sale_type
       },
-      allSales,
+      salesForValidation,
       platform,
       draggedSale.id
     )
@@ -512,36 +635,59 @@ export default function GanttChart(props: GanttChartProps) {
       return
     }
     
-    // Optimistic update - immediately show new position
-    setOptimisticUpdates(prev => ({
-      ...prev,
+    // Show info message if we're cascading
+    if (cascadeShifts.length > 0) {
+      setValidationError(`Auto-shifted ${cascadeShifts.length} sale(s) to maintain cooldowns`)
+      setTimeout(() => setValidationError(null), 3000)
+    }
+    
+    // Optimistic update - immediately show new positions for all affected sales
+    const newOptimistic: Record<string, { startDate: string; endDate: string }> = {
       [draggedSale.id]: { startDate: newStartStr, endDate: newEndStr }
-    }))
+    }
+    for (const shift of cascadeShifts) {
+      newOptimistic[shift.saleId] = { startDate: shift.newStart, endDate: shift.newEnd }
+    }
+    setOptimisticUpdates(prev => ({ ...prev, ...newOptimistic }))
     
     setDraggedSale(null)
     
     try {
-      // Update in background
+      // Update the dragged sale first
       await onSaleUpdate(draggedSale.id, {
         start_date: newStartStr,
         end_date: newEndStr
       })
+      
+      // Update all cascade-shifted sales
+      for (const shift of cascadeShifts) {
+        await onSaleUpdate(shift.saleId, {
+          start_date: shift.newStart,
+          end_date: shift.newEnd
+        })
+      }
     } catch (err) {
-      // Revert optimistic update on error
+      // Revert all optimistic updates on error
       setOptimisticUpdates(prev => {
         const updated = { ...prev }
         delete updated[draggedSale.id]
+        for (const shift of cascadeShifts) {
+          delete updated[shift.saleId]
+        }
         return updated
       })
       setValidationError('Failed to save - position reverted')
       setTimeout(() => setValidationError(null), 3000)
     }
     
-    // Clear optimistic update after data refresh
+    // Clear optimistic updates after data refresh
     setTimeout(() => {
       setOptimisticUpdates(prev => {
         const updated = { ...prev }
         delete updated[draggedSale.id]
+        for (const shift of cascadeShifts) {
+          delete updated[shift.saleId]
+        }
         return updated
       })
     }, 500)
@@ -566,10 +712,11 @@ export default function GanttChart(props: GanttChartProps) {
     <div 
       className={styles.container}
       onMouseLeave={handleMouseLeave}
+      ref={containerRef}
     >
       {validationError && (
-        <div className={styles.validationError}>
-          <span>⚠️ {validationError}</span>
+        <div className={`${styles.validationError} ${validationError.includes('Auto-shifted') ? styles.infoMessage : ''}`}>
+          <span>{validationError.includes('Auto-shifted') ? 'ℹ️' : '⚠️'} {validationError}</span>
         </div>
       )}
       
@@ -587,7 +734,20 @@ export default function GanttChart(props: GanttChartProps) {
         ))}
       </div>
       
-      <div className={styles.scrollContainer} ref={containerRef}>
+      {/* Scroll Grab Bar */}
+      <div 
+        className={`${styles.scrollGrabBar} ${isGrabbing ? styles.grabbing : ''}`}
+        onMouseDown={handleScrollGrabStart}
+      >
+        <div className={styles.scrollGrabTrack}>
+          <div className={styles.scrollGrabThumb} style={scrollThumbStyle}>
+            <span className={styles.scrollGrabIcon}>⟷</span>
+          </div>
+        </div>
+        <span className={styles.scrollGrabHint}>Drag to scroll timeline</span>
+      </div>
+      
+      <div className={styles.scrollContainer} ref={scrollContainerRef}>
         <DndContext
           sensors={sensors}
           onDragStart={handleDragStart}
