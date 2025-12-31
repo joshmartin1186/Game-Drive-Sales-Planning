@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { createClient } from '@supabase/supabase-js'
-import { parseISO } from 'date-fns'
+import { parseISO, format } from 'date-fns'
 import GanttChart from './components/GanttChart'
 import SalesTable from './components/SalesTable'
 import AddSaleModal from './components/AddSaleModal'
@@ -32,6 +32,7 @@ interface SalePrefill {
 interface CalendarGenerationState {
   productId: string
   productName: string
+  launchDate: string
   variations: CalendarVariation[]
 }
 
@@ -398,20 +399,22 @@ export default function GameDriveDashboard() {
     setSalePrefill(null)
   }, [])
 
-  const handleGenerateCalendar = useCallback((productId: string, productName: string) => {
-    const currentYear = new Date().getFullYear()
+  const handleGenerateCalendar = useCallback((productId: string, productName: string, launchDate?: string) => {
+    // Use provided launch date or today's date
+    const effectiveLaunchDate = launchDate || format(new Date(), 'yyyy-MM-dd')
     
     const variations = generateSaleCalendar({
       productId,
       platforms,
       platformEvents,
-      year: currentYear,
+      launchDate: effectiveLaunchDate,
       defaultDiscount: 50
     })
     
     setCalendarGeneration({
       productId,
       productName,
+      launchDate: effectiveLaunchDate,
       variations
     })
   }, [platforms, platformEvents])
@@ -531,6 +534,76 @@ export default function GameDriveDashboard() {
       await fetchSales()
     }
   }, [sales, pushAction])
+
+  // Launch date change handler - shifts all sales for a product
+  const handleLaunchDateChange = useCallback(async (productId: string, newLaunchDate: string) => {
+    const product = products.find(p => p.id === productId)
+    if (!product) return
+    
+    const oldLaunchDate = product.launch_date
+    if (!oldLaunchDate || oldLaunchDate === newLaunchDate) return
+    
+    // Calculate the day difference
+    const oldDate = parseISO(oldLaunchDate)
+    const newDate = parseISO(newLaunchDate)
+    const daysDiff = Math.round((newDate.getTime() - oldDate.getTime()) / (1000 * 60 * 60 * 24))
+    
+    if (daysDiff === 0) return
+    
+    // Get all sales for this product
+    const productSales = sales.filter(s => s.product_id === productId)
+    
+    // Optimistically update product launch date
+    setProducts(prev => prev.map(p => 
+      p.id === productId ? { ...p, launch_date: newLaunchDate } : p
+    ))
+    
+    // Optimistically update all sales dates
+    const updatedSales = productSales.map(sale => {
+      const newStartDate = new Date(parseISO(sale.start_date).getTime() + daysDiff * 24 * 60 * 60 * 1000)
+      const newEndDate = new Date(parseISO(sale.end_date).getTime() + daysDiff * 24 * 60 * 60 * 1000)
+      return {
+        ...sale,
+        start_date: format(newStartDate, 'yyyy-MM-dd'),
+        end_date: format(newEndDate, 'yyyy-MM-dd')
+      }
+    })
+    
+    setSales(prev => prev.map(sale => {
+      const updated = updatedSales.find(u => u.id === sale.id)
+      return updated || sale
+    }))
+    
+    try {
+      // Update product launch date in database
+      const { error: productError } = await supabase
+        .from('products')
+        .update({ launch_date: newLaunchDate })
+        .eq('id', productId)
+      
+      if (productError) throw productError
+      
+      // Update all sales dates in database
+      for (const sale of updatedSales) {
+        const { error: saleError } = await supabase
+          .from('sales')
+          .update({
+            start_date: sale.start_date,
+            end_date: sale.end_date
+          })
+          .eq('id', sale.id)
+        
+        if (saleError) throw saleError
+      }
+      
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to update launch date'
+      console.error('Error updating launch date:', err)
+      setError(errorMessage)
+      // Rollback on error
+      await fetchData()
+    }
+  }, [products, sales])
 
   async function handleClientCreate(client: Omit<Client, 'id' | 'created_at'>) {
     try {
@@ -852,6 +925,7 @@ export default function GameDriveDashboard() {
             onCreateSale={handleTimelineCreate}
             onGenerateCalendar={handleGenerateCalendar}
             onClearSales={handleClearSales}
+            onLaunchDateChange={handleLaunchDateChange}
             allSales={sales}
             showEvents={showEvents}
           />
@@ -944,6 +1018,7 @@ export default function GameDriveDashboard() {
           isOpen={true}
           onClose={() => setCalendarGeneration(null)}
           productName={calendarGeneration.productName}
+          launchDate={calendarGeneration.launchDate}
           variations={calendarGeneration.variations}
           onApply={handleApplyCalendar}
           isApplying={isApplyingCalendar}
