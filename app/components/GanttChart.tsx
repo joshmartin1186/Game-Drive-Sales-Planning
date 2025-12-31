@@ -19,6 +19,7 @@ interface GanttChartProps {
   onSaleDelete: (saleId: string) => Promise<void>
   onSaleEdit: (sale: SaleWithDetails) => void
   onCreateSale?: (prefill: { productId: string; platformId: string; startDate: string; endDate: string }) => void
+  onGenerateCalendar?: (productId: string, productName: string) => void
   allSales: SaleWithDetails[]
   showEvents?: boolean
 }
@@ -46,6 +47,7 @@ export default function GanttChart(props: GanttChartProps) {
     onSaleDelete,
     onSaleEdit,
     onCreateSale,
+    onGenerateCalendar,
     allSales,
     showEvents = true
   } = props
@@ -528,8 +530,19 @@ export default function GanttChart(props: GanttChartProps) {
                         {/* Product header row */}
                         <div className={styles.productRow}>
                           <div className={styles.productLabel}>
-                            <span className={styles.productName}>{product.name}</span>
-                            <span className={styles.productType}>{product.product_type}</span>
+                            <div className={styles.productLabelContent}>
+                              <span className={styles.productName}>{product.name}</span>
+                              <span className={styles.productType}>{product.product_type}</span>
+                            </div>
+                            {onGenerateCalendar && (
+                              <button
+                                className={styles.generateButton}
+                                onClick={() => onGenerateCalendar(product.id, product.name)}
+                                title="Auto-generate sale calendar for this product"
+                              >
+                                🗓️
+                              </button>
+                            )}
                           </div>
                           
                           <div className={styles.timelineRow} style={{ width: totalWidth }}>
