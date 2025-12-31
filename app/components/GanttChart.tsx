@@ -20,6 +20,7 @@ interface GanttChartProps {
   onSaleEdit: (sale: SaleWithDetails) => void
   onCreateSale?: (prefill: { productId: string; platformId: string; startDate: string; endDate: string }) => void
   onGenerateCalendar?: (productId: string, productName: string) => void
+  onClearSales?: (productId: string, productName: string) => void
   allSales: SaleWithDetails[]
   showEvents?: boolean
 }
@@ -48,6 +49,7 @@ export default function GanttChart(props: GanttChartProps) {
     onSaleEdit,
     onCreateSale,
     onGenerateCalendar,
+    onClearSales,
     allSales,
     showEvents = true
   } = props
@@ -450,6 +452,11 @@ export default function GanttChart(props: GanttChartProps) {
     }
   }, [])
   
+  // Get sale count for a product
+  const getSaleCount = useCallback((productId: string) => {
+    return sales.filter(s => s.product_id === productId).length
+  }, [sales])
+  
   const totalWidth = totalDays * DAY_WIDTH
   
   return (
@@ -524,6 +531,7 @@ export default function GanttChart(props: GanttChartProps) {
                   
                   {gameProducts.map(product => {
                     const productPlatforms = getPlatformsForProduct(product.id)
+                    const saleCount = getSaleCount(product.id)
                     
                     return (
                       <div key={product.id} className={styles.productGroup}>
@@ -534,15 +542,26 @@ export default function GanttChart(props: GanttChartProps) {
                               <span className={styles.productName}>{product.name}</span>
                               <span className={styles.productType}>{product.product_type}</span>
                             </div>
-                            {onGenerateCalendar && (
-                              <button
-                                className={styles.generateButton}
-                                onClick={() => onGenerateCalendar(product.id, product.name)}
-                                title="Auto-generate sale calendar for this product"
-                              >
-                                🗓️
-                              </button>
-                            )}
+                            <div className={styles.productActions}>
+                              {onGenerateCalendar && (
+                                <button
+                                  className={styles.generateButton}
+                                  onClick={() => onGenerateCalendar(product.id, product.name)}
+                                  title="Auto-generate sale calendar for this product"
+                                >
+                                  🗓️
+                                </button>
+                              )}
+                              {onClearSales && saleCount > 0 && (
+                                <button
+                                  className={styles.clearButton}
+                                  onClick={() => onClearSales(product.id, product.name)}
+                                  title={`Clear sales for this product (${saleCount})`}
+                                >
+                                  🗑️
+                                </button>
+                              )}
+                            </div>
                           </div>
                           
                           <div className={styles.timelineRow} style={{ width: totalWidth }}>
