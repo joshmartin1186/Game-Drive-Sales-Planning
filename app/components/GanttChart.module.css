@@ -238,6 +238,15 @@
   flex: 1;
 }
 
+/* Clickable timeline for creating sales */
+.clickableTimeline {
+  cursor: crosshair;
+}
+
+.clickableTimeline .dayCell {
+  cursor: crosshair;
+}
+
 .dayCell {
   position: absolute;
   top: 0;
@@ -248,6 +257,36 @@
 
 .weekendCell {
   background: #fafafa;
+}
+
+/* Selection Preview for click-to-create */
+.selectionPreview {
+  position: absolute;
+  top: 2px;
+  height: calc(100% - 4px);
+  border-radius: 4px;
+  border: 2px dashed;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 8;
+  pointer-events: none;
+  animation: selectionPulse 0.8s ease-in-out infinite;
+}
+
+.selectionLabel {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: #334155;
+  background: rgba(255, 255, 255, 0.9);
+  padding: 2px 6px;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+
+@keyframes selectionPulse {
+  0%, 100% { opacity: 0.8; }
+  50% { opacity: 1; }
 }
 
 /* Platform Event Shading - different from cooldown */
@@ -264,6 +303,7 @@
   justify-content: center;
   padding-top: 2px;
   overflow: hidden;
+  pointer-events: none;
 }
 
 .platformEventShade:hover {
@@ -350,6 +390,7 @@
   justify-content: center;
   overflow: hidden;
   z-index: 2;
+  pointer-events: none;
 }
 
 .cooldownBlock span {
