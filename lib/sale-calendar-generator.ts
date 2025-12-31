@@ -1,4 +1,4 @@
-import { addDays, addMonths, differenceInDays, parseISO, format, isAfter, isBefore, isEqual } from 'date-fns'
+import { addDays, addMonths, differenceInDays, parseISO, format, isAfter, isBefore } from 'date-fns'
 import { Platform, PlatformEvent, SaleWithDetails } from '@/lib/types'
 
 export interface GeneratedSale {
@@ -74,6 +74,7 @@ function getEventsForPlatform(
 }
 
 // Check if a proposed sale conflicts with existing sales on SAME platform
+// Uses the "10 AM rule" - last day of cooldown is a valid start day for new sale
 function hasConflict(
   startDate: Date,
   endDate: Date,
@@ -84,14 +85,10 @@ function hasConflict(
   // Only check against sales on the SAME platform
   const samePlatformSales = existingSales.filter(s => s.platform_id === platformId)
   
-  // Calculate when this new sale's cooldown would end
-  const newSaleCooldownEnd = addDays(endDate, newSaleCooldownDays)
-  
   for (const existingSale of samePlatformSales) {
     const saleStart = parseISO(existingSale.start_date)
     const saleEnd = parseISO(existingSale.end_date)
     const saleCooldownDays = existingSale.cooldown_days || 0
-    const saleCooldownEnd = addDays(saleEnd, saleCooldownDays)
     
     // Check 1: Direct overlap - new sale overlaps with existing sale period
     if (startDate <= saleEnd && endDate >= saleStart) {
@@ -99,15 +96,22 @@ function hasConflict(
     }
     
     // Check 2: New sale starts during existing sale's cooldown
+    // 10 AM rule: Last day of cooldown IS valid for new sale to start
+    // So we use < not <= for the cooldown check
     if (saleCooldownDays > 0) {
-      if (isAfter(startDate, saleEnd) && (isBefore(startDate, saleCooldownEnd) || isEqual(startDate, saleCooldownEnd))) {
+      const saleCooldownEnd = addDays(saleEnd, saleCooldownDays)
+      // startDate must be AFTER saleEnd but BEFORE cooldownEnd (exclusive)
+      if (isAfter(startDate, saleEnd) && isBefore(startDate, saleCooldownEnd)) {
         return true
       }
     }
     
     // Check 3: Existing sale starts during new sale's cooldown
+    // Same 10 AM rule applies
     if (newSaleCooldownDays > 0) {
-      if (isAfter(saleStart, endDate) && (isBefore(saleStart, newSaleCooldownEnd) || isEqual(saleStart, newSaleCooldownEnd))) {
+      const newSaleCooldownEnd = addDays(endDate, newSaleCooldownDays)
+      // existingStart must be AFTER newEnd but BEFORE newCooldownEnd (exclusive)
+      if (isAfter(saleStart, endDate) && isBefore(saleStart, newSaleCooldownEnd)) {
         return true
       }
     }
@@ -153,7 +157,8 @@ function findNextAvailableDate(
       const saleCooldownEnd = addDays(saleEnd, saleCooldownDays)
       
       if (candidate <= saleCooldownEnd) {
-        const jumpTo = addDays(saleCooldownEnd, 1)
+        // Jump to the cooldown end day (which IS valid to start a new sale)
+        const jumpTo = saleCooldownEnd
         if (isAfter(jumpTo, nextPossible)) {
           nextPossible = jumpTo
         }
@@ -292,7 +297,8 @@ function generatePlatformSales(
       allSales.push(customSale)
       customSaleCount++
       
-      searchStart = addDays(actualEnd, platformCooldownDays)
+      // Start searching from the cooldown end of this sale
+      searchStart = addDays(actualEnd, platformCooldownDays - 1)
     } else {
       searchStart = addDays(availableDate, 1)
     }
