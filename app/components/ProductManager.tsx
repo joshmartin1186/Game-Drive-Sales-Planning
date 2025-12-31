@@ -10,10 +10,11 @@ interface ProductManagerProps {
   products: (Product & { game: Game & { client: Client } })[]
   onClientCreate: (client: Omit<Client, 'id' | 'created_at'>) => Promise<void>
   onGameCreate: (game: Omit<Game, 'id' | 'created_at'>) => Promise<void>
-  onProductCreate: (product: Omit<Product, 'id' | 'created_at'>) => Promise<void>
+  onProductCreate: (product: Omit<Product, 'id' | 'created_at'>) => Promise<Product | void>
   onClientDelete?: (id: string) => Promise<void>
   onGameDelete?: (id: string) => Promise<void>
   onProductDelete?: (id: string) => Promise<void>
+  onGenerateCalendar?: (productId: string, productName: string) => void
   onClose: () => void
 }
 
@@ -29,6 +30,7 @@ export default function ProductManager({
   onClientDelete,
   onGameDelete,
   onProductDelete,
+  onGenerateCalendar,
   onClose
 }: ProductManagerProps) {
   const [activeTab, setActiveTab] = useState<Tab>('clients')
@@ -50,6 +52,7 @@ export default function ProductManager({
   const [productGameId, setProductGameId] = useState('')
   const [productType, setProductType] = useState<'base' | 'edition' | 'dlc' | 'soundtrack'>('base')
   const [steamProductId, setSteamProductId] = useState('')
+  const [autoGenerateCalendar, setAutoGenerateCalendar] = useState(true) // Default to checked
 
   const handleCreateClient = async () => {
     if (!clientName.trim()) {
@@ -108,13 +111,21 @@ export default function ProductManager({
     setLoading(true)
     setError(null)
     
+    const nameToCreate = productName.trim()
+    
     try {
-      await onProductCreate({
-        name: productName.trim(),
+      const createdProduct = await onProductCreate({
+        name: nameToCreate,
         game_id: productGameId,
         product_type: productType,
         steam_product_id: steamProductId.trim() || undefined
       })
+      
+      // If auto-generate is checked and we got a product back, trigger calendar generation
+      if (autoGenerateCalendar && createdProduct && onGenerateCalendar) {
+        onGenerateCalendar(createdProduct.id, createdProduct.name)
+      }
+      
       setProductName('')
       setSteamProductId('')
     } catch (err: any) {
@@ -394,6 +405,26 @@ export default function ProductManager({
                       placeholder="e.g., 1234567"
                     />
                   </div>
+                  
+                  {/* Auto-generate calendar checkbox */}
+                  {onGenerateCalendar && (
+                    <div className={styles.checkboxField}>
+                      <label className={styles.checkboxLabel}>
+                        <input
+                          type="checkbox"
+                          checked={autoGenerateCalendar}
+                          onChange={(e) => setAutoGenerateCalendar(e.target.checked)}
+                        />
+                        <span className={styles.checkboxText}>
+                          🗓️ Auto-generate sales calendar
+                        </span>
+                      </label>
+                      <p className={styles.checkboxHint}>
+                        Automatically create a yearly sales plan across all platforms
+                      </p>
+                    </div>
+                  )}
+                  
                   <button 
                     className={styles.addBtn}
                     onClick={handleCreateProduct}
