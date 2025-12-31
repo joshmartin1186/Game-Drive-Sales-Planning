@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { createClient } from '@supabase/supabase-js'
+import { parseISO } from 'date-fns'
 import GanttChart from './components/GanttChart'
 import SalesTable from './components/SalesTable'
 import AddSaleModal from './components/AddSaleModal'
@@ -15,6 +16,13 @@ import { Sale, Platform, Product, Game, Client, SaleWithDetails, PlatformEvent }
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
 const supabase = createClient(supabaseUrl, supabaseAnonKey)
+
+interface SalePrefill {
+  productId: string
+  platformId: string
+  startDate: string
+  endDate: string
+}
 
 export default function GameDriveDashboard() {
   const [sales, setSales] = useState<SaleWithDetails[]>([])
@@ -31,6 +39,7 @@ export default function GameDriveDashboard() {
   const [editingSale, setEditingSale] = useState<SaleWithDetails | null>(null)
   const [viewMode, setViewMode] = useState<'gantt' | 'table'>('gantt')
   const [showEvents, setShowEvents] = useState(true)
+  const [salePrefill, setSalePrefill] = useState<SalePrefill | null>(null)
   
   // Filter state
   const [filterClientId, setFilterClientId] = useState<string>('')
@@ -247,6 +256,7 @@ export default function GameDriveDashboard() {
       }
       
       setShowAddModal(false)
+      setSalePrefill(null)
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to create sale'
       console.error('Error creating sale:', err)
@@ -254,9 +264,21 @@ export default function GameDriveDashboard() {
     }
   }
 
-  function handleSaleEdit(sale: SaleWithDetails) {
+  const handleSaleEdit = useCallback((sale: SaleWithDetails) => {
     setEditingSale(sale)
-  }
+  }, [])
+
+  // Handle click-to-create from timeline - MEMOIZED to prevent recreation
+  const handleTimelineCreate = useCallback((prefill: SalePrefill) => {
+    setSalePrefill(prefill)
+    setShowAddModal(true)
+  }, [])
+
+  // Close modal and clear prefill
+  const handleCloseAddModal = useCallback(() => {
+    setShowAddModal(false)
+    setSalePrefill(null)
+  }, [])
 
   async function handleClientCreate(client: Omit<Client, 'id' | 'created_at'>) {
     try {
@@ -443,7 +465,7 @@ export default function GameDriveDashboard() {
         <div className={styles.statCard}>
           <div className={styles.statIcon} style={{backgroundColor: '#10b981'}}>📊</div>
           <div className={styles.statContent}>
-            <h3>Total Sales</h3>
+            <h3>TOTAL SALES</h3>
             <p className={styles.statValue}>{filteredSales.length}</p>
             <span className={styles.statChange}>Across all platforms</span>
           </div>
@@ -452,7 +474,7 @@ export default function GameDriveDashboard() {
         <div className={styles.statCard}>
           <div className={styles.statIcon} style={{backgroundColor: '#3b82f6'}}>🎮</div>
           <div className={styles.statContent}>
-            <h3>Products</h3>
+            <h3>PRODUCTS</h3>
             <p className={styles.statValue}>{filteredProducts.length}</p>
             <span className={styles.statChange}>Games and DLCs</span>
           </div>
@@ -461,7 +483,7 @@ export default function GameDriveDashboard() {
         <div className={styles.statCard}>
           <div className={styles.statIcon} style={{backgroundColor: '#8b5cf6'}}>📅</div>
           <div className={styles.statContent}>
-            <h3>Platform Events</h3>
+            <h3>PLATFORM EVENTS</h3>
             <p className={styles.statValue}>{upcomingEvents}</p>
             <span className={styles.statChange}>Upcoming sales events</span>
           </div>
@@ -472,7 +494,7 @@ export default function GameDriveDashboard() {
             {conflicts > 0 ? '⚠️' : '✓'}
           </div>
           <div className={styles.statContent}>
-            <h3>Conflicts</h3>
+            <h3>CONFLICTS</h3>
             <p className={styles.statValue}>{conflicts}</p>
             <span className={styles.statChange}>{conflicts === 0 ? 'All platforms clear' : 'Needs attention'}</span>
           </div>
@@ -574,6 +596,7 @@ export default function GameDriveDashboard() {
             onSaleUpdate={handleSaleUpdate}
             onSaleDelete={handleSaleDelete}
             onSaleEdit={handleSaleEdit}
+            onCreateSale={handleTimelineCreate}
             allSales={sales}
             showEvents={showEvents}
           />
@@ -612,7 +635,11 @@ export default function GameDriveDashboard() {
           platforms={platforms}
           existingSales={sales}
           onSave={handleSaleCreate}
-          onClose={() => setShowAddModal(false)}
+          onClose={handleCloseAddModal}
+          initialDate={salePrefill ? parseISO(salePrefill.startDate) : undefined}
+          initialEndDate={salePrefill ? parseISO(salePrefill.endDate) : undefined}
+          initialProductId={salePrefill?.productId}
+          initialPlatformId={salePrefill?.platformId}
         />
       )}
 
