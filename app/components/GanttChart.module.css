@@ -196,6 +196,7 @@
 .gameHeader .productLabel {
   padding: 0.5rem 1rem;
   min-width: 200px;
+  max-width: 200px;
   background: #f1f5f9;
 }
 
@@ -231,18 +232,23 @@
   align-items: center;
   justify-content: space-between;
   min-width: 200px;
-  padding: 0 1rem;
+  max-width: 200px;
+  width: 200px;
+  padding: 0 0.5rem 0 1rem;
   background: white;
   border-right: 1px solid #e2e8f0;
   position: sticky;
   left: 0;
   z-index: 10;
+  flex-shrink: 0;
 }
 
 .productLabelContent {
   display: flex;
   flex-direction: column;
   justify-content: center;
+  min-width: 0;
+  flex: 1;
 }
 
 .productName {
@@ -267,7 +273,6 @@
   background: #f0fdf4;
   padding: 1px 4px;
   border-radius: 3px;
-  margin-left: 4px;
   white-space: nowrap;
 }
 
@@ -275,18 +280,19 @@
 .productActions {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
   flex-shrink: 0;
+  margin-left: 4px;
 }
 
 /* Generate Calendar Button */
 .generateButton {
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
   border: none;
   background: #f1f5f9;
-  border-radius: 6px;
-  font-size: 0.875rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -306,12 +312,12 @@
 
 /* Clear Sales Button */
 .clearButton {
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
   border: none;
   background: #fef2f2;
-  border-radius: 6px;
-  font-size: 0.875rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -351,12 +357,15 @@
   align-items: center;
   gap: 0.5rem;
   min-width: 200px;
-  padding: 0 1rem 0 2rem; /* Extra left padding for indent */
+  max-width: 200px;
+  width: 200px;
+  padding: 0 1rem 0 2rem;
   background: #fcfcfd;
   border-right: 1px solid #e2e8f0;
   position: sticky;
   left: 0;
   z-index: 10;
+  flex-shrink: 0;
 }
 
 .platformRow:hover .platformLabel {
@@ -383,7 +392,7 @@
   position: relative;
   height: 100%;
   flex: 1;
-  overflow: hidden; /* Clip content that goes beyond bounds */
+  overflow: hidden;
 }
 
 /* Clickable timeline for creating sales */
@@ -491,24 +500,23 @@
   z-index: 6;
 }
 
-/* Launch marker line extension into platform rows */
+/* Launch marker line extension into platform rows - SOLID, full opacity */
 .launchMarkerLineExtension {
   position: absolute;
   top: 0;
   width: 2px;
   height: 100%;
   background: #22c55e;
-  opacity: 0.5;
-  z-index: 1;
+  z-index: 4;
   pointer-events: none;
 }
 
-/* Platform Event Shading - different from cooldown */
+/* Platform Event Shading - solid border, not dotted */
 .platformEventShade {
   position: absolute;
   top: 0;
   height: 100%;
-  border-top: 3px dotted;
+  border-top: 2px solid;
   border-bottom: 1px solid;
   opacity: 0.9;
   z-index: 1;

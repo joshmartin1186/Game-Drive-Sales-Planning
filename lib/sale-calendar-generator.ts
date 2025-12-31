@@ -1,5 +1,5 @@
-import { addDays, addMonths, differenceInDays, parseISO, format, isAfter, isBefore } from 'date-fns'
-import { Platform, PlatformEvent } from '@/lib/types'
+import { addDays, addMonths, differenceInDays, parseISO, format, isAfter, isBefore, isEqual } from 'date-fns'
+import { Platform, PlatformEvent, SaleWithDetails } from '@/lib/types'
 
 export interface GeneratedSale {
   id: string // temporary ID for preview
@@ -36,6 +36,25 @@ export interface GenerateCalendarParams {
   platformEvents: PlatformEvent[]
   launchDate: string // ISO date string - calendar generates 12 months from this date
   defaultDiscount?: number
+  existingSales?: SaleWithDetails[] // Existing sales to check against
+}
+
+// Convert existing sale to GeneratedSale format for conflict checking
+function existingSaleToGenerated(sale: SaleWithDetails): GeneratedSale {
+  return {
+    id: sale.id,
+    product_id: sale.product_id,
+    platform_id: sale.platform_id,
+    platform_name: sale.platform?.name || '',
+    platform_color: sale.platform?.color_hex || '#000',
+    start_date: sale.start_date,
+    end_date: sale.end_date,
+    discount_percentage: sale.discount_percentage || 0,
+    sale_name: sale.sale_name || '',
+    sale_type: (sale.sale_type as 'custom' | 'seasonal' | 'festival' | 'special') || 'custom',
+    is_event: false,
+    cooldown_days: sale.platform?.cooldown_days || 0
+  }
 }
 
 // Get platform events for a specific platform within a date range
@@ -54,22 +73,25 @@ function getEventsForPlatform(
   }).sort((a, b) => parseISO(a.start_date).getTime() - parseISO(b.start_date).getTime())
 }
 
-// Check if a proposed sale conflicts with existing sales
-// Each existing sale has its own cooldown_days attached
+// Check if a proposed sale conflicts with existing sales on SAME platform
 function hasConflict(
   startDate: Date,
   endDate: Date,
-  newSaleCooldownDays: number, // Cooldown that will apply after this new sale
-  existingSales: GeneratedSale[]
+  newSaleCooldownDays: number,
+  existingSales: GeneratedSale[],
+  platformId: string
 ): boolean {
+  // Only check against sales on the SAME platform
+  const samePlatformSales = existingSales.filter(s => s.platform_id === platformId)
+  
   // Calculate when this new sale's cooldown would end
   const newSaleCooldownEnd = addDays(endDate, newSaleCooldownDays)
   
-  for (const existingSale of existingSales) {
+  for (const existingSale of samePlatformSales) {
     const saleStart = parseISO(existingSale.start_date)
     const saleEnd = parseISO(existingSale.end_date)
-    // Each existing sale knows its own cooldown
-    const saleCooldownEnd = addDays(saleEnd, existingSale.cooldown_days)
+    const saleCooldownDays = existingSale.cooldown_days || 0
+    const saleCooldownEnd = addDays(saleEnd, saleCooldownDays)
     
     // Check 1: Direct overlap - new sale overlaps with existing sale period
     if (startDate <= saleEnd && endDate >= saleStart) {
@@ -77,15 +99,17 @@ function hasConflict(
     }
     
     // Check 2: New sale starts during existing sale's cooldown
-    // (starts after sale ends, but before cooldown ends)
-    if (isAfter(startDate, saleEnd) && isBefore(startDate, saleCooldownEnd)) {
-      return true
+    if (saleCooldownDays > 0) {
+      if (isAfter(startDate, saleEnd) && (isBefore(startDate, saleCooldownEnd) || isEqual(startDate, saleCooldownEnd))) {
+        return true
+      }
     }
     
     // Check 3: Existing sale starts during new sale's cooldown
-    // (existing starts after new sale ends, but before new sale's cooldown ends)
-    if (isAfter(saleStart, endDate) && isBefore(saleStart, newSaleCooldownEnd)) {
-      return true
+    if (newSaleCooldownDays > 0) {
+      if (isAfter(saleStart, endDate) && (isBefore(saleStart, newSaleCooldownEnd) || isEqual(saleStart, newSaleCooldownEnd))) {
+        return true
+      }
     }
   }
   
@@ -98,34 +122,36 @@ function findNextAvailableDate(
   existingSales: GeneratedSale[],
   newSaleCooldownDays: number,
   periodEnd: Date,
-  saleDuration: number
+  saleDuration: number,
+  platformId: string
 ): Date | null {
   let candidate = addDays(afterDate, 1)
   let iterations = 0
-  const maxIterations = 500 // Safety limit
+  const maxIterations = 500
+  
+  // Only consider sales on the same platform
+  const samePlatformSales = existingSales.filter(s => s.platform_id === platformId)
   
   while (candidate <= periodEnd && iterations < maxIterations) {
     iterations++
     
-    // Calculate potential sale end date
     const potentialEnd = addDays(candidate, saleDuration - 1)
     const actualEnd = potentialEnd > periodEnd ? periodEnd : potentialEnd
     
-    // Check if this would create any conflicts
-    const conflict = hasConflict(candidate, actualEnd, newSaleCooldownDays, existingSales)
+    const conflict = hasConflict(candidate, actualEnd, newSaleCooldownDays, existingSales, platformId)
     
     if (!conflict) {
       return candidate
     }
     
-    // Find the next possible start date by jumping past blocking sales' cooldowns
+    // Jump past blocking sales' cooldowns
     let nextPossible = addDays(candidate, 1)
     
-    for (const sale of existingSales) {
+    for (const sale of samePlatformSales) {
       const saleEnd = parseISO(sale.end_date)
-      const saleCooldownEnd = addDays(saleEnd, sale.cooldown_days)
+      const saleCooldownDays = sale.cooldown_days || 0
+      const saleCooldownEnd = addDays(saleEnd, saleCooldownDays)
       
-      // If candidate is within a sale or its cooldown, jump past it
       if (candidate <= saleCooldownEnd) {
         const jumpTo = addDays(saleCooldownEnd, 1)
         if (isAfter(jumpTo, nextPossible)) {
@@ -148,11 +174,15 @@ function generatePlatformSales(
   periodStart: Date,
   periodEnd: Date,
   defaultDiscount: number,
-  variation: 'aggressive' | 'balanced' | 'conservative'
+  variation: 'aggressive' | 'balanced' | 'conservative',
+  existingSales: GeneratedSale[] // Include existing sales for conflict checking
 ): GeneratedSale[] {
-  const sales: GeneratedSale[] = []
+  const newSales: GeneratedSale[] = []
   const maxSaleDays = platform.max_sale_days || 14
-  const platformCooldownDays = platform.cooldown_days || 30
+  const platformCooldownDays = platform.cooldown_days || 0
+  
+  // Combine existing sales with new sales for conflict checking
+  const allSales = [...existingSales]
   
   // Get events for this platform
   const events = getEventsForPlatform(platform.id, platformEvents, periodStart, periodEnd)
@@ -162,20 +192,17 @@ function generatePlatformSales(
     const eventStart = parseISO(event.start_date)
     const eventEnd = parseISO(event.end_date)
     
-    // Clamp to period boundaries
     const saleStart = eventStart < periodStart ? periodStart : eventStart
     const saleEnd = eventEnd > periodEnd ? periodEnd : eventEnd
     
-    // Check duration doesn't exceed max
     const duration = differenceInDays(saleEnd, saleStart) + 1
     const actualEnd = duration > maxSaleDays ? addDays(saleStart, maxSaleDays - 1) : saleEnd
     
-    // Event sales may have no cooldown requirement (based on event settings)
     const eventCooldownDays = event.requires_cooldown === false ? 0 : platformCooldownDays
     
-    // Check for conflicts using this event's specific cooldown
-    if (!hasConflict(saleStart, actualEnd, eventCooldownDays, sales)) {
-      sales.push({
+    // Check against ALL sales (existing + newly generated)
+    if (!hasConflict(saleStart, actualEnd, eventCooldownDays, allSales, platform.id)) {
+      const newSale: GeneratedSale = {
         id: `gen-${productId}-${platform.id}-event-${event.id}`,
         product_id: productId,
         platform_id: platform.id,
@@ -189,68 +216,61 @@ function generatePlatformSales(
         is_event: true,
         event_name: event.name,
         cooldown_days: eventCooldownDays
-      })
+      }
+      newSales.push(newSale)
+      allSales.push(newSale)
     }
   }
   
-  // For conservative: if no events, add at least one custom sale per platform
+  // For conservative: if no new event sales added, add at least one custom sale
   if (variation === 'conservative') {
-    if (sales.length === 0) {
-      // Add a single custom sale at start of period (launch sale)
+    if (newSales.length === 0) {
       const saleDuration = Math.min(maxSaleDays, 7)
       const saleEnd = addDays(periodStart, saleDuration - 1)
       
-      sales.push({
-        id: `gen-${productId}-${platform.id}-custom-0`,
-        product_id: productId,
-        platform_id: platform.id,
-        platform_name: platform.name,
-        platform_color: platform.color_hex,
-        start_date: format(periodStart, 'yyyy-MM-dd'),
-        end_date: format(saleEnd, 'yyyy-MM-dd'),
-        discount_percentage: defaultDiscount,
-        sale_name: `${platform.name} Launch Sale`,
-        sale_type: 'custom',
-        is_event: false,
-        cooldown_days: platformCooldownDays
-      })
+      if (!hasConflict(periodStart, saleEnd, platformCooldownDays, allSales, platform.id)) {
+        newSales.push({
+          id: `gen-${productId}-${platform.id}-custom-0`,
+          product_id: productId,
+          platform_id: platform.id,
+          platform_name: platform.name,
+          platform_color: platform.color_hex,
+          start_date: format(periodStart, 'yyyy-MM-dd'),
+          end_date: format(saleEnd, 'yyyy-MM-dd'),
+          discount_percentage: defaultDiscount,
+          sale_name: `${platform.name} Launch Sale`,
+          sale_type: 'custom',
+          is_event: false,
+          cooldown_days: platformCooldownDays
+        })
+      }
     }
-    return sales
+    return newSales
   }
   
   // For balanced and aggressive, fill gaps with custom sales
-  // Sort existing sales by start date
-  const allSales = [...sales].sort((a, b) => 
-    parseISO(a.start_date).getTime() - parseISO(b.start_date).getTime()
-  )
-  
   let customSaleCount = 0
-  
-  // Determine how many custom sales to add and duration based on variation
   const maxCustomSales = variation === 'aggressive' ? 50 : 12
   const saleDuration = variation === 'aggressive' ? maxSaleDays : Math.min(maxSaleDays, 7)
   
-  // Start search from before the period start
   let searchStart = addDays(periodStart, -1)
   
   while (customSaleCount < maxCustomSales) {
-    // Find next available slot that won't conflict with ANY sale
     const availableDate = findNextAvailableDate(
       searchStart,
       allSales,
-      platformCooldownDays, // Custom sales use platform's full cooldown
+      platformCooldownDays,
       periodEnd,
-      saleDuration
+      saleDuration,
+      platform.id
     )
     
     if (!availableDate || availableDate > periodEnd) break
     
-    // Calculate actual end date
     const potentialEnd = addDays(availableDate, saleDuration - 1)
     const actualEnd = potentialEnd > periodEnd ? periodEnd : potentialEnd
     
-    // Final conflict check (should be redundant but ensures no bugs)
-    if (!hasConflict(availableDate, actualEnd, platformCooldownDays, allSales)) {
+    if (!hasConflict(availableDate, actualEnd, platformCooldownDays, allSales, platform.id)) {
       const customSale: GeneratedSale = {
         id: `gen-${productId}-${platform.id}-custom-${customSaleCount}`,
         product_id: productId,
@@ -260,7 +280,7 @@ function generatePlatformSales(
         start_date: format(availableDate, 'yyyy-MM-dd'),
         end_date: format(actualEnd, 'yyyy-MM-dd'),
         discount_percentage: defaultDiscount,
-        sale_name: customSaleCount === 0 && sales.length === 0 
+        sale_name: customSaleCount === 0 && newSales.length === 0 
           ? `${platform.name} Launch Sale` 
           : `Custom Sale ${customSaleCount + 1}`,
         sale_type: 'custom',
@@ -268,22 +288,17 @@ function generatePlatformSales(
         cooldown_days: platformCooldownDays
       }
       
+      newSales.push(customSale)
       allSales.push(customSale)
-      allSales.sort((a, b) => 
-        parseISO(a.start_date).getTime() - parseISO(b.start_date).getTime()
-      )
-      
       customSaleCount++
       
-      // Move search start to after this sale's cooldown
       searchStart = addDays(actualEnd, platformCooldownDays)
     } else {
-      // If still conflicting somehow, move forward
       searchStart = addDays(availableDate, 1)
     }
   }
   
-  return allSales
+  return newSales
 }
 
 // Calculate stats for a variation
@@ -321,19 +336,21 @@ export function generateSaleCalendar(params: GenerateCalendarParams): CalendarVa
     platforms,
     platformEvents,
     launchDate,
-    defaultDiscount = 50
+    defaultDiscount = 50,
+    existingSales = []
   } = params
   
-  // Parse launch date and calculate 12-month period
   const periodStart = parseISO(launchDate)
-  const periodEnd = addDays(addMonths(periodStart, 12), -1) // 12 months from launch
+  const periodEnd = addDays(addMonths(periodStart, 12), -1)
   
-  // Use ALL platforms passed in - no filtering
+  // Convert existing sales for this product to GeneratedSale format
+  const existingForProduct = existingSales
+    .filter(s => s.product_id === productId)
+    .map(existingSaleToGenerated)
+  
   const allPlatforms = platforms
-  
   const variations: CalendarVariation[] = []
   
-  // Generate three variations
   const variationConfigs: { key: 'aggressive' | 'balanced' | 'conservative'; name: string; description: string }[] = [
     {
       key: 'aggressive',
@@ -353,7 +370,7 @@ export function generateSaleCalendar(params: GenerateCalendarParams): CalendarVa
   ]
   
   for (const config of variationConfigs) {
-    const allSales: GeneratedSale[] = []
+    const newSales: GeneratedSale[] = []
     
     for (const platform of allPlatforms) {
       const platformSales = generatePlatformSales(
@@ -363,21 +380,22 @@ export function generateSaleCalendar(params: GenerateCalendarParams): CalendarVa
         periodStart,
         periodEnd,
         defaultDiscount,
-        config.key
+        config.key,
+        [...existingForProduct, ...newSales] // Pass existing + already generated for other platforms
       )
-      allSales.push(...platformSales)
+      newSales.push(...platformSales)
     }
     
-    // Sort all sales by date
-    allSales.sort((a, b) => 
+    // Sort all new sales by date
+    newSales.sort((a, b) => 
       parseISO(a.start_date).getTime() - parseISO(b.start_date).getTime()
     )
     
     variations.push({
       name: config.name,
       description: config.description,
-      sales: allSales,
-      stats: calculateStats(allSales, periodStart, periodEnd)
+      sales: newSales, // Only return NEW sales, not existing ones
+      stats: calculateStats(newSales, periodStart, periodEnd)
     })
   }
   
