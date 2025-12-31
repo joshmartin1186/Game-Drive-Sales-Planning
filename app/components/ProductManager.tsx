@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { format } from 'date-fns'
 import { Client, Game, Product } from '@/lib/types'
 import styles from './ProductManager.module.css'
 
@@ -14,7 +15,7 @@ interface ProductManagerProps {
   onClientDelete?: (id: string) => Promise<void>
   onGameDelete?: (id: string) => Promise<void>
   onProductDelete?: (id: string) => Promise<void>
-  onGenerateCalendar?: (productId: string, productName: string) => void
+  onGenerateCalendar?: (productId: string, productName: string, launchDate?: string) => void
   onClose: () => void
 }
 
@@ -52,6 +53,7 @@ export default function ProductManager({
   const [productGameId, setProductGameId] = useState('')
   const [productType, setProductType] = useState<'base' | 'edition' | 'dlc' | 'soundtrack'>('base')
   const [steamProductId, setSteamProductId] = useState('')
+  const [launchDate, setLaunchDate] = useState(format(new Date(), 'yyyy-MM-dd'))
   const [autoGenerateCalendar, setAutoGenerateCalendar] = useState(true) // Default to checked
 
   const handleCreateClient = async () => {
@@ -112,22 +114,25 @@ export default function ProductManager({
     setError(null)
     
     const nameToCreate = productName.trim()
+    const launchDateToUse = launchDate
     
     try {
       const createdProduct = await onProductCreate({
         name: nameToCreate,
         game_id: productGameId,
         product_type: productType,
-        steam_product_id: steamProductId.trim() || undefined
+        steam_product_id: steamProductId.trim() || undefined,
+        launch_date: launchDateToUse
       })
       
       // If auto-generate is checked and we got a product back, trigger calendar generation
       if (autoGenerateCalendar && createdProduct && onGenerateCalendar) {
-        onGenerateCalendar(createdProduct.id, createdProduct.name)
+        onGenerateCalendar(createdProduct.id, createdProduct.name, launchDateToUse)
       }
       
       setProductName('')
       setSteamProductId('')
+      setLaunchDate(format(new Date(), 'yyyy-MM-dd'))
     } catch (err: any) {
       setError(err.message)
     } finally {
@@ -397,6 +402,15 @@ export default function ProductManager({
                     </select>
                   </div>
                   <div className={styles.field}>
+                    <label>Launch Date *</label>
+                    <input
+                      type="date"
+                      value={launchDate}
+                      onChange={(e) => setLaunchDate(e.target.value)}
+                    />
+                    <p className={styles.fieldHint}>Sales calendar will be generated for 12 months from this date</p>
+                  </div>
+                  <div className={styles.field}>
                     <label>Steam Product ID</label>
                     <input
                       type="text"
@@ -420,7 +434,7 @@ export default function ProductManager({
                         </span>
                       </label>
                       <p className={styles.checkboxHint}>
-                        Automatically create a yearly sales plan across all platforms
+                        Automatically create a 12-month sales plan from launch date
                       </p>
                     </div>
                   )}
@@ -446,6 +460,11 @@ export default function ProductManager({
                         <div className={styles.itemInfo}>
                           <strong>{product.name}</strong>
                           <span className={styles.badge}>{product.product_type}</span>
+                          {product.launch_date && (
+                            <span className={styles.launchBadge}>
+                              🚀 {format(new Date(product.launch_date), 'MMM d, yyyy')}
+                            </span>
+                          )}
                           <span className={styles.meta}> - {product.game?.name} ({product.game?.client?.name})</span>
                         </div>
                         {onProductDelete && (
