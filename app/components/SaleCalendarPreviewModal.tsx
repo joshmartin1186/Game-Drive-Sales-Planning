@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { format, parseISO } from 'date-fns'
+import { format, parseISO, addMonths } from 'date-fns'
 import { CalendarVariation, GeneratedSale } from '@/lib/sale-calendar-generator'
 import styles from './SaleCalendarPreviewModal.module.css'
 
@@ -9,6 +9,7 @@ interface SaleCalendarPreviewModalProps {
   isOpen: boolean
   onClose: () => void
   productName: string
+  launchDate: string
   variations: CalendarVariation[]
   onApply: (sales: GeneratedSale[]) => Promise<void>
   isApplying: boolean
@@ -18,6 +19,7 @@ export default function SaleCalendarPreviewModal({
   isOpen,
   onClose,
   productName,
+  launchDate,
   variations,
   onApply,
   isApplying
@@ -26,6 +28,11 @@ export default function SaleCalendarPreviewModal({
   const [selectedPlatform, setSelectedPlatform] = useState<string | 'all'>('all')
   
   const currentVariation = variations[selectedVariation]
+  
+  // Calculate period end (12 months from launch)
+  const periodEnd = useMemo(() => {
+    return format(addMonths(parseISO(launchDate), 12), 'MMM d, yyyy')
+  }, [launchDate])
   
   // Get unique platforms from the sales
   const platforms = useMemo(() => {
@@ -81,6 +88,10 @@ export default function SaleCalendarPreviewModal({
         <div className={styles.header}>
           <h2>🗓️ Auto-Generate Sale Calendar</h2>
           <p className={styles.subtitle}>for <strong>{productName}</strong></p>
+          <div className={styles.launchInfo}>
+            <span className={styles.launchBadge}>🚀 Launch: {format(parseISO(launchDate), 'MMM d, yyyy')}</span>
+            <span className={styles.periodBadge}>📅 Planning through {periodEnd}</span>
+          </div>
           <button className={styles.closeButton} onClick={onClose}>×</button>
         </div>
         
