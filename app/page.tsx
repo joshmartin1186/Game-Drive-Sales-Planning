@@ -11,7 +11,6 @@ import ProductManager from './components/ProductManager'
 import PlatformSettings from './components/PlatformSettings'
 import SaleCalendarPreviewModal from './components/SaleCalendarPreviewModal'
 import ClearSalesModal from './components/ClearSalesModal'
-import UndoRedoIndicator from './components/UndoRedoIndicator'
 import { generateSaleCalendar, GeneratedSale, CalendarVariation, generatedSaleToCreateFormat } from '@/lib/sale-calendar-generator'
 import { useUndo } from '@/lib/undo-context'
 import styles from './page.module.css'
@@ -69,16 +68,8 @@ export default function GameDriveDashboard() {
   const [filterClientId, setFilterClientId] = useState<string>('')
   const [filterGameId, setFilterGameId] = useState<string>('')
   
-  // Undo/Redo
-  const { pushAction, setHandlers, canUndo, canRedo, undo, redo } = useUndo()
-  
-  // Force re-render when undo stack changes
-  const [, setForceUpdate] = useState(0)
-  useEffect(() => {
-    const handler = () => setForceUpdate(n => n + 1)
-    window.addEventListener('undo-stack-change', handler)
-    return () => window.removeEventListener('undo-stack-change', handler)
-  }, [])
+  // Undo/Redo (functionality kept, UI removed)
+  const { pushAction, setHandlers } = useUndo()
 
   // Set up undo/redo handlers
   useEffect(() => {
@@ -770,14 +761,6 @@ export default function GameDriveDashboard() {
         <h1>GameDrive Sales Planning</h1>
         <p>Interactive sales timeline with drag-and-drop scheduling</p>
       </header>
-
-      {/* Undo/Redo Indicator */}
-      <UndoRedoIndicator 
-        canUndo={canUndo} 
-        canRedo={canRedo}
-        onUndo={undo}
-        onRedo={redo}
-      />
 
       {error && (
         <div className={styles.errorBanner}>
