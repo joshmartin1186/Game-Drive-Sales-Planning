@@ -99,7 +99,7 @@
   align-items: center;
   justify-content: center;
   box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3);
-  transition: box-shadow 0.1s;
+  transition: left 0.05s ease-out, box-shadow 0.1s;
 }
 
 .scrollGrabThumb:hover {
@@ -108,6 +108,7 @@
 
 .scrollGrabBar.grabbing .scrollGrabThumb {
   box-shadow: 0 4px 12px rgba(59, 130, 246, 0.5);
+  transition: none;
 }
 
 .scrollGrabIcon {
@@ -125,6 +126,12 @@
   overflow-x: auto;
   overflow-y: auto;
   max-height: calc(100vh - 350px);
+  scroll-behavior: smooth;
+}
+
+/* When grabbing, disable smooth scroll for instant feedback */
+.scrollContainer.grabbing {
+  scroll-behavior: auto;
 }
 
 .timeline {
@@ -457,6 +464,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
+  transition: left 0.15s ease-out;
 }
 
 .launchMarker:hover .launchMarkerLine {
@@ -466,6 +474,10 @@
 
 .launchMarker:hover .launchMarkerFlag {
   transform: scale(1.1);
+}
+
+.launchMarkerDragging {
+  transition: none;
 }
 
 .launchMarkerDragging .launchMarkerLine {
@@ -509,6 +521,7 @@
   background: #22c55e;
   z-index: 4;
   pointer-events: none;
+  transition: left 0.15s ease-out;
 }
 
 /* Platform Event Shading - solid border, not dotted */
@@ -554,6 +567,19 @@
   font-size: 0.625rem;
 }
 
+/* Sale Block Container - handles smooth position transitions */
+.saleBlockContainer {
+  position: absolute;
+  top: 4px;
+  height: calc(100% - 8px);
+  transition: left 0.2s ease-out, width 0.2s ease-out;
+}
+
+/* Disable transition during active drag */
+.saleBlockContainer.dragging {
+  transition: none;
+}
+
 /* Sale Block */
 .saleBlock {
   position: absolute;
@@ -571,8 +597,13 @@
   white-space: nowrap;
   text-overflow: ellipsis;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
-  transition: box-shadow 0.2s, transform 0.1s;
+  transition: left 0.2s ease-out, width 0.2s ease-out, box-shadow 0.15s, transform 0.1s;
   z-index: 5;
+}
+
+/* Disable smooth transition during drag for instant feedback */
+.saleBlock.dragging {
+  transition: box-shadow 0.15s, transform 0.1s;
 }
 
 .saleBlock:hover {
@@ -613,6 +644,7 @@
   overflow: hidden;
   z-index: 2;
   pointer-events: none;
+  transition: left 0.2s ease-out, width 0.2s ease-out;
 }
 
 .cooldownBlock span {
