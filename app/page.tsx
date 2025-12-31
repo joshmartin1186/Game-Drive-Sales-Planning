@@ -9,6 +9,8 @@ import AddSaleModal from './components/AddSaleModal'
 import EditSaleModal from './components/EditSaleModal'
 import ProductManager from './components/ProductManager'
 import PlatformSettings from './components/PlatformSettings'
+import SaleCalendarPreviewModal from './components/SaleCalendarPreviewModal'
+import { generateSaleCalendar, GeneratedSale, CalendarVariation, generatedSaleToCreateFormat } from '@/lib/sale-calendar-generator'
 import styles from './page.module.css'
 import { Sale, Platform, Product, Game, Client, SaleWithDetails, PlatformEvent } from '@/lib/types'
 
@@ -22,6 +24,12 @@ interface SalePrefill {
   platformId: string
   startDate: string
   endDate: string
+}
+
+interface CalendarGenerationState {
+  productId: string
+  productName: string
+  variations: CalendarVariation[]
 }
 
 export default function GameDriveDashboard() {
@@ -40,6 +48,10 @@ export default function GameDriveDashboard() {
   const [viewMode, setViewMode] = useState<'gantt' | 'table'>('gantt')
   const [showEvents, setShowEvents] = useState(true)
   const [salePrefill, setSalePrefill] = useState<SalePrefill | null>(null)
+  
+  // Calendar generation state
+  const [calendarGeneration, setCalendarGeneration] = useState<CalendarGenerationState | null>(null)
+  const [isApplyingCalendar, setIsApplyingCalendar] = useState(false)
   
   // Filter state
   const [filterClientId, setFilterClientId] = useState<string>('')
@@ -278,6 +290,71 @@ export default function GameDriveDashboard() {
   const handleCloseAddModal = useCallback(() => {
     setShowAddModal(false)
     setSalePrefill(null)
+  }, [])
+
+  // Handle generate calendar button click
+  const handleGenerateCalendar = useCallback((productId: string, productName: string) => {
+    const currentYear = new Date().getFullYear()
+    
+    const variations = generateSaleCalendar({
+      productId,
+      platforms,
+      platformEvents,
+      year: currentYear,
+      defaultDiscount: 50
+    })
+    
+    setCalendarGeneration({
+      productId,
+      productName,
+      variations
+    })
+  }, [platforms, platformEvents])
+
+  // Handle applying generated calendar
+  const handleApplyCalendar = useCallback(async (generatedSales: GeneratedSale[]) => {
+    setIsApplyingCalendar(true)
+    setError(null)
+    
+    try {
+      // Convert generated sales to database format
+      const salesToCreate = generatedSales.map(sale => generatedSaleToCreateFormat(sale))
+      
+      // Insert all sales in batch
+      const { data, error } = await supabase
+        .from('sales')
+        .insert(salesToCreate)
+        .select(`
+          *,
+          product:products(
+            *,
+            game:games(
+              *,
+              client:clients(*)
+            )
+          ),
+          platform:platforms(*)
+        `)
+      
+      if (error) throw error
+      
+      // Add all new sales to local state
+      if (data && data.length > 0) {
+        setSales(prev => [...prev, ...data].sort((a, b) => 
+          new Date(a.start_date).getTime() - new Date(b.start_date).getTime()
+        ))
+      }
+      
+      // Close the modal
+      setCalendarGeneration(null)
+      
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to create sales'
+      console.error('Error creating calendar sales:', err)
+      setError(errorMessage)
+    } finally {
+      setIsApplyingCalendar(false)
+    }
   }, [])
 
   async function handleClientCreate(client: Omit<Client, 'id' | 'created_at'>) {
@@ -597,6 +674,7 @@ export default function GameDriveDashboard() {
             onSaleDelete={handleSaleDelete}
             onSaleEdit={handleSaleEdit}
             onCreateSale={handleTimelineCreate}
+            onGenerateCalendar={handleGenerateCalendar}
             allSales={sales}
             showEvents={showEvents}
           />
@@ -681,6 +759,18 @@ export default function GameDriveDashboard() {
           fetchData() // Also refresh platforms in case rules changed
         }}
       />
+
+      {/* Sale Calendar Preview Modal */}
+      {calendarGeneration && (
+        <SaleCalendarPreviewModal
+          isOpen={true}
+          onClose={() => setCalendarGeneration(null)}
+          productName={calendarGeneration.productName}
+          variations={calendarGeneration.variations}
+          onApply={handleApplyCalendar}
+          isApplying={isApplyingCalendar}
+        />
+      )}
     </div>
   )
 }
