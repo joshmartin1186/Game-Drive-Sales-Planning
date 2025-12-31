@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useRef, useCallback, useEffect } from 'react'
+import { useState, useMemo, useRef, useCallback } from 'react'
 import { DndContext, DragEndEvent, DragStartEvent, useSensor, useSensors, PointerSensor, DragOverlay } from '@dnd-kit/core'
 import { format, addDays, differenceInDays, parseISO, startOfMonth, endOfMonth, eachDayOfInterval } from 'date-fns'
 import { Sale, Platform, Product, Game, Client, SaleWithDetails, PlatformEvent } from '@/lib/types'
@@ -55,20 +55,8 @@ export default function GanttChart({
   const [isSelecting, setIsSelecting] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
   
-  // Refs for mouseup handler to always have current values
-  const selectionRef = useRef<SelectionState | null>(null)
-  const isSelectingRef = useRef(false)
-  const onCreateSaleRef = useRef(onCreateSale)
-  
-  // Keep refs in sync
-  useEffect(() => {
-    selectionRef.current = selection
-    isSelectingRef.current = isSelecting
-  }, [selection, isSelecting])
-  
-  useEffect(() => {
-    onCreateSaleRef.current = onCreateSale
-  }, [onCreateSale])
+  // Ref to track if we're currently in a selection drag
+  const selectionDataRef = useRef<SelectionState | null>(null)
   
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -94,12 +82,6 @@ export default function GanttChart({
     
     return { months: monthsArr, days: daysArr, totalDays: daysArr.length }
   }, [timelineStart, monthCount])
-  
-  // Keep days ref in sync
-  const daysRef = useRef(days)
-  useEffect(() => {
-    daysRef.current = days
-  }, [days])
   
   const groupedProducts = useMemo(() => {
     const groups: { game: Game & { client: Client }; products: (Product & { game: Game & { client: Client } })[] }[] = []
@@ -255,6 +237,9 @@ export default function GanttChart({
       return
     }
     
+    // Only respond to left mouse button
+    if (e.button !== 0) return
+    
     e.preventDefault()
     e.stopPropagation()
     
@@ -267,67 +252,62 @@ export default function GanttChart({
     
     setIsSelecting(true)
     setSelection(newSelection)
-    isSelectingRef.current = true
-    selectionRef.current = newSelection
+    selectionDataRef.current = newSelection
   }, [])
   
   const handleSelectionMove = useCallback((dayIndex: number) => {
-    if (!isSelectingRef.current || !selectionRef.current) return
+    if (!isSelecting || !selectionDataRef.current) return
     
     const newSelection = {
-      ...selectionRef.current,
+      ...selectionDataRef.current,
       endDayIndex: dayIndex
     }
     
     setSelection(newSelection)
-    selectionRef.current = newSelection
-  }, [])
+    selectionDataRef.current = newSelection
+  }, [isSelecting])
   
-  // Document-level mouseup handler for reliable selection end detection
-  useEffect(() => {
-    const handleMouseUp = () => {
-      if (!isSelectingRef.current || !selectionRef.current) {
-        return
-      }
+  // Handle selection end - called on mouseup on day cells
+  const handleSelectionEnd = useCallback((e: React.MouseEvent) => {
+    if (!isSelecting || !selectionDataRef.current) return
+    
+    e.preventDefault()
+    e.stopPropagation()
+    
+    const sel = selectionDataRef.current
+    
+    if (onCreateSale && days.length > 0) {
+      const startIdx = Math.min(sel.startDayIndex, sel.endDayIndex)
+      const endIdx = Math.max(sel.startDayIndex, sel.endDayIndex)
       
-      const sel = selectionRef.current
-      const currentDays = daysRef.current
-      const createHandler = onCreateSaleRef.current
+      // Ensure indices are within bounds
+      const safeStartIdx = Math.max(0, Math.min(startIdx, days.length - 1))
+      const safeEndIdx = Math.max(0, Math.min(endIdx, days.length - 1))
       
-      if (createHandler && currentDays.length > 0) {
-        const startIdx = Math.min(sel.startDayIndex, sel.endDayIndex)
-        const endIdx = Math.max(sel.startDayIndex, sel.endDayIndex)
-        
-        // Ensure indices are within bounds
-        const safeStartIdx = Math.max(0, Math.min(startIdx, currentDays.length - 1))
-        const safeEndIdx = Math.max(0, Math.min(endIdx, currentDays.length - 1))
-        
-        const startDate = format(currentDays[safeStartIdx], 'yyyy-MM-dd')
-        const endDate = format(currentDays[safeEndIdx], 'yyyy-MM-dd')
-        
-        // Call the create handler
-        createHandler({
+      const startDate = format(days[safeStartIdx], 'yyyy-MM-dd')
+      const endDate = format(days[safeEndIdx], 'yyyy-MM-dd')
+      
+      // Clear state first
+      setIsSelecting(false)
+      setSelection(null)
+      selectionDataRef.current = null
+      
+      // Then call the handler (use setTimeout to ensure state is cleared)
+      setTimeout(() => {
+        onCreateSale({
           productId: sel.productId,
           platformId: sel.platformId,
           startDate,
           endDate
         })
-      }
-      
+      }, 0)
+    } else {
       // Clear selection state
       setIsSelecting(false)
       setSelection(null)
-      isSelectingRef.current = false
-      selectionRef.current = null
+      selectionDataRef.current = null
     }
-    
-    // Add global mouseup listener
-    document.addEventListener('mouseup', handleMouseUp)
-    
-    return () => {
-      document.removeEventListener('mouseup', handleMouseUp)
-    }
-  }, []) // Empty deps - uses refs for all values
+  }, [isSelecting, days, onCreateSale])
   
   // Get selection visual properties
   const getSelectionStyle = useCallback((productId: string, platformId: string) => {
@@ -451,10 +431,10 @@ export default function GanttChart({
         if (isSelecting) {
           setIsSelecting(false)
           setSelection(null)
-          isSelectingRef.current = false
-          selectionRef.current = null
+          selectionDataRef.current = null
         }
       }}
+      onMouseUp={handleSelectionEnd}
     >
       {validationError && (
         <div className={styles.validationError}>
@@ -589,6 +569,7 @@ export default function GanttChart({
                                       width: selectionStyle.width,
                                       backgroundColor: selectionStyle.backgroundColor,
                                       borderColor: selectionStyle.borderColor,
+                                      pointerEvents: 'none',
                                     }}
                                   >
                                     <span className={styles.selectionLabel}>
