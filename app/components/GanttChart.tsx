@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useRef, useCallback } from 'react'
+import { useState, useMemo, useRef, useCallback, useEffect } from 'react'
 import { DndContext, DragEndEvent, DragStartEvent, useSensor, useSensors, PointerSensor, DragOverlay } from '@dnd-kit/core'
 import { format, addDays, differenceInDays, parseISO, startOfMonth, endOfMonth, eachDayOfInterval } from 'date-fns'
 import { Sale, Platform, Product, Game, Client, SaleWithDetails, PlatformEvent } from '@/lib/types'
@@ -52,12 +52,17 @@ export default function GanttChart({
   const [validationError, setValidationError] = useState<string | null>(null)
   const [optimisticUpdates, setOptimisticUpdates] = useState<Record<string, { startDate: string; endDate: string }>>({})
   const [selection, setSelection] = useState<SelectionState | null>(null)
-  const [isSelecting, setIsSelecting] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
   
-  // Ref to track selection data - survives across renders
-  const selectionDataRef = useRef<SelectionState | null>(null)
+  // Use refs for selection tracking - these persist across renders and event handlers
+  const selectionRef = useRef<SelectionState | null>(null)
   const isSelectingRef = useRef(false)
+  const onCreateSaleRef = useRef(onCreateSale)
+  
+  // Keep onCreateSale ref updated
+  useEffect(() => {
+    onCreateSaleRef.current = onCreateSale
+  }, [onCreateSale])
   
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -83,6 +88,12 @@ export default function GanttChart({
     
     return { months: monthsArr, days: daysArr, totalDays: daysArr.length }
   }, [timelineStart, monthCount])
+  
+  // Keep days ref updated
+  const daysRef = useRef(days)
+  useEffect(() => {
+    daysRef.current = days
+  }, [days])
   
   const groupedProducts = useMemo(() => {
     const groups: { game: Game & { client: Client }; products: (Product & { game: Game & { client: Client } })[] }[] = []
@@ -252,67 +263,79 @@ export default function GanttChart({
     }
     
     // Update both state and refs
-    setIsSelecting(true)
     setSelection(newSelection)
+    selectionRef.current = newSelection
     isSelectingRef.current = true
-    selectionDataRef.current = newSelection
+    
+    console.log('[Selection] Started:', newSelection)
   }, [])
   
   const handleSelectionMove = useCallback((dayIndex: number) => {
     // Use ref to check if selecting (more reliable than state)
-    if (!isSelectingRef.current || !selectionDataRef.current) return
+    if (!isSelectingRef.current || !selectionRef.current) return
     
     const newSelection = {
-      ...selectionDataRef.current,
+      ...selectionRef.current,
       endDayIndex: dayIndex
     }
     
     setSelection(newSelection)
-    selectionDataRef.current = newSelection
+    selectionRef.current = newSelection
   }, [])
   
-  // Handle selection end - called directly on day cell mouseup
-  const handleSelectionEnd = useCallback((dayIndex: number, e: React.MouseEvent) => {
-    // Use refs to check state (more reliable)
-    if (!isSelectingRef.current || !selectionDataRef.current) {
-      return
-    }
-    
-    e.preventDefault()
-    e.stopPropagation()
-    
-    // Capture the data before clearing
-    const sel = { ...selectionDataRef.current, endDayIndex: dayIndex }
-    
-    // Clear state immediately
-    isSelectingRef.current = false
-    selectionDataRef.current = null
-    setIsSelecting(false)
-    setSelection(null)
-    
-    // Call onCreate with captured data
-    if (onCreateSale && days.length > 0) {
-      const startIdx = Math.min(sel.startDayIndex, sel.endDayIndex)
-      const endIdx = Math.max(sel.startDayIndex, sel.endDayIndex)
+  // Window-level mouseup handler using capture phase
+  useEffect(() => {
+    const handleWindowMouseUp = (e: MouseEvent) => {
+      console.log('[Selection] Window mouseup, isSelecting:', isSelectingRef.current)
       
-      // Ensure indices are within bounds
-      const safeStartIdx = Math.max(0, Math.min(startIdx, days.length - 1))
-      const safeEndIdx = Math.max(0, Math.min(endIdx, days.length - 1))
+      if (!isSelectingRef.current || !selectionRef.current) {
+        return
+      }
       
-      const startDate = format(days[safeStartIdx], 'yyyy-MM-dd')
-      const endDate = format(days[safeEndIdx], 'yyyy-MM-dd')
+      // Capture the selection data before clearing
+      const sel = selectionRef.current
+      const currentDays = daysRef.current
+      const createSaleCallback = onCreateSaleRef.current
       
-      // Use requestAnimationFrame to ensure DOM updates complete first
-      requestAnimationFrame(() => {
-        onCreateSale({
+      console.log('[Selection] Ending selection:', sel)
+      console.log('[Selection] Days available:', currentDays.length)
+      console.log('[Selection] Callback exists:', !!createSaleCallback)
+      
+      // Clear selection state
+      isSelectingRef.current = false
+      selectionRef.current = null
+      setSelection(null)
+      
+      // Call the create handler
+      if (createSaleCallback && currentDays.length > 0) {
+        const startIdx = Math.min(sel.startDayIndex, sel.endDayIndex)
+        const endIdx = Math.max(sel.startDayIndex, sel.endDayIndex)
+        
+        // Ensure indices are within bounds
+        const safeStartIdx = Math.max(0, Math.min(startIdx, currentDays.length - 1))
+        const safeEndIdx = Math.max(0, Math.min(endIdx, currentDays.length - 1))
+        
+        const startDate = format(currentDays[safeStartIdx], 'yyyy-MM-dd')
+        const endDate = format(currentDays[safeEndIdx], 'yyyy-MM-dd')
+        
+        console.log('[Selection] Creating sale:', { productId: sel.productId, platformId: sel.platformId, startDate, endDate })
+        
+        createSaleCallback({
           productId: sel.productId,
           platformId: sel.platformId,
           startDate,
           endDate
         })
-      })
+      }
     }
-  }, [days, onCreateSale])
+    
+    // Use capture phase to ensure we get the event before DndContext
+    window.addEventListener('mouseup', handleWindowMouseUp, { capture: true })
+    
+    return () => {
+      window.removeEventListener('mouseup', handleWindowMouseUp, { capture: true })
+    }
+  }, []) // Empty deps - uses refs for all values
   
   // Get selection visual properties
   const getSelectionStyle = useCallback((productId: string, platformId: string) => {
@@ -430,9 +453,9 @@ export default function GanttChart({
   // Clear selection if mouse leaves the container
   const handleMouseLeave = useCallback(() => {
     if (isSelectingRef.current) {
+      console.log('[Selection] Mouse left container, clearing selection')
       isSelectingRef.current = false
-      selectionDataRef.current = null
-      setIsSelecting(false)
+      selectionRef.current = null
       setSelection(null)
     }
   }, [])
@@ -564,7 +587,6 @@ export default function GanttChart({
                                       style={{ left: idx * DAY_WIDTH, width: DAY_WIDTH }}
                                       onMouseDown={(e) => handleSelectionStart(product.id, platform.id, idx, e)}
                                       onMouseEnter={() => handleSelectionMove(idx)}
-                                      onMouseUp={(e) => handleSelectionEnd(idx, e)}
                                     />
                                   )
                                 })}
