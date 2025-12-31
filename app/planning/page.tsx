@@ -222,21 +222,22 @@ export default function PlanningPage() {
     }
   }
 
-  const handleSaleEdit = (sale: SaleWithDetails) => {
+  const handleSaleEdit = useCallback((sale: SaleWithDetails) => {
     setEditingSale(sale)
-  }
+  }, [])
 
-  // Handle click-to-create from timeline
-  const handleTimelineCreate = (prefill: SalePrefill) => {
+  // Handle click-to-create from timeline - MEMOIZED to prevent recreation
+  const handleTimelineCreate = useCallback((prefill: SalePrefill) => {
+    console.log('[Planning] handleTimelineCreate called with:', prefill)
     setSalePrefill(prefill)
     setShowAddModal(true)
-  }
+  }, [])
 
   // Close modal and clear prefill
-  const handleCloseAddModal = () => {
+  const handleCloseAddModal = useCallback(() => {
     setShowAddModal(false)
     setSalePrefill(null)
-  }
+  }, [])
   
   // Filter products and sales by selected client
   const filteredProducts = selectedClient === 'all' 
