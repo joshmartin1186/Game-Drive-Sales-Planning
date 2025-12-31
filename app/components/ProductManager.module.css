@@ -226,6 +226,44 @@
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
 }
 
+/* Checkbox field styling */
+.checkboxField {
+  margin: 20px 0;
+  padding: 16px;
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+  border: 1px solid #bae6fd;
+  border-radius: 8px;
+}
+
+.checkboxLabel {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: #1e40af;
+}
+
+.checkboxLabel input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: #2563eb;
+}
+
+.checkboxText {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.checkboxHint {
+  margin: 8px 0 0 28px;
+  font-size: 0.8125rem;
+  color: #64748b;
+}
+
 .addBtn {
   width: 100%;
   padding: 12px;
