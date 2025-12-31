@@ -18,8 +18,16 @@ interface GanttChartProps {
   onSaleUpdate: (saleId: string, updates: Partial<Sale>) => Promise<void>
   onSaleDelete: (saleId: string) => Promise<void>
   onSaleEdit: (sale: SaleWithDetails) => void
+  onCreateSale?: (prefill: { productId: string; platformId: string; startDate: string; endDate: string }) => void
   allSales: SaleWithDetails[]
   showEvents?: boolean
+}
+
+interface SelectionState {
+  productId: string
+  platformId: string
+  startDayIndex: number
+  endDayIndex: number
 }
 
 const DAY_WIDTH = 28
@@ -36,12 +44,15 @@ export default function GanttChart({
   onSaleUpdate,
   onSaleDelete,
   onSaleEdit,
+  onCreateSale,
   allSales,
   showEvents = true
 }: GanttChartProps) {
   const [draggedSale, setDraggedSale] = useState<SaleWithDetails | null>(null)
   const [validationError, setValidationError] = useState<string | null>(null)
   const [optimisticUpdates, setOptimisticUpdates] = useState<Record<string, { startDate: string; endDate: string }>>({})
+  const [selection, setSelection] = useState<SelectionState | null>(null)
+  const [isSelecting, setIsSelecting] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
   
   const sensors = useSensors(
@@ -216,6 +227,77 @@ export default function GanttChart({
     }
   }, [getPositionForDate, getWidthForRange])
   
+  // Selection handlers for click-to-create
+  const handleSelectionStart = useCallback((productId: string, platformId: string, dayIndex: number, e: React.MouseEvent) => {
+    // Don't start selection if clicking on a sale block
+    if ((e.target as HTMLElement).closest('[data-sale-block]')) {
+      return
+    }
+    
+    e.preventDefault()
+    setIsSelecting(true)
+    setSelection({
+      productId,
+      platformId,
+      startDayIndex: dayIndex,
+      endDayIndex: dayIndex
+    })
+  }, [])
+  
+  const handleSelectionMove = useCallback((dayIndex: number) => {
+    if (!isSelecting || !selection) return
+    
+    setSelection(prev => prev ? {
+      ...prev,
+      endDayIndex: dayIndex
+    } : null)
+  }, [isSelecting, selection])
+  
+  const handleSelectionEnd = useCallback(() => {
+    if (!isSelecting || !selection || !onCreateSale) {
+      setIsSelecting(false)
+      setSelection(null)
+      return
+    }
+    
+    const startIdx = Math.min(selection.startDayIndex, selection.endDayIndex)
+    const endIdx = Math.max(selection.startDayIndex, selection.endDayIndex)
+    
+    const startDate = format(days[startIdx], 'yyyy-MM-dd')
+    const endDate = format(days[endIdx], 'yyyy-MM-dd')
+    
+    onCreateSale({
+      productId: selection.productId,
+      platformId: selection.platformId,
+      startDate,
+      endDate
+    })
+    
+    setIsSelecting(false)
+    setSelection(null)
+  }, [isSelecting, selection, days, onCreateSale])
+  
+  // Get selection visual properties
+  const getSelectionStyle = useCallback((productId: string, platformId: string) => {
+    if (!selection || selection.productId !== productId || selection.platformId !== platformId) {
+      return null
+    }
+    
+    const startIdx = Math.min(selection.startDayIndex, selection.endDayIndex)
+    const endIdx = Math.max(selection.startDayIndex, selection.endDayIndex)
+    const left = startIdx * DAY_WIDTH
+    const width = (endIdx - startIdx + 1) * DAY_WIDTH
+    
+    const platform = platforms.find(p => p.id === platformId)
+    
+    return {
+      left,
+      width,
+      backgroundColor: platform ? `${platform.color_hex}40` : 'rgba(59, 130, 246, 0.25)',
+      borderColor: platform?.color_hex || '#3b82f6'
+    }
+  }, [selection, platforms])
+  
   const handleDragStart = (event: DragStartEvent) => {
     const saleId = event.active.id as string
     const sale = sales.find(s => s.id === saleId)
@@ -311,7 +393,16 @@ export default function GanttChart({
   const totalWidth = totalDays * DAY_WIDTH
   
   return (
-    <div className={styles.container}>
+    <div 
+      className={styles.container}
+      onMouseUp={handleSelectionEnd}
+      onMouseLeave={() => {
+        if (isSelecting) {
+          setIsSelecting(false)
+          setSelection(null)
+        }
+      }}
+    >
       {validationError && (
         <div className={styles.validationError}>
           <span>⚠️ {validationError}</span>
@@ -407,6 +498,7 @@ export default function GanttChart({
                         {productPlatforms.map(platform => {
                           const platformSales = getSalesForProductPlatform(product.id, platform.id)
                           const platformEventsForRow = getEventsForPlatform(platform.id)
+                          const selectionStyle = getSelectionStyle(product.id, platform.id)
                           
                           return (
                             <div key={`${product.id}-${platform.id}`} className={styles.platformRow}>
@@ -418,7 +510,10 @@ export default function GanttChart({
                                 <span className={styles.platformName}>{platform.name}</span>
                               </div>
                               
-                              <div className={styles.timelineRow} style={{ width: totalWidth }}>
+                              <div 
+                                className={`${styles.timelineRow} ${styles.clickableTimeline}`}
+                                style={{ width: totalWidth }}
+                              >
                                 {days.map((day, idx) => {
                                   const isWeekend = day.getDay() === 0 || day.getDay() === 6
                                   return (
@@ -426,9 +521,28 @@ export default function GanttChart({
                                       key={idx}
                                       className={`${styles.dayCell} ${isWeekend ? styles.weekendCell : ''}`}
                                       style={{ left: idx * DAY_WIDTH, width: DAY_WIDTH }}
+                                      onMouseDown={(e) => handleSelectionStart(product.id, platform.id, idx, e)}
+                                      onMouseEnter={() => handleSelectionMove(idx)}
                                     />
                                   )
                                 })}
+                                
+                                {/* Selection preview */}
+                                {selectionStyle && (
+                                  <div
+                                    className={styles.selectionPreview}
+                                    style={{
+                                      left: selectionStyle.left,
+                                      width: selectionStyle.width,
+                                      backgroundColor: selectionStyle.backgroundColor,
+                                      borderColor: selectionStyle.borderColor,
+                                    }}
+                                  >
+                                    <span className={styles.selectionLabel}>
+                                      {format(days[Math.min(selection!.startDayIndex, selection!.endDayIndex)], 'MMM d')} - {format(days[Math.max(selection!.startDayIndex, selection!.endDayIndex)], 'MMM d')}
+                                    </span>
+                                  </div>
+                                )}
                                 
                                 {/* Platform Events as shaded backgrounds */}
                                 {showEvents && platformEventsForRow.map(event => (
@@ -457,7 +571,7 @@ export default function GanttChart({
                                   const cooldown = getCooldownForSale(sale)
                                   
                                   return (
-                                    <div key={sale.id}>
+                                    <div key={sale.id} data-sale-block>
                                       {cooldown && (
                                         <div
                                           className={styles.cooldownBlock}
