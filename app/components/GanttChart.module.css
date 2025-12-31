@@ -157,8 +157,8 @@
 
 .productLabel {
   display: flex;
-  flex-direction: column;
-  justify-content: center;
+  align-items: center;
+  justify-content: space-between;
   min-width: 200px;
   padding: 0 1rem;
   background: white;
@@ -166,6 +166,12 @@
   position: sticky;
   left: 0;
   z-index: 10;
+}
+
+.productLabelContent {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 
 .productName {
@@ -181,6 +187,31 @@
   font-size: 0.625rem;
   color: #94a3b8;
   text-transform: uppercase;
+}
+
+/* Generate Calendar Button */
+.generateButton {
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: #f1f5f9;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+
+.generateButton:hover {
+  background: #e2e8f0;
+  transform: scale(1.05);
+}
+
+.generateButton:active {
+  transform: scale(0.95);
 }
 
 /* Platform Sub-rows */
