@@ -34,22 +34,26 @@ const DAY_WIDTH = 28
 const ROW_HEIGHT = 40
 const HEADER_HEIGHT = 60
 
-export default function GanttChart({
-  sales,
-  products,
-  platforms,
-  platformEvents,
-  timelineStart,
-  monthCount,
-  onSaleUpdate,
-  onSaleDelete,
-  onSaleEdit,
-  onCreateSale,
-  allSales,
-  showEvents = true
-}: GanttChartProps) {
-  // DEBUG: Log when component renders and what onCreateSale is
-  console.log('[GanttChart] Render - onCreateSale is:', typeof onCreateSale, onCreateSale ? 'defined' : 'undefined')
+export default function GanttChart(props: GanttChartProps) {
+  // DEBUG: Log ALL props to see what we're receiving
+  console.log('[GanttChart] ALL PROPS:', Object.keys(props))
+  console.log('[GanttChart] onCreateSale prop value:', props.onCreateSale)
+  console.log('[GanttChart] onSaleEdit prop value:', typeof props.onSaleEdit)
+  
+  const {
+    sales,
+    products,
+    platforms,
+    platformEvents,
+    timelineStart,
+    monthCount,
+    onSaleUpdate,
+    onSaleDelete,
+    onSaleEdit,
+    onCreateSale,
+    allSales,
+    showEvents = true
+  } = props
   
   const [draggedSale, setDraggedSale] = useState<SaleWithDetails | null>(null)
   const [validationError, setValidationError] = useState<string | null>(null)
@@ -294,16 +298,17 @@ export default function GanttChart({
     }
     
     // Capture EVERYTHING needed at mousedown time - callback and days
+    // Use props.onCreateSale directly to ensure we get the latest value
     selectionRef.current = {
       data: newSelection,
-      callback: onCreateSale,
+      callback: props.onCreateSale,
       days: days
     }
     
     setSelection(newSelection)
     
-    console.log('[Selection] Started, callback captured:', !!onCreateSale)
-  }, [onCreateSale, days])
+    console.log('[Selection] Started, callback captured:', !!props.onCreateSale)
+  }, [props.onCreateSale, days])
   
   const handleSelectionMove = useCallback((dayIndex: number) => {
     if (!selectionRef.current) return
