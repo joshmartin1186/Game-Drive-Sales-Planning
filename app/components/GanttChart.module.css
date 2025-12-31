@@ -90,6 +90,8 @@
 }
 
 .scrollGrabThumb {
+  position: absolute;
+  top: 0;
   height: 100%;
   background: linear-gradient(135deg, #3b82f6, #2563eb);
   border-radius: 8px;
@@ -97,7 +99,7 @@
   align-items: center;
   justify-content: center;
   box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3);
-  transition: transform 0.1s, box-shadow 0.1s;
+  transition: box-shadow 0.1s;
 }
 
 .scrollGrabThumb:hover {
@@ -105,7 +107,6 @@
 }
 
 .scrollGrabBar.grabbing .scrollGrabThumb {
-  transform: scale(1.02);
   box-shadow: 0 4px 12px rgba(59, 130, 246, 0.5);
 }
 
@@ -382,6 +383,7 @@
   position: relative;
   height: 100%;
   flex: 1;
+  overflow: hidden; /* Clip content that goes beyond bounds */
 }
 
 /* Clickable timeline for creating sales */
@@ -435,13 +437,13 @@
   50% { opacity: 1; }
 }
 
-/* Launch Date Marker */
+/* Launch Date Marker - z-index lower than sidebar so it goes under */
 .launchMarker {
   position: absolute;
   top: 0;
   height: 100%;
   width: 28px;
-  z-index: 15;
+  z-index: 5;
   cursor: ew-resize;
   display: flex;
   flex-direction: column;
@@ -486,7 +488,7 @@
   font-size: 0.75rem;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
   transition: transform 0.15s;
-  z-index: 16;
+  z-index: 6;
 }
 
 /* Launch marker line extension into platform rows */
