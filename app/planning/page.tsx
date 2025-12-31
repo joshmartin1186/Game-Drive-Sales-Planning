@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
-import { Sale, Platform, Product, Game, Client, SaleWithDetails, TimelineEvent } from '@/lib/types'
+import { Sale, Platform, Product, Game, Client, SaleWithDetails, PlatformEvent } from '@/lib/types'
 import GanttChart from '../components/GanttChart'
 import SalesTable from '../components/SalesTable'
 import AddSaleModal from '../components/AddSaleModal'
@@ -13,13 +13,14 @@ export default function PlanningPage() {
   const [sales, setSales] = useState<SaleWithDetails[]>([])
   const [platforms, setPlatforms] = useState<Platform[]>([])
   const [products, setProducts] = useState<(Product & { game: Game & { client: Client } })[]>([])
-  const [events, setEvents] = useState<TimelineEvent[]>([])
+  const [platformEvents, setPlatformEvents] = useState<PlatformEvent[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [showAddModal, setShowAddModal] = useState(false)
   const [editingSale, setEditingSale] = useState<SaleWithDetails | null>(null)
   const [selectedClient, setSelectedClient] = useState<string>('all')
   const [clients, setClients] = useState<Client[]>([])
+  const [showEvents, setShowEvents] = useState(true)
   
   // Timeline configuration
   const [timelineStart] = useState(() => {
@@ -41,6 +42,18 @@ export default function PlanningPage() {
       
       if (platformsError) throw platformsError
       setPlatforms(platformsData || [])
+
+      // Fetch platform events
+      const { data: eventsData, error: eventsError } = await supabase
+        .from('platform_events')
+        .select(`
+          *,
+          platform:platforms(*)
+        `)
+        .order('start_date')
+      
+      if (eventsError) throw eventsError
+      setPlatformEvents(eventsData || [])
       
       // Fetch clients
       const { data: clientsData, error: clientsError } = await supabase
@@ -231,6 +244,14 @@ export default function PlanningPage() {
           <p className={styles.subtitle}>Drag and drop to schedule sales</p>
         </div>
         <div className={styles.headerRight}>
+          <label className={styles.checkboxLabel}>
+            <input 
+              type="checkbox" 
+              checked={showEvents} 
+              onChange={(e) => setShowEvents(e.target.checked)}
+            />
+            Show Events
+          </label>
           <select 
             className={styles.clientFilter}
             value={selectedClient}
@@ -262,13 +283,14 @@ export default function PlanningPage() {
           sales={filteredSales}
           products={filteredProducts}
           platforms={platforms}
-          events={events}
+          platformEvents={platformEvents}
           timelineStart={timelineStart}
           monthCount={monthCount}
           onSaleUpdate={handleSaleUpdate}
           onSaleDelete={handleSaleDelete}
           onSaleEdit={handleSaleEdit}
           allSales={sales}
+          showEvents={showEvents}
         />
       </div>
       
