@@ -77,6 +77,34 @@
   color: #1e40af;
 }
 
+/* Header Actions - Export button */
+.headerActions {
+  position: absolute;
+  top: 16px;
+  right: 60px;
+}
+
+.exportPngButton {
+  padding: 8px 14px;
+  background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.exportPngButton:hover {
+  background: linear-gradient(135deg, #7c3aed, #6d28d9);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.35);
+}
+
 .closeButton {
   position: absolute;
   top: 16px;
@@ -453,5 +481,15 @@
   
   .launchInfo {
     flex-direction: column;
+  }
+  
+  .headerActions {
+    position: static;
+    margin-top: 12px;
+  }
+  
+  .exportPngButton {
+    width: 100%;
+    justify-content: center;
   }
 }
