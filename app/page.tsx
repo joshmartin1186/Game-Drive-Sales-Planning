@@ -41,32 +41,32 @@ interface ClearSalesState {
 }
 
 export default function GameDriveDashboard() {
-  const [sales, setSales] = useState&lt;SaleWithDetails[]>([])
-  const [clients, setClients] = useState&lt;Client[]>([])
-  const [games, setGames] = useState&lt;(Game &amp; { client: Client })[]>([])
-  const [products, setProducts] = useState&lt;(Product &amp; { game: Game &amp; { client: Client } })[]>([])
-  const [platforms, setPlatforms] = useState&lt;Platform[]>([])
-  const [platformEvents, setPlatformEvents] = useState&lt;PlatformEvent[]>([])
+  const [sales, setSales] = useState<SaleWithDetails[]>([])
+  const [clients, setClients] = useState<Client[]>([])
+  const [games, setGames] = useState<(Game & { client: Client })[]>([])
+  const [products, setProducts] = useState<(Product & { game: Game & { client: Client } })[]>([])
+  const [platforms, setPlatforms] = useState<Platform[]>([])
+  const [platformEvents, setPlatformEvents] = useState<PlatformEvent[]>([])
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState&lt;string | null>(null)
+  const [error, setError] = useState<string | null>(null)
   const [showAddModal, setShowAddModal] = useState(false)
   const [showProductManager, setShowProductManager] = useState(false)
   const [showPlatformSettings, setShowPlatformSettings] = useState(false)
-  const [editingSale, setEditingSale] = useState&lt;SaleWithDetails | null>(null)
-  const [viewMode, setViewMode] = useState&lt;'gantt' | 'table'>('gantt')
+  const [editingSale, setEditingSale] = useState<SaleWithDetails | null>(null)
+  const [viewMode, setViewMode] = useState<'gantt' | 'table'>('gantt')
   const [showEvents, setShowEvents] = useState(true)
-  const [salePrefill, setSalePrefill] = useState&lt;SalePrefill | null>(null)
+  const [salePrefill, setSalePrefill] = useState<SalePrefill | null>(null)
   
   // Calendar generation state
-  const [calendarGeneration, setCalendarGeneration] = useState&lt;CalendarGenerationState | null>(null)
+  const [calendarGeneration, setCalendarGeneration] = useState<CalendarGenerationState | null>(null)
   const [isApplyingCalendar, setIsApplyingCalendar] = useState(false)
   
   // Clear sales state
-  const [clearSalesState, setClearSalesState] = useState&lt;ClearSalesState | null>(null)
+  const [clearSalesState, setClearSalesState] = useState<ClearSalesState | null>(null)
   
   // Filter state
-  const [filterClientId, setFilterClientId] = useState&lt;string>('')
-  const [filterGameId, setFilterGameId] = useState&lt;string>('')
+  const [filterClientId, setFilterClientId] = useState<string>('')
+  const [filterGameId, setFilterGameId] = useState<string>('')
   
   // Undo/Redo (functionality kept, UI removed)
   const { pushAction, setHandlers } = useUndo()
@@ -223,13 +223,13 @@ export default function GameDriveDashboard() {
   }
 
   // Optimistic update for sales - updates local state immediately
-  async function handleSaleUpdate(saleId: string, updates: Partial&lt;Sale>) {
+  async function handleSaleUpdate(saleId: string, updates: Partial<Sale>) {
     // Get current sale data for undo
     const currentSale = sales.find(s => s.id === saleId)
     if (!currentSale) return
     
-    const previousData: Record&lt;string, unknown> = {}
-    const newData: Record&lt;string, unknown> = {}
+    const previousData: Record<string, unknown> = {}
+    const newData: Record<string, unknown> = {}
     
     for (const key of Object.keys(updates)) {
       previousData[key] = currentSale[key as keyof SaleWithDetails]
@@ -296,7 +296,7 @@ export default function GameDriveDashboard() {
     const saleToDelete = sales.find(s => s.id === saleId)
     if (!saleToDelete) return
     
-    const saleData: Record&lt;string, unknown> = {
+    const saleData: Record<string, unknown> = {
       product_id: saleToDelete.product_id,
       platform_id: saleToDelete.platform_id,
       start_date: saleToDelete.start_date,
@@ -334,7 +334,7 @@ export default function GameDriveDashboard() {
     }
   }
 
-  async function handleSaleCreate(sale: Omit&lt;Sale, 'id' | 'created_at'>) {
+  async function handleSaleCreate(sale: Omit<Sale, 'id' | 'created_at'>) {
     try {
       const { data, error } = await supabase
         .from('sales')
@@ -363,7 +363,7 @@ export default function GameDriveDashboard() {
         pushAction({
           type: 'CREATE_SALE',
           saleId: data.id,
-          saleData: sale as Record&lt;string, unknown>
+          saleData: sale as Record<string, unknown>
         })
       }
       
@@ -435,7 +435,7 @@ export default function GameDriveDashboard() {
       
       if (error) throw error
       
-      if (data &amp;&amp; data.length > 0) {
+      if (data && data.length > 0) {
         setSales(prev => [...prev, ...data].sort((a, b) => 
           new Date(a.start_date).getTime() - new Date(b.start_date).getTime()
         ))
@@ -446,9 +446,9 @@ export default function GameDriveDashboard() {
           sales: data.map(s => ({
             id: s.id,
             data: salesToCreate.find(sc => 
-              sc.product_id === s.product_id &amp;&amp; 
+              sc.product_id === s.product_id && 
               sc.start_date === s.start_date
-            ) as Record&lt;string, unknown>
+            ) as Record<string, unknown>
           }))
         })
       }
@@ -471,7 +471,7 @@ export default function GameDriveDashboard() {
 
   const handleConfirmClearSales = useCallback(async (productId: string, platformId: string | null) => {
     const salesToDelete = sales.filter(s => 
-      s.product_id === productId &amp;&amp; 
+      s.product_id === productId && 
       (platformId === null || s.platform_id === platformId)
     )
     
@@ -493,12 +493,12 @@ export default function GameDriveDashboard() {
         sale_type: s.sale_type,
         status: s.status,
         notes: s.notes
-      } as Record&lt;string, unknown>
+      } as Record<string, unknown>
     }))
     
     // Optimistically remove
     setSales(prev => prev.filter(s => 
-      !(s.product_id === productId &amp;&amp; (platformId === null || s.platform_id === platformId))
+      !(s.product_id === productId && (platformId === null || s.platform_id === platformId))
     ))
     
     try {
@@ -597,7 +597,7 @@ export default function GameDriveDashboard() {
     }
   }, [products, sales])
 
-  async function handleClientCreate(client: Omit&lt;Client, 'id' | 'created_at'>) {
+  async function handleClientCreate(client: Omit<Client, 'id' | 'created_at'>) {
     try {
       const { data, error } = await supabase
         .from('clients')
@@ -613,7 +613,7 @@ export default function GameDriveDashboard() {
     }
   }
 
-  async function handleGameCreate(game: Omit&lt;Game, 'id' | 'created_at'>) {
+  async function handleGameCreate(game: Omit<Game, 'id' | 'created_at'>) {
     try {
       const { data, error } = await supabase
         .from('games')
@@ -629,7 +629,7 @@ export default function GameDriveDashboard() {
     }
   }
 
-  async function handleProductCreate(product: Omit&lt;Product, 'id' | 'created_at'>): Promise&lt;Product | undefined> {
+  async function handleProductCreate(product: Omit<Product, 'id' | 'created_at'>): Promise<Product | undefined> {
     try {
       const { data, error } = await supabase
         .from('products')
@@ -737,9 +737,9 @@ export default function GameDriveDashboard() {
   const monthCount = 12
 
   useEffect(() => {
-    if (filterClientId &amp;&amp; filterGameId) {
+    if (filterClientId && filterGameId) {
       const game = games.find(g => g.id === filterGameId)
-      if (game &amp;&amp; game.client_id !== filterClientId) {
+      if (game && game.client_id !== filterClientId) {
         setFilterGameId('')
       }
     }
@@ -747,156 +747,156 @@ export default function GameDriveDashboard() {
 
   if (loading) {
     return (
-      &lt;div className={styles.container}>
-        &lt;div className={styles.loading}>
-          &lt;div className={styles.spinner}>&lt;/div>
-          &lt;p>Loading sales data...&lt;/p>
-        &lt;/div>
-      &lt;/div>
+      <div className={styles.container}>
+        <div className={styles.loading}>
+          <div className={styles.spinner}></div>
+          <p>Loading sales data...</p>
+        </div>
+      </div>
     )
   }
 
   return (
-    &lt;div className={styles.container}>
-      &lt;header className={styles.header}>
-        &lt;h1>GameDrive Sales Planning&lt;/h1>
-        &lt;p>Interactive sales timeline with drag-and-drop scheduling&lt;/p>
-      &lt;/header>
+    <div className={styles.container}>
+      <header className={styles.header}>
+        <h1>GameDrive Sales Planning</h1>
+        <p>Interactive sales timeline with drag-and-drop scheduling</p>
+      </header>
 
-      {error &amp;&amp; (
-        &lt;div className={styles.errorBanner}>
-          &lt;span>⚠️ {error}&lt;/span>
-          &lt;button onClick={() => setError(null)}>×&lt;/button>
-        &lt;/div>
+      {error && (
+        <div className={styles.errorBanner}>
+          <span>⚠️ {error}</span>
+          <button onClick={() => setError(null)}>×</button>
+        </div>
       )}
 
       {/* Header Stats */}
-      &lt;div className={styles.statsGrid}>
-        &lt;div className={styles.statCard}>
-          &lt;div className={styles.statIcon} style={{backgroundColor: '#10b981'}}>📊&lt;/div>
-          &lt;div className={styles.statContent}>
-            &lt;h3>TOTAL SALES&lt;/h3>
-            &lt;p className={styles.statValue}>{filteredSales.length}&lt;/p>
-            &lt;span className={styles.statChange}>Across all platforms&lt;/span>
-          &lt;/div>
-        &lt;/div>
+      <div className={styles.statsGrid}>
+        <div className={styles.statCard}>
+          <div className={styles.statIcon} style={{backgroundColor: '#10b981'}}>📊</div>
+          <div className={styles.statContent}>
+            <h3>TOTAL SALES</h3>
+            <p className={styles.statValue}>{filteredSales.length}</p>
+            <span className={styles.statChange}>Across all platforms</span>
+          </div>
+        </div>
 
-        &lt;div className={styles.statCard}>
-          &lt;div className={styles.statIcon} style={{backgroundColor: '#3b82f6'}}>🎮&lt;/div>
-          &lt;div className={styles.statContent}>
-            &lt;h3>PRODUCTS&lt;/h3>
-            &lt;p className={styles.statValue}>{filteredProducts.length}&lt;/p>
-            &lt;span className={styles.statChange}>Games and DLCs&lt;/span>
-          &lt;/div>
-        &lt;/div>
+        <div className={styles.statCard}>
+          <div className={styles.statIcon} style={{backgroundColor: '#3b82f6'}}>🎮</div>
+          <div className={styles.statContent}>
+            <h3>PRODUCTS</h3>
+            <p className={styles.statValue}>{filteredProducts.length}</p>
+            <span className={styles.statChange}>Games and DLCs</span>
+          </div>
+        </div>
 
-        &lt;div className={styles.statCard}>
-          &lt;div className={styles.statIcon} style={{backgroundColor: '#8b5cf6'}}>📅&lt;/div>
-          &lt;div className={styles.statContent}>
-            &lt;h3>PLATFORM EVENTS&lt;/h3>
-            &lt;p className={styles.statValue}>{upcomingEvents}&lt;/p>
-            &lt;span className={styles.statChange}>Upcoming sales events&lt;/span>
-          &lt;/div>
-        &lt;/div>
+        <div className={styles.statCard}>
+          <div className={styles.statIcon} style={{backgroundColor: '#8b5cf6'}}>📅</div>
+          <div className={styles.statContent}>
+            <h3>PLATFORM EVENTS</h3>
+            <p className={styles.statValue}>{upcomingEvents}</p>
+            <span className={styles.statChange}>Upcoming sales events</span>
+          </div>
+        </div>
 
-        &lt;div className={styles.statCard}>
-          &lt;div className={styles.statIcon} style={{backgroundColor: conflicts > 0 ? '#ef4444' : '#22c55e'}}>
+        <div className={styles.statCard}>
+          <div className={styles.statIcon} style={{backgroundColor: conflicts > 0 ? '#ef4444' : '#22c55e'}}>
             {conflicts > 0 ? '⚠️' : '✓'}
-          &lt;/div>
-          &lt;div className={styles.statContent}>
-            &lt;h3>CONFLICTS&lt;/h3>
-            &lt;p className={styles.statValue}>{conflicts}&lt;/p>
-            &lt;span className={styles.statChange}>{conflicts === 0 ? 'All platforms clear' : 'Needs attention'}&lt;/span>
-          &lt;/div>
-        &lt;/div>
-      &lt;/div>
+          </div>
+          <div className={styles.statContent}>
+            <h3>CONFLICTS</h3>
+            <p className={styles.statValue}>{conflicts}</p>
+            <span className={styles.statChange}>{conflicts === 0 ? 'All platforms clear' : 'Needs attention'}</span>
+          </div>
+        </div>
+      </div>
 
       {/* Filters */}
-      &lt;div className={styles.filters}>
-        &lt;div className={styles.filterGroup}>
-          &lt;label>Client:&lt;/label>
-          &lt;select 
+      <div className={styles.filters}>
+        <div className={styles.filterGroup}>
+          <label>Client:</label>
+          <select 
             value={filterClientId} 
             onChange={(e) => setFilterClientId(e.target.value)}
           >
-            &lt;option value="">All Clients&lt;/option>
+            <option value="">All Clients</option>
             {clients.map(client => (
-              &lt;option key={client.id} value={client.id}>{client.name}&lt;/option>
+              <option key={client.id} value={client.id}>{client.name}</option>
             ))}
-          &lt;/select>
-        &lt;/div>
+          </select>
+        </div>
         
-        &lt;div className={styles.filterGroup}>
-          &lt;label>Game:&lt;/label>
-          &lt;select 
+        <div className={styles.filterGroup}>
+          <label>Game:</label>
+          <select 
             value={filterGameId} 
             onChange={(e) => setFilterGameId(e.target.value)}
           >
-            &lt;option value="">All Games&lt;/option>
+            <option value="">All Games</option>
             {filteredGames.map(game => (
-              &lt;option key={game.id} value={game.id}>{game.name}&lt;/option>
+              <option key={game.id} value={game.id}>{game.name}</option>
             ))}
-          &lt;/select>
-        &lt;/div>
+          </select>
+        </div>
 
-        &lt;div className={styles.filterGroup}>
-          &lt;label className={styles.checkboxLabel}>
-            &lt;input 
+        <div className={styles.filterGroup}>
+          <label className={styles.checkboxLabel}>
+            <input 
               type="checkbox" 
               checked={showEvents} 
               onChange={(e) => setShowEvents(e.target.checked)}
             />
             Show Platform Events
-          &lt;/label>
-        &lt;/div>
+          </label>
+        </div>
 
-        {(filterClientId || filterGameId) &amp;&amp; (
-          &lt;button 
+        {(filterClientId || filterGameId) && (
+          <button 
             className={styles.clearFilters}
             onClick={() => { setFilterClientId(''); setFilterGameId(''); }}
           >
             Clear Filters
-          &lt;/button>
+          </button>
         )}
-      &lt;/div>
+      </div>
 
       {/* View Toggle and Actions */}
-      &lt;div className={styles.toolbar}>
-        &lt;div className={styles.viewToggle}>
-          &lt;button 
+      <div className={styles.toolbar}>
+        <div className={styles.viewToggle}>
+          <button 
             className={`${styles.toggleBtn} ${viewMode === 'gantt' ? styles.active : ''}`}
             onClick={() => setViewMode('gantt')}
           >
             📅 Timeline
-          &lt;/button>
-          &lt;button 
+          </button>
+          <button 
             className={`${styles.toggleBtn} ${viewMode === 'table' ? styles.active : ''}`}
             onClick={() => setViewMode('table')}
           >
             📋 Table
-          &lt;/button>
-        &lt;/div>
+          </button>
+        </div>
         
-        &lt;div className={styles.actions}>
-          &lt;button className={styles.primaryBtn} onClick={() => setShowAddModal(true)}>
+        <div className={styles.actions}>
+          <button className={styles.primaryBtn} onClick={() => setShowAddModal(true)}>
             + Add Sale
-          &lt;/button>
-          &lt;button className={styles.secondaryBtn} onClick={() => setShowProductManager(true)}>
+          </button>
+          <button className={styles.secondaryBtn} onClick={() => setShowProductManager(true)}>
             ⚙️ Manage Products
-          &lt;/button>
-          &lt;button className={styles.secondaryBtn} onClick={() => setShowPlatformSettings(true)}>
+          </button>
+          <button className={styles.secondaryBtn} onClick={() => setShowPlatformSettings(true)}>
             📅 Platform Settings
-          &lt;/button>
-          &lt;button className={styles.secondaryBtn} onClick={fetchData}>
+          </button>
+          <button className={styles.secondaryBtn} onClick={fetchData}>
             🔄 Refresh
-          &lt;/button>
-        &lt;/div>
-      &lt;/div>
+          </button>
+        </div>
+      </div>
 
       {/* Main Content */}
-      &lt;div className={styles.mainContent}>
+      <div className={styles.mainContent}>
         {viewMode === 'gantt' ? (
-          &lt;GanttChart
+          <GanttChart
             sales={filteredSales}
             products={filteredProducts}
             platforms={platforms}
@@ -914,36 +914,36 @@ export default function GameDriveDashboard() {
             showEvents={showEvents}
           />
         ) : (
-          &lt;SalesTable
+          <SalesTable
             sales={filteredSales}
             platforms={platforms}
             onDelete={handleSaleDelete}
             onEdit={handleSaleEdit}
           />
         )}
-      &lt;/div>
+      </div>
 
       {/* Platform Legend */}
-      &lt;div className={styles.platformLegend}>
-        &lt;h3>Platform Cooldown Periods&lt;/h3>
-        &lt;div className={styles.legendGrid}>
+      <div className={styles.platformLegend}>
+        <h3>Platform Cooldown Periods</h3>
+        <div className={styles.legendGrid}>
           {platforms.map((platform) => (
-            &lt;div key={platform.id} className={styles.legendItem}>
-              &lt;div 
+            <div key={platform.id} className={styles.legendItem}>
+              <div 
                 className={styles.legendColor}
                 style={{backgroundColor: platform.color_hex}}
-              >&lt;/div>
-              &lt;span>
-                &lt;strong>{platform.name}&lt;/strong>: {platform.cooldown_days} days cooldown
-              &lt;/span>
-            &lt;/div>
+              ></div>
+              <span>
+                <strong>{platform.name}</strong>: {platform.cooldown_days} days cooldown
+              </span>
+            </div>
           ))}
-        &lt;/div>
-      &lt;/div>
+        </div>
+      </div>
 
       {/* Add Sale Modal */}
-      {showAddModal &amp;&amp; (
-        &lt;AddSaleModal
+      {showAddModal && (
+        <AddSaleModal
           products={products}
           platforms={platforms}
           existingSales={sales}
@@ -957,8 +957,8 @@ export default function GameDriveDashboard() {
       )}
 
       {/* Edit Sale Modal */}
-      {editingSale &amp;&amp; (
-        &lt;EditSaleModal
+      {editingSale && (
+        <EditSaleModal
           sale={editingSale}
           products={products}
           platforms={platforms}
@@ -970,8 +970,8 @@ export default function GameDriveDashboard() {
       )}
 
       {/* Product Manager Modal */}
-      {showProductManager &amp;&amp; (
-        &lt;ProductManager
+      {showProductManager && (
+        <ProductManager
           clients={clients}
           games={games}
           products={products}
@@ -987,7 +987,7 @@ export default function GameDriveDashboard() {
       )}
 
       {/* Platform Settings Modal */}
-      &lt;PlatformSettings
+      <PlatformSettings
         isOpen={showPlatformSettings}
         onClose={() => setShowPlatformSettings(false)}
         onEventsChange={() => {
@@ -997,8 +997,8 @@ export default function GameDriveDashboard() {
       />
 
       {/* Sale Calendar Preview Modal */}
-      {calendarGeneration &amp;&amp; (
-        &lt;SaleCalendarPreviewModal
+      {calendarGeneration && (
+        <SaleCalendarPreviewModal
           isOpen={true}
           onClose={() => setCalendarGeneration(null)}
           productName={calendarGeneration.productName}
@@ -1010,8 +1010,8 @@ export default function GameDriveDashboard() {
       )}
 
       {/* Clear Sales Modal */}
-      {clearSalesState &amp;&amp; (
-        &lt;ClearSalesModal
+      {clearSalesState && (
+        <ClearSalesModal
           isOpen={true}
           onClose={() => setClearSalesState(null)}
           productId={clearSalesState.productId}
@@ -1021,6 +1021,6 @@ export default function GameDriveDashboard() {
           onConfirm={handleConfirmClearSales}
         />
       )}
-    &lt;/div>
+    </div>
   )
 }
