@@ -153,8 +153,28 @@ function generatePlatformSales(
     })
   }
   
-  // For conservative, only do events
+  // For conservative: if no events, add at least one custom sale per platform
+  // This ensures all platforms get coverage even without events
   if (variation === 'conservative') {
+    if (sales.length === 0) {
+      // Add a single custom sale at start of year
+      const saleDuration = Math.min(maxSaleDays, 7)
+      const saleEnd = addDays(yearStart, saleDuration - 1)
+      
+      sales.push({
+        id: `gen-${productId}-${platform.id}-custom-0`,
+        product_id: productId,
+        platform_id: platform.id,
+        platform_name: platform.name,
+        platform_color: platform.color_hex,
+        start_date: format(yearStart, 'yyyy-MM-dd'),
+        end_date: format(saleEnd, 'yyyy-MM-dd'),
+        discount_percentage: defaultDiscount,
+        sale_name: `${platform.name} Launch Sale`,
+        sale_type: 'custom',
+        is_event: false
+      })
+    }
     return sales
   }
   
@@ -263,10 +283,9 @@ export function generateSaleCalendar(params: GenerateCalendarParams): CalendarVa
   const yearStart = startOfYear(new Date(year, 0, 1))
   const yearEnd = endOfYear(new Date(year, 0, 1))
   
-  // Filter to main platforms (Steam Custom, PS-All, Xbox, Nintendo-All, Epic)
-  const mainPlatforms = platforms.filter(p => 
-    ['Steam Custom', 'Steam Seasonal', 'PS-All', 'Xbox', 'Nintendo-All', 'Epic'].includes(p.name)
-  )
+  // Use ALL platforms passed in - no filtering
+  // This ensures every platform gets sales generated
+  const allPlatforms = platforms
   
   const variations: CalendarVariation[] = []
   
@@ -285,14 +304,14 @@ export function generateSaleCalendar(params: GenerateCalendarParams): CalendarVa
     {
       key: 'conservative',
       name: 'Events Only',
-      description: 'Participate only in platform seasonal events and major sales'
+      description: 'Participate only in platform seasonal events (plus one launch sale per platform without events)'
     }
   ]
   
   for (const config of variationConfigs) {
     const allSales: GeneratedSale[] = []
     
-    for (const platform of mainPlatforms) {
+    for (const platform of allPlatforms) {
       const platformSales = generatePlatformSales(
         productId,
         platform,
