@@ -2,8 +2,8 @@
 
 import { useState, useMemo, useRef, useCallback } from 'react'
 import { DndContext, DragEndEvent, DragStartEvent, useSensor, useSensors, PointerSensor, DragOverlay } from '@dnd-kit/core'
-import { format, addDays, differenceInDays, parseISO, startOfMonth, endOfMonth, eachDayOfInterval } from 'date-fns'
-import { Sale, Platform, Product, Game, Client, SaleWithDetails, TimelineEvent } from '@/lib/types'
+import { format, addDays, differenceInDays, parseISO, startOfMonth, endOfMonth, eachDayOfInterval, isWithinInterval } from 'date-fns'
+import { Sale, Platform, Product, Game, Client, SaleWithDetails, PlatformEvent } from '@/lib/types'
 import { validateSale } from '@/lib/validation'
 import SaleBlock from './SaleBlock'
 import styles from './GanttChart.module.css'
@@ -12,13 +12,14 @@ interface GanttChartProps {
   sales: SaleWithDetails[]
   products: (Product & { game: Game & { client: Client } })[]
   platforms: Platform[]
-  events: TimelineEvent[]
+  platformEvents: PlatformEvent[]
   timelineStart: Date
   monthCount: number
   onSaleUpdate: (saleId: string, updates: Partial<Sale>) => Promise<void>
   onSaleDelete: (saleId: string) => Promise<void>
   onSaleEdit: (sale: SaleWithDetails) => void
   allSales: SaleWithDetails[]
+  showEvents?: boolean
 }
 
 const DAY_WIDTH = 28
@@ -29,13 +30,14 @@ export default function GanttChart({
   sales,
   products,
   platforms,
-  events,
+  platformEvents,
   timelineStart,
   monthCount,
   onSaleUpdate,
   onSaleDelete,
   onSaleEdit,
-  allSales
+  allSales,
+  showEvents = true
 }: GanttChartProps) {
   const [draggedSale, setDraggedSale] = useState<SaleWithDetails | null>(null)
   const [validationError, setValidationError] = useState<string | null>(null)
@@ -88,6 +90,19 @@ export default function GanttChart({
     
     return groups.sort((a, b) => a.game.name.localeCompare(b.game.name))
   }, [products])
+  
+  // Group platform events by platform for display
+  const visibleEvents = useMemo(() => {
+    if (!showEvents || !platformEvents.length) return []
+    
+    const timelineEnd = days[days.length - 1]
+    return platformEvents.filter(event => {
+      const eventStart = parseISO(event.start_date)
+      const eventEnd = parseISO(event.end_date)
+      // Show event if it overlaps with timeline
+      return eventEnd >= days[0] && eventStart <= timelineEnd
+    })
+  }, [platformEvents, days, showEvents])
   
   const getPositionForDate = useCallback((date: Date | string): number => {
     const d = typeof date === 'string' ? parseISO(date) : date
@@ -306,6 +321,54 @@ export default function GanttChart({
                 )
               })}
             </div>
+            
+            {/* Platform Events Row */}
+            {showEvents && visibleEvents.length > 0 && (
+              <div className={styles.eventsRow}>
+                <div className={styles.eventsLabel}>
+                  <span className={styles.eventsIcon}>📅</span>
+                  <span>Platform Events</span>
+                </div>
+                <div className={styles.eventsTimeline} style={{ width: totalWidth }}>
+                  {days.map((day, idx) => {
+                    const isWeekend = day.getDay() === 0 || day.getDay() === 6
+                    return (
+                      <div
+                        key={idx}
+                        className={`${styles.dayCell} ${isWeekend ? styles.weekendCell : ''}`}
+                        style={{ left: idx * DAY_WIDTH, width: DAY_WIDTH }}
+                      />
+                    )
+                  })}
+                  
+                  {visibleEvents.map(event => {
+                    const eventStart = parseISO(event.start_date)
+                    const eventEnd = parseISO(event.end_date)
+                    // Clamp to timeline bounds
+                    const displayStart = eventStart < days[0] ? days[0] : eventStart
+                    const displayEnd = eventEnd > days[days.length - 1] ? days[days.length - 1] : eventEnd
+                    const left = getPositionForDate(displayStart)
+                    const width = getWidthForRange(displayStart, displayEnd)
+                    
+                    return (
+                      <div
+                        key={event.id}
+                        className={styles.eventBlock}
+                        style={{
+                          left,
+                          width,
+                          backgroundColor: event.platform?.color_hex || '#6366f1',
+                        }}
+                        title={`${event.name} (${event.platform?.name})\n${format(eventStart, 'MMM d')} - ${format(eventEnd, 'MMM d, yyyy')}${!event.requires_cooldown ? '\nNo cooldown required' : ''}`}
+                      >
+                        <span className={styles.eventName}>{event.name}</span>
+                        {!event.requires_cooldown && <span className={styles.eventNoCooldown}>★</span>}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
             
             <div className={styles.productRows}>
               {groupedProducts.map(({ game, products: gameProducts }) => (
