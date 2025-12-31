@@ -8,6 +8,30 @@ export interface Platform {
   color_hex: string
   max_sale_days: number
   special_sales_no_cooldown: boolean
+  // New fields for extended platform configuration
+  typical_start_day?: string | null
+  submission_lead_days?: number
+  min_discount_percent?: number
+  max_discount_percent?: number
+  notes?: string | null
+  is_active?: boolean
+  created_at?: string
+}
+
+export interface PlatformEvent {
+  id: string
+  platform_id: string
+  name: string
+  start_date: string
+  end_date: string
+  event_type: 'seasonal' | 'thirdparty' | 'invitational' | 'festival' | 'custom'
+  region?: string | null
+  requires_cooldown: boolean
+  is_recurring: boolean
+  notes?: string | null
+  created_at?: string
+  updated_at?: string
+  platform?: Platform
 }
 
 export interface Product {
@@ -68,6 +92,8 @@ export interface TimelineEvent {
   start_date: string
   end_date: string
   color: string
+  platform_id?: string
+  event_type?: string
 }
 
 export interface ValidationResult {
