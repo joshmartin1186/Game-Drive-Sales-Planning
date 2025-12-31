@@ -1,14 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
+// Create supabase client lazily inside handlers to avoid build-time errors
+function getSupabase() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  
+  if (!supabaseUrl || !supabaseKey) {
+    throw new Error('Missing Supabase environment variables')
+  }
+  
+  return createClient(supabaseUrl, supabaseKey)
+}
 
 // GET - Fetch all platform events (optionally filtered by date range)
 export async function GET(request: NextRequest) {
   try {
+    const supabase = getSupabase()
     const { searchParams } = new URL(request.url)
     const startDate = searchParams.get('start_date')
     const endDate = searchParams.get('end_date')
@@ -50,6 +58,7 @@ export async function GET(request: NextRequest) {
 // POST - Create a new platform event
 export async function POST(request: NextRequest) {
   try {
+    const supabase = getSupabase()
     const body = await request.json()
     
     const { data, error } = await supabase
@@ -86,6 +95,7 @@ export async function POST(request: NextRequest) {
 // PUT - Update a platform event
 export async function PUT(request: NextRequest) {
   try {
+    const supabase = getSupabase()
     const body = await request.json()
     const { id, ...updates } = body
     
@@ -121,6 +131,7 @@ export async function PUT(request: NextRequest) {
 // DELETE - Delete a platform event
 export async function DELETE(request: NextRequest) {
   try {
+    const supabase = getSupabase()
     const { searchParams } = new URL(request.url)
     const id = searchParams.get('id')
     
