@@ -1,5 +1,5 @@
 import { Sale, Platform, ValidationResult } from './types'
-import { parseISO, addDays, isBefore, isAfter, isSameDay } from 'date-fns'
+import { parseISO, addDays, isBefore, isAfter } from 'date-fns'
 
 export function validateSale(
   newSale: {
@@ -24,50 +24,51 @@ export function validateSale(
   )
   
   const conflicts: Sale[] = []
+  const cooldownDays = platform.cooldown_days || 0
+  
+  // Skip cooldown check for special sales if platform allows
+  const skipCooldown = (newSale.sale_type === 'seasonal' || newSale.sale_type === 'special') && 
+                        platform.special_sales_no_cooldown
   
   for (const existingSale of relevantSales) {
     const existingStart = parseISO(existingSale.start_date)
     const existingEnd = parseISO(existingSale.end_date)
     
-    // Check for direct overlap (sales can't run at the same time)
+    // Check 1: Direct overlap (sales can't run at the same time)
     if (doPeriodsOverlap(newStart, newEnd, existingStart, existingEnd)) {
       conflicts.push(existingSale)
       continue
     }
     
-    // Check cooldown violations
-    // Cooldown is from END of sale
-    const cooldownDays = platform.cooldown_days
+    if (skipCooldown) continue
     
-    // If seasonal/special sale and platform allows no cooldown for special sales, skip cooldown check
-    if ((newSale.sale_type === 'seasonal' || newSale.sale_type === 'special') && platform.special_sales_no_cooldown) {
-      continue
-    }
-    
-    // Calculate cooldown end for existing sale
-    // Rule: Last day of cooldown CAN be the first day of new sale (10 AM overlap rule)
-    const cooldownEnd = addDays(existingEnd, cooldownDays - 1) // -1 because last cooldown day = valid start
-    
-    // New sale starts during cooldown period?
-    if (isBefore(newStart, existingEnd) || 
-        (isAfter(newStart, existingEnd) && isBefore(newStart, cooldownEnd))) {
-      // Check if it's exactly on the last cooldown day (which is allowed)
-      if (!isSameDay(newStart, cooldownEnd) && !isAfter(newStart, cooldownEnd)) {
+    // Check 2: New sale starts during existing sale's cooldown
+    // 10 AM rule: The cooldown end day IS valid for starting a new sale
+    // So if cooldown is 30 days, new sale can start on day 30 (but not days 1-29)
+    if (cooldownDays > 0) {
+      // existingCooldownEnd = the first day a new sale CAN start after existing sale
+      const existingCooldownEnd = addDays(existingEnd, cooldownDays)
+      
+      // If new sale starts after existing ends but before cooldown ends - CONFLICT
+      if (isAfter(newStart, existingEnd) && isBefore(newStart, existingCooldownEnd)) {
         conflicts.push(existingSale)
         continue
       }
     }
     
-    // Also check reverse: does existing sale start during new sale's cooldown?
-    const newCooldownEnd = addDays(newEnd, cooldownDays - 1)
-    if (isAfter(existingStart, newEnd) && isBefore(existingStart, newCooldownEnd)) {
-      if (!isSameDay(existingStart, newCooldownEnd)) {
+    // Check 3: Existing sale starts during new sale's cooldown (reverse check)
+    if (cooldownDays > 0) {
+      const newCooldownEnd = addDays(newEnd, cooldownDays)
+      
+      // If existing sale starts after new sale ends but before new cooldown ends - CONFLICT
+      if (isAfter(existingStart, newEnd) && isBefore(existingStart, newCooldownEnd)) {
         conflicts.push(existingSale)
+        continue
       }
     }
   }
   
-  const cooldownEnd = addDays(newEnd, platform.cooldown_days)
+  const cooldownEnd = addDays(newEnd, cooldownDays)
   
   return {
     valid: conflicts.length === 0,
