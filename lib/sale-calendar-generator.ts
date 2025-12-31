@@ -1,4 +1,4 @@
-import { addDays, differenceInDays, parseISO, format, startOfYear, endOfYear } from 'date-fns'
+import { addDays, addMonths, differenceInDays, parseISO, format } from 'date-fns'
 import { Platform, PlatformEvent } from '@/lib/types'
 
 export interface GeneratedSale {
@@ -33,7 +33,7 @@ export interface GenerateCalendarParams {
   productId: string
   platforms: Platform[]
   platformEvents: PlatformEvent[]
-  year: number
+  launchDate: string // ISO date string - calendar generates 12 months from this date
   defaultDiscount?: number
 }
 
@@ -41,15 +41,15 @@ export interface GenerateCalendarParams {
 function getEventsForPlatform(
   platformId: string,
   platformEvents: PlatformEvent[],
-  yearStart: Date,
-  yearEnd: Date
+  periodStart: Date,
+  periodEnd: Date
 ): PlatformEvent[] {
   return platformEvents.filter(event => {
     if (event.platform_id !== platformId) return false
     const eventStart = parseISO(event.start_date)
     const eventEnd = parseISO(event.end_date)
-    // Check if event overlaps with the year
-    return eventStart <= yearEnd && eventEnd >= yearStart
+    // Check if event overlaps with the period
+    return eventStart <= periodEnd && eventEnd >= periodStart
   }).sort((a, b) => parseISO(a.start_date).getTime() - parseISO(b.start_date).getTime())
 }
 
@@ -78,11 +78,11 @@ function findNextAvailableDate(
   afterDate: Date,
   existingSales: GeneratedSale[],
   cooldownDays: number,
-  yearEnd: Date
+  periodEnd: Date
 ): Date | null {
   let candidate = addDays(afterDate, 1)
   
-  while (candidate <= yearEnd) {
+  while (candidate <= periodEnd) {
     let isBlocked = false
     
     for (const sale of existingSales) {
@@ -112,8 +112,8 @@ function generatePlatformSales(
   productId: string,
   platform: Platform,
   platformEvents: PlatformEvent[],
-  yearStart: Date,
-  yearEnd: Date,
+  periodStart: Date,
+  periodEnd: Date,
   defaultDiscount: number,
   variation: 'aggressive' | 'balanced' | 'conservative'
 ): GeneratedSale[] {
@@ -122,16 +122,16 @@ function generatePlatformSales(
   const cooldownDays = platform.cooldown_days || 30
   
   // Get events for this platform
-  const events = getEventsForPlatform(platform.id, platformEvents, yearStart, yearEnd)
+  const events = getEventsForPlatform(platform.id, platformEvents, periodStart, periodEnd)
   
   // First, add all seasonal/special events (these typically have no cooldown requirement)
   for (const event of events) {
     const eventStart = parseISO(event.start_date)
     const eventEnd = parseISO(event.end_date)
     
-    // Clamp to year boundaries
-    const saleStart = eventStart < yearStart ? yearStart : eventStart
-    const saleEnd = eventEnd > yearEnd ? yearEnd : eventEnd
+    // Clamp to period boundaries
+    const saleStart = eventStart < periodStart ? periodStart : eventStart
+    const saleEnd = eventEnd > periodEnd ? periodEnd : eventEnd
     
     // Check duration doesn't exceed max
     const duration = differenceInDays(saleEnd, saleStart) + 1
@@ -157,9 +157,9 @@ function generatePlatformSales(
   // This ensures all platforms get coverage even without events
   if (variation === 'conservative') {
     if (sales.length === 0) {
-      // Add a single custom sale at start of year
+      // Add a single custom sale at start of period (launch sale)
       const saleDuration = Math.min(maxSaleDays, 7)
-      const saleEnd = addDays(yearStart, saleDuration - 1)
+      const saleEnd = addDays(periodStart, saleDuration - 1)
       
       sales.push({
         id: `gen-${productId}-${platform.id}-custom-0`,
@@ -167,7 +167,7 @@ function generatePlatformSales(
         platform_id: platform.id,
         platform_name: platform.name,
         platform_color: platform.color_hex,
-        start_date: format(yearStart, 'yyyy-MM-dd'),
+        start_date: format(periodStart, 'yyyy-MM-dd'),
         end_date: format(saleEnd, 'yyyy-MM-dd'),
         discount_percentage: defaultDiscount,
         sale_name: `${platform.name} Launch Sale`,
@@ -184,22 +184,22 @@ function generatePlatformSales(
     parseISO(a.start_date).getTime() - parseISO(b.start_date).getTime()
   )
   
-  let currentDate = yearStart
+  let currentDate = periodStart
   let customSaleCount = 0
   
   // Determine how many custom sales to add based on variation
   const maxCustomSales = variation === 'aggressive' ? 50 : 12 // balanced = ~monthly
   
-  while (currentDate <= yearEnd && customSaleCount < maxCustomSales) {
+  while (currentDate <= periodEnd && customSaleCount < maxCustomSales) {
     // Find next available slot
     const availableDate = findNextAvailableDate(
       addDays(currentDate, -1), // Start checking from current date
       allSales,
       cooldownDays,
-      yearEnd
+      periodEnd
     )
     
-    if (!availableDate || availableDate > yearEnd) break
+    if (!availableDate || availableDate > periodEnd) break
     
     // Calculate sale end date (max duration allowed)
     let saleDuration = maxSaleDays
@@ -209,7 +209,7 @@ function generatePlatformSales(
     }
     
     const saleEnd = addDays(availableDate, saleDuration - 1)
-    const actualEnd = saleEnd > yearEnd ? yearEnd : saleEnd
+    const actualEnd = saleEnd > periodEnd ? periodEnd : saleEnd
     
     // Check this doesn't conflict with any existing sale
     if (!hasConflict(availableDate, actualEnd, allSales, 0)) {
@@ -222,7 +222,7 @@ function generatePlatformSales(
         start_date: format(availableDate, 'yyyy-MM-dd'),
         end_date: format(actualEnd, 'yyyy-MM-dd'),
         discount_percentage: defaultDiscount,
-        sale_name: `Custom Sale ${customSaleCount + 1}`,
+        sale_name: customSaleCount === 0 ? `${platform.name} Launch Sale` : `Custom Sale ${customSaleCount + 1}`,
         sale_type: 'custom',
         is_event: false
       }
@@ -243,8 +243,8 @@ function generatePlatformSales(
 }
 
 // Calculate stats for a variation
-function calculateStats(sales: GeneratedSale[], yearStart: Date, yearEnd: Date): CalendarVariation['stats'] {
-  const totalDaysInYear = differenceInDays(yearEnd, yearStart) + 1
+function calculateStats(sales: GeneratedSale[], periodStart: Date, periodEnd: Date): CalendarVariation['stats'] {
+  const totalDaysInPeriod = differenceInDays(periodEnd, periodStart) + 1
   let totalDaysOnSale = 0
   let eventSales = 0
   let customSales = 0
@@ -264,7 +264,7 @@ function calculateStats(sales: GeneratedSale[], yearStart: Date, yearEnd: Date):
   return {
     totalSales: sales.length,
     totalDaysOnSale,
-    percentageOnSale: Math.round((totalDaysOnSale / totalDaysInYear) * 100),
+    percentageOnSale: Math.round((totalDaysOnSale / totalDaysInPeriod) * 100),
     eventSales,
     customSales
   }
@@ -276,12 +276,13 @@ export function generateSaleCalendar(params: GenerateCalendarParams): CalendarVa
     productId,
     platforms,
     platformEvents,
-    year,
+    launchDate,
     defaultDiscount = 50
   } = params
   
-  const yearStart = startOfYear(new Date(year, 0, 1))
-  const yearEnd = endOfYear(new Date(year, 0, 1))
+  // Parse launch date and calculate 12-month period
+  const periodStart = parseISO(launchDate)
+  const periodEnd = addDays(addMonths(periodStart, 12), -1) // 12 months from launch
   
   // Use ALL platforms passed in - no filtering
   // This ensures every platform gets sales generated
@@ -316,8 +317,8 @@ export function generateSaleCalendar(params: GenerateCalendarParams): CalendarVa
         productId,
         platform,
         platformEvents,
-        yearStart,
-        yearEnd,
+        periodStart,
+        periodEnd,
         defaultDiscount,
         config.key
       )
@@ -333,7 +334,7 @@ export function generateSaleCalendar(params: GenerateCalendarParams): CalendarVa
       name: config.name,
       description: config.description,
       sales: allSales,
-      stats: calculateStats(allSales, yearStart, yearEnd)
+      stats: calculateStats(allSales, periodStart, periodEnd)
     })
   }
   
