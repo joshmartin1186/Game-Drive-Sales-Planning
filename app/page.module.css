@@ -187,6 +187,32 @@
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
 }
 
+.checkboxLabel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #475569;
+  cursor: pointer;
+  padding: 8px 12px;
+  background: #f1f5f9;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+  transition: all 0.2s;
+}
+
+.checkboxLabel:hover {
+  background: #e2e8f0;
+}
+
+.checkboxLabel input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: #3b82f6;
+}
+
 .clearFilters {
   padding: 10px 16px;
   background: #f1f5f9;
@@ -253,6 +279,7 @@
 .actions {
   display: flex;
   gap: 12px;
+  flex-wrap: wrap;
 }
 
 .primaryBtn {
