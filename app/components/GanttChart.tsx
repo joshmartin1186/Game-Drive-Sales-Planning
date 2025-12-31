@@ -54,14 +54,21 @@ export default function GanttChart({
   const [selection, setSelection] = useState<SelectionState | null>(null)
   const [isSelecting, setIsSelecting] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
+  
+  // Refs for mouseup handler to always have current values
   const selectionRef = useRef<SelectionState | null>(null)
   const isSelectingRef = useRef(false)
+  const onCreateSaleRef = useRef(onCreateSale)
   
-  // Keep refs in sync with state for use in event listeners
+  // Keep refs in sync
   useEffect(() => {
     selectionRef.current = selection
     isSelectingRef.current = isSelecting
   }, [selection, isSelecting])
+  
+  useEffect(() => {
+    onCreateSaleRef.current = onCreateSale
+  }, [onCreateSale])
   
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -87,6 +94,12 @@ export default function GanttChart({
     
     return { months: monthsArr, days: daysArr, totalDays: daysArr.length }
   }, [timelineStart, monthCount])
+  
+  // Keep days ref in sync
+  const daysRef = useRef(days)
+  useEffect(() => {
+    daysRef.current = days
+  }, [days])
   
   const groupedProducts = useMemo(() => {
     const groups: { game: Game & { client: Client }; products: (Product & { game: Game & { client: Client } })[] }[] = []
@@ -278,16 +291,22 @@ export default function GanttChart({
       }
       
       const sel = selectionRef.current
+      const currentDays = daysRef.current
+      const createHandler = onCreateSaleRef.current
       
-      if (onCreateSale) {
+      if (createHandler && currentDays.length > 0) {
         const startIdx = Math.min(sel.startDayIndex, sel.endDayIndex)
         const endIdx = Math.max(sel.startDayIndex, sel.endDayIndex)
         
-        const startDate = format(days[startIdx], 'yyyy-MM-dd')
-        const endDate = format(days[endIdx], 'yyyy-MM-dd')
+        // Ensure indices are within bounds
+        const safeStartIdx = Math.max(0, Math.min(startIdx, currentDays.length - 1))
+        const safeEndIdx = Math.max(0, Math.min(endIdx, currentDays.length - 1))
+        
+        const startDate = format(currentDays[safeStartIdx], 'yyyy-MM-dd')
+        const endDate = format(currentDays[safeEndIdx], 'yyyy-MM-dd')
         
         // Call the create handler
-        onCreateSale({
+        createHandler({
           productId: sel.productId,
           platformId: sel.platformId,
           startDate,
@@ -308,7 +327,7 @@ export default function GanttChart({
     return () => {
       document.removeEventListener('mouseup', handleMouseUp)
     }
-  }, [days, onCreateSale])
+  }, []) // Empty deps - uses refs for all values
   
   // Get selection visual properties
   const getSelectionStyle = useCallback((productId: string, platformId: string) => {
