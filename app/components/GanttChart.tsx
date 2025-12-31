@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useRef, useCallback } from 'react'
+import { useState, useMemo, useRef, useCallback, useEffect } from 'react'
 import { DndContext, DragEndEvent, DragStartEvent, useSensor, useSensors, PointerSensor, DragOverlay } from '@dnd-kit/core'
 import { format, addDays, differenceInDays, parseISO, startOfMonth, endOfMonth, eachDayOfInterval } from 'date-fns'
 import { Sale, Platform, Product, Game, Client, SaleWithDetails, PlatformEvent } from '@/lib/types'
@@ -54,6 +54,14 @@ export default function GanttChart({
   const [selection, setSelection] = useState<SelectionState | null>(null)
   const [isSelecting, setIsSelecting] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
+  const selectionRef = useRef<SelectionState | null>(null)
+  const isSelectingRef = useRef(false)
+  
+  // Keep refs in sync with state for use in event listeners
+  useEffect(() => {
+    selectionRef.current = selection
+    isSelectingRef.current = isSelecting
+  }, [selection, isSelecting])
   
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -235,47 +243,72 @@ export default function GanttChart({
     }
     
     e.preventDefault()
-    setIsSelecting(true)
-    setSelection({
+    e.stopPropagation()
+    
+    const newSelection = {
       productId,
       platformId,
       startDayIndex: dayIndex,
       endDayIndex: dayIndex
-    })
+    }
+    
+    setIsSelecting(true)
+    setSelection(newSelection)
+    isSelectingRef.current = true
+    selectionRef.current = newSelection
   }, [])
   
   const handleSelectionMove = useCallback((dayIndex: number) => {
-    if (!isSelecting || !selection) return
+    if (!isSelectingRef.current || !selectionRef.current) return
     
-    setSelection(prev => prev ? {
-      ...prev,
+    const newSelection = {
+      ...selectionRef.current,
       endDayIndex: dayIndex
-    } : null)
-  }, [isSelecting, selection])
-  
-  const handleSelectionEnd = useCallback(() => {
-    if (!isSelecting || !selection || !onCreateSale) {
-      setIsSelecting(false)
-      setSelection(null)
-      return
     }
     
-    const startIdx = Math.min(selection.startDayIndex, selection.endDayIndex)
-    const endIdx = Math.max(selection.startDayIndex, selection.endDayIndex)
+    setSelection(newSelection)
+    selectionRef.current = newSelection
+  }, [])
+  
+  // Document-level mouseup handler for reliable selection end detection
+  useEffect(() => {
+    const handleMouseUp = () => {
+      if (!isSelectingRef.current || !selectionRef.current) {
+        return
+      }
+      
+      const sel = selectionRef.current
+      
+      if (onCreateSale) {
+        const startIdx = Math.min(sel.startDayIndex, sel.endDayIndex)
+        const endIdx = Math.max(sel.startDayIndex, sel.endDayIndex)
+        
+        const startDate = format(days[startIdx], 'yyyy-MM-dd')
+        const endDate = format(days[endIdx], 'yyyy-MM-dd')
+        
+        // Call the create handler
+        onCreateSale({
+          productId: sel.productId,
+          platformId: sel.platformId,
+          startDate,
+          endDate
+        })
+      }
+      
+      // Clear selection state
+      setIsSelecting(false)
+      setSelection(null)
+      isSelectingRef.current = false
+      selectionRef.current = null
+    }
     
-    const startDate = format(days[startIdx], 'yyyy-MM-dd')
-    const endDate = format(days[endIdx], 'yyyy-MM-dd')
+    // Add global mouseup listener
+    document.addEventListener('mouseup', handleMouseUp)
     
-    onCreateSale({
-      productId: selection.productId,
-      platformId: selection.platformId,
-      startDate,
-      endDate
-    })
-    
-    setIsSelecting(false)
-    setSelection(null)
-  }, [isSelecting, selection, days, onCreateSale])
+    return () => {
+      document.removeEventListener('mouseup', handleMouseUp)
+    }
+  }, [days, onCreateSale])
   
   // Get selection visual properties
   const getSelectionStyle = useCallback((productId: string, platformId: string) => {
@@ -395,11 +428,12 @@ export default function GanttChart({
   return (
     <div 
       className={styles.container}
-      onMouseUp={handleSelectionEnd}
       onMouseLeave={() => {
         if (isSelecting) {
           setIsSelecting(false)
           setSelection(null)
+          isSelectingRef.current = false
+          selectionRef.current = null
         }
       }}
     >
