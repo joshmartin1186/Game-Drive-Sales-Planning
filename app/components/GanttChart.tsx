@@ -48,6 +48,9 @@ export default function GanttChart({
   allSales,
   showEvents = true
 }: GanttChartProps) {
+  // DEBUG: Log when component renders and what onCreateSale is
+  console.log('[GanttChart] Render - onCreateSale is:', typeof onCreateSale, onCreateSale ? 'defined' : 'undefined')
+  
   const [draggedSale, setDraggedSale] = useState<SaleWithDetails | null>(null)
   const [validationError, setValidationError] = useState<string | null>(null)
   const [optimisticUpdates, setOptimisticUpdates] = useState<Record<string, { startDate: string; endDate: string }>>({})
