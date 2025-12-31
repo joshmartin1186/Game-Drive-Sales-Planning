@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { parseISO } from 'date-fns'
 import { supabase } from '@/lib/supabase'
 import { Sale, Platform, Product, Game, Client, SaleWithDetails, PlatformEvent } from '@/lib/types'
 import GanttChart from '../components/GanttChart'
@@ -8,6 +9,13 @@ import SalesTable from '../components/SalesTable'
 import AddSaleModal from '../components/AddSaleModal'
 import EditSaleModal from '../components/EditSaleModal'
 import styles from './planning.module.css'
+
+interface SalePrefill {
+  productId: string
+  platformId: string
+  startDate: string
+  endDate: string
+}
 
 export default function PlanningPage() {
   const [sales, setSales] = useState<SaleWithDetails[]>([])
@@ -17,6 +25,7 @@ export default function PlanningPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [showAddModal, setShowAddModal] = useState(false)
+  const [salePrefill, setSalePrefill] = useState<SalePrefill | null>(null)
   const [editingSale, setEditingSale] = useState<SaleWithDetails | null>(null)
   const [selectedClient, setSelectedClient] = useState<string>('all')
   const [clients, setClients] = useState<Client[]>([])
@@ -184,6 +193,7 @@ export default function PlanningPage() {
       }
       
       setShowAddModal(false)
+      setSalePrefill(null)
     } catch (err) {
       console.error('Error creating sale:', err)
       setError(err instanceof Error ? err.message : 'Failed to create sale')
@@ -215,6 +225,18 @@ export default function PlanningPage() {
   const handleSaleEdit = (sale: SaleWithDetails) => {
     setEditingSale(sale)
   }
+
+  // Handle click-to-create from timeline
+  const handleTimelineCreate = (prefill: SalePrefill) => {
+    setSalePrefill(prefill)
+    setShowAddModal(true)
+  }
+
+  // Close modal and clear prefill
+  const handleCloseAddModal = () => {
+    setShowAddModal(false)
+    setSalePrefill(null)
+  }
   
   // Filter products and sales by selected client
   const filteredProducts = selectedClient === 'all' 
@@ -241,7 +263,7 @@ export default function PlanningPage() {
       <header className={styles.header}>
         <div className={styles.headerLeft}>
           <h1>Sales Planning</h1>
-          <p className={styles.subtitle}>Drag and drop to schedule sales</p>
+          <p className={styles.subtitle}>Click and drag on timeline to create sales, or drag existing sales to move them</p>
         </div>
         <div className={styles.headerRight}>
           <label className={styles.checkboxLabel}>
@@ -289,6 +311,7 @@ export default function PlanningPage() {
           onSaleUpdate={handleSaleUpdate}
           onSaleDelete={handleSaleDelete}
           onSaleEdit={handleSaleEdit}
+          onCreateSale={handleTimelineCreate}
           allSales={sales}
           showEvents={showEvents}
         />
@@ -310,7 +333,11 @@ export default function PlanningPage() {
           platforms={platforms}
           existingSales={sales}
           onSave={handleSaleCreate}
-          onClose={() => setShowAddModal(false)}
+          onClose={handleCloseAddModal}
+          initialDate={salePrefill ? parseISO(salePrefill.startDate) : undefined}
+          initialEndDate={salePrefill ? parseISO(salePrefill.endDate) : undefined}
+          initialProductId={salePrefill?.productId}
+          initialPlatformId={salePrefill?.platformId}
         />
       )}
 
