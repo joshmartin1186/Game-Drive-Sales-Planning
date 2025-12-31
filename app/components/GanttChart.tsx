@@ -115,9 +115,9 @@ export default function GanttChart({
     return map
   }, [platformEvents, days, showEvents])
   
-  // Get platform IDs that have visible events
-  const platformsWithEvents = useMemo(() => {
-    return new Set(eventsByPlatform.keys())
+  // Get platform IDs that have visible events - use Array.from for TypeScript compatibility
+  const platformsWithEventsArray = useMemo(() => {
+    return Array.from(eventsByPlatform.keys())
   }, [eventsByPlatform])
   
   const getPositionForDate = useCallback((date: Date | string): number => {
@@ -175,19 +175,19 @@ export default function GanttChart({
   // Get platforms to show for a product (those with sales OR those with visible events)
   const getPlatformsForProduct = useCallback((productId: string) => {
     const productSales = getSalesForProduct(productId)
-    const platformIdsWithSales = new Set(productSales.map(s => s.platform_id))
+    const platformIdsWithSales = productSales.map(s => s.platform_id)
     
     // Combine platforms with sales and platforms with visible events
-    const allPlatformIds = new Set([
+    const allPlatformIdsSet = new Set([
       ...platformIdsWithSales,
-      ...(showEvents ? platformsWithEvents : [])
+      ...(showEvents ? platformsWithEventsArray : [])
     ])
     
-    return Array.from(allPlatformIds)
+    return Array.from(allPlatformIdsSet)
       .map(id => platforms.find(p => p.id === id))
       .filter((p): p is Platform => p !== undefined)
       .sort((a, b) => a.name.localeCompare(b.name))
-  }, [getSalesForProduct, platforms, platformsWithEvents, showEvents])
+  }, [getSalesForProduct, platforms, platformsWithEventsArray, showEvents])
   
   // Get sales for a specific product and platform
   const getSalesForProductPlatform = useCallback((productId: string, platformId: string) => {
