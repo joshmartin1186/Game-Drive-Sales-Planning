@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useRef, useCallback } from 'react'
 import { DndContext, DragEndEvent, DragStartEvent, useSensor, useSensors, PointerSensor, DragOverlay } from '@dnd-kit/core'
-import { format, addDays, differenceInDays, parseISO, startOfMonth, endOfMonth, eachDayOfInterval, isWithinInterval } from 'date-fns'
+import { format, addDays, differenceInDays, parseISO, startOfMonth, endOfMonth, eachDayOfInterval } from 'date-fns'
 import { Sale, Platform, Product, Game, Client, SaleWithDetails, PlatformEvent } from '@/lib/types'
 import { validateSale } from '@/lib/validation'
 import SaleBlock from './SaleBlock'
@@ -91,17 +91,28 @@ export default function GanttChart({
     return groups.sort((a, b) => a.game.name.localeCompare(b.game.name))
   }, [products])
   
-  // Group platform events by platform for display
-  const visibleEvents = useMemo(() => {
-    if (!showEvents || !platformEvents.length) return []
+  // Group platform events by platform ID for quick lookup
+  const eventsByPlatform = useMemo(() => {
+    const map = new Map<string, PlatformEvent[]>()
+    if (!showEvents) return map
     
     const timelineEnd = days[days.length - 1]
-    return platformEvents.filter(event => {
+    
+    for (const event of platformEvents) {
       const eventStart = parseISO(event.start_date)
       const eventEnd = parseISO(event.end_date)
-      // Show event if it overlaps with timeline
-      return eventEnd >= days[0] && eventStart <= timelineEnd
-    })
+      
+      // Only include events that overlap with timeline
+      if (eventEnd >= days[0] && eventStart <= timelineEnd) {
+        const platformId = event.platform_id
+        if (!map.has(platformId)) {
+          map.set(platformId, [])
+        }
+        map.get(platformId)!.push(event)
+      }
+    }
+    
+    return map
   }, [platformEvents, days, showEvents])
   
   const getPositionForDate = useCallback((date: Date | string): number => {
@@ -116,6 +127,28 @@ export default function GanttChart({
     const daysDiff = differenceInDays(e, s) + 1
     return daysDiff * DAY_WIDTH
   }, [])
+  
+  // Get events for a specific platform, clamped to timeline bounds
+  const getEventsForPlatform = useCallback((platformId: string) => {
+    const events = eventsByPlatform.get(platformId) || []
+    return events.map(event => {
+      const eventStart = parseISO(event.start_date)
+      const eventEnd = parseISO(event.end_date)
+      // Clamp to timeline bounds
+      const displayStart = eventStart < days[0] ? days[0] : eventStart
+      const displayEnd = eventEnd > days[days.length - 1] ? days[days.length - 1] : eventEnd
+      const left = getPositionForDate(displayStart)
+      const width = getWidthForRange(displayStart, displayEnd)
+      
+      return {
+        ...event,
+        displayStart,
+        displayEnd,
+        left,
+        width
+      }
+    })
+  }, [eventsByPlatform, days, getPositionForDate, getWidthForRange])
   
   // Get sales for a product, applying optimistic updates
   const getSalesForProduct = useCallback((productId: string) => {
@@ -322,54 +355,6 @@ export default function GanttChart({
               })}
             </div>
             
-            {/* Platform Events Row */}
-            {showEvents && visibleEvents.length > 0 && (
-              <div className={styles.eventsRow}>
-                <div className={styles.eventsLabel}>
-                  <span className={styles.eventsIcon}>📅</span>
-                  <span>Platform Events</span>
-                </div>
-                <div className={styles.eventsTimeline} style={{ width: totalWidth }}>
-                  {days.map((day, idx) => {
-                    const isWeekend = day.getDay() === 0 || day.getDay() === 6
-                    return (
-                      <div
-                        key={idx}
-                        className={`${styles.dayCell} ${isWeekend ? styles.weekendCell : ''}`}
-                        style={{ left: idx * DAY_WIDTH, width: DAY_WIDTH }}
-                      />
-                    )
-                  })}
-                  
-                  {visibleEvents.map(event => {
-                    const eventStart = parseISO(event.start_date)
-                    const eventEnd = parseISO(event.end_date)
-                    // Clamp to timeline bounds
-                    const displayStart = eventStart < days[0] ? days[0] : eventStart
-                    const displayEnd = eventEnd > days[days.length - 1] ? days[days.length - 1] : eventEnd
-                    const left = getPositionForDate(displayStart)
-                    const width = getWidthForRange(displayStart, displayEnd)
-                    
-                    return (
-                      <div
-                        key={event.id}
-                        className={styles.eventBlock}
-                        style={{
-                          left,
-                          width,
-                          backgroundColor: event.platform?.color_hex || '#6366f1',
-                        }}
-                        title={`${event.name} (${event.platform?.name})\n${format(eventStart, 'MMM d')} - ${format(eventEnd, 'MMM d, yyyy')}${!event.requires_cooldown ? '\nNo cooldown required' : ''}`}
-                      >
-                        <span className={styles.eventName}>{event.name}</span>
-                        {!event.requires_cooldown && <span className={styles.eventNoCooldown}>★</span>}
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-            )}
-            
             <div className={styles.productRows}>
               {groupedProducts.map(({ game, products: gameProducts }) => (
                 <div key={game.id} className={styles.gameGroup}>
@@ -410,6 +395,7 @@ export default function GanttChart({
                         {/* Platform sub-rows for products with sales */}
                         {productPlatforms.map(platform => {
                           const platformSales = getSalesForProductPlatform(product.id, platform.id)
+                          const platformEvents = getEventsForPlatform(platform.id)
                           
                           return (
                             <div key={`${product.id}-${platform.id}`} className={styles.platformRow}>
@@ -433,6 +419,27 @@ export default function GanttChart({
                                   )
                                 })}
                                 
+                                {/* Platform Events as shaded backgrounds */}
+                                {showEvents && platformEvents.map(event => (
+                                  <div
+                                    key={`event-${event.id}`}
+                                    className={styles.platformEventShade}
+                                    style={{
+                                      left: event.left,
+                                      width: event.width,
+                                      backgroundColor: `${platform.color_hex}25`,
+                                      borderColor: platform.color_hex,
+                                    }}
+                                    title={`${event.name}\n${format(event.displayStart, 'MMM d')} - ${format(event.displayEnd, 'MMM d, yyyy')}${!event.requires_cooldown ? '\n★ No cooldown required' : ''}`}
+                                  >
+                                    <span className={styles.platformEventLabel}>
+                                      {event.name}
+                                      {!event.requires_cooldown && <span className={styles.noCooldownStar}>★</span>}
+                                    </span>
+                                  </div>
+                                ))}
+                                
+                                {/* Cooldowns and Sales */}
                                 {platformSales.map(sale => {
                                   const left = getPositionForDate(sale.start_date)
                                   const width = getWidthForRange(sale.start_date, sale.end_date)
