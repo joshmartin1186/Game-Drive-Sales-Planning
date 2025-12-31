@@ -22,7 +22,7 @@ export default function SaleCalendarPreviewModal({
   onApply,
   isApplying
 }: SaleCalendarPreviewModalProps) {
-  const [selectedVariation, setSelectedVariation] = useState(0)
+  const [selectedVariation, setSelectedVariation] = useState(1) // Default to "Balanced" (middle option)
   const [selectedPlatform, setSelectedPlatform] = useState<string | 'all'>('all')
   
   const currentVariation = variations[selectedVariation]
@@ -70,6 +70,10 @@ export default function SaleCalendarPreviewModal({
       await onApply(currentVariation.sales)
     }
   }
+
+  // Icons for each variation
+  const variationIcons = ['🚀', '⚖️', '🎯']
+  const variationColors = ['#ef4444', '#3b82f6', '#22c55e']
   
   return (
     <div className={styles.overlay} onClick={onClose}>
@@ -80,67 +84,92 @@ export default function SaleCalendarPreviewModal({
           <button className={styles.closeButton} onClick={onClose}>×</button>
         </div>
         
-        {/* Variation Tabs */}
-        <div className={styles.variationTabs}>
-          {variations.map((variation, idx) => (
-            <button
-              key={idx}
-              className={`${styles.variationTab} ${selectedVariation === idx ? styles.active : ''}`}
-              onClick={() => setSelectedVariation(idx)}
-            >
-              <span className={styles.tabName}>{variation.name}</span>
-              <span className={styles.tabStats}>{variation.stats.totalSales} sales</span>
-            </button>
-          ))}
+        {/* Big Variation Selector */}
+        <div className={styles.variationSelector}>
+          <h3 className={styles.selectorTitle}>Choose Your Strategy</h3>
+          <div className={styles.variationCards}>
+            {variations.map((variation, idx) => (
+              <button
+                key={idx}
+                className={`${styles.variationCard} ${selectedVariation === idx ? styles.selectedCard : ''}`}
+                onClick={() => setSelectedVariation(idx)}
+                style={{ 
+                  '--card-color': variationColors[idx],
+                  borderColor: selectedVariation === idx ? variationColors[idx] : 'transparent'
+                } as React.CSSProperties}
+              >
+                <span className={styles.cardIcon}>{variationIcons[idx]}</span>
+                <span className={styles.cardName}>{variation.name}</span>
+                <span className={styles.cardDescription}>{variation.description}</span>
+                <div className={styles.cardStats}>
+                  <span className={styles.cardStatMain}>{variation.stats.totalSales} sales</span>
+                  <span className={styles.cardStatSub}>{variation.stats.percentageOnSale}% coverage</span>
+                </div>
+                {selectedVariation === idx && (
+                  <span className={styles.selectedBadge}>✓ Selected</span>
+                )}
+              </button>
+            ))}
+          </div>
         </div>
         
         {currentVariation && (
           <>
-            {/* Variation Description & Stats */}
-            <div className={styles.variationInfo}>
-              <p className={styles.description}>{currentVariation.description}</p>
-              <div className={styles.statsGrid}>
-                <div className={styles.stat}>
-                  <span className={styles.statValue}>{currentVariation.stats.totalSales}</span>
-                  <span className={styles.statLabel}>Total Sales</span>
-                </div>
-                <div className={styles.stat}>
-                  <span className={styles.statValue}>{currentVariation.stats.totalDaysOnSale}</span>
-                  <span className={styles.statLabel}>Days on Sale</span>
-                </div>
-                <div className={styles.stat}>
-                  <span className={styles.statValue}>{currentVariation.stats.percentageOnSale}%</span>
-                  <span className={styles.statLabel}>Year Coverage</span>
-                </div>
-                <div className={styles.stat}>
-                  <span className={styles.statValue}>{currentVariation.stats.eventSales}</span>
-                  <span className={styles.statLabel}>Event Sales</span>
-                </div>
-                <div className={styles.stat}>
-                  <span className={styles.statValue}>{currentVariation.stats.customSales}</span>
-                  <span className={styles.statLabel}>Custom Sales</span>
-                </div>
+            {/* Quick Stats Bar */}
+            <div className={styles.quickStats}>
+              <div className={styles.quickStat}>
+                <span className={styles.quickStatValue}>{currentVariation.stats.totalSales}</span>
+                <span className={styles.quickStatLabel}>Total</span>
+              </div>
+              <div className={styles.quickStatDivider} />
+              <div className={styles.quickStat}>
+                <span className={styles.quickStatValue}>{currentVariation.stats.totalDaysOnSale}</span>
+                <span className={styles.quickStatLabel}>Days</span>
+              </div>
+              <div className={styles.quickStatDivider} />
+              <div className={styles.quickStat}>
+                <span className={styles.quickStatValue}>{currentVariation.stats.eventSales}</span>
+                <span className={styles.quickStatLabel}>Events</span>
+              </div>
+              <div className={styles.quickStatDivider} />
+              <div className={styles.quickStat}>
+                <span className={styles.quickStatValue}>{currentVariation.stats.customSales}</span>
+                <span className={styles.quickStatLabel}>Custom</span>
+              </div>
+              <div className={styles.quickStatDivider} />
+              <div className={styles.quickStat}>
+                <span className={styles.quickStatValue}>{platforms.length}</span>
+                <span className={styles.quickStatLabel}>Platforms</span>
               </div>
             </div>
             
             {/* Platform Filter */}
             <div className={styles.filterBar}>
-              <label>Filter by Platform:</label>
-              <select 
-                value={selectedPlatform} 
-                onChange={e => setSelectedPlatform(e.target.value)}
-                className={styles.platformSelect}
-              >
-                <option value="all">All Platforms ({currentVariation.sales.length})</option>
+              <label>Preview by Platform:</label>
+              <div className={styles.platformTabs}>
+                <button
+                  className={`${styles.platformTab} ${selectedPlatform === 'all' ? styles.activePlatformTab : ''}`}
+                  onClick={() => setSelectedPlatform('all')}
+                >
+                  All ({currentVariation.sales.length})
+                </button>
                 {platforms.map(platform => {
                   const count = currentVariation.sales.filter(s => s.platform_id === platform.id).length
                   return (
-                    <option key={platform.id} value={platform.id}>
+                    <button
+                      key={platform.id}
+                      className={`${styles.platformTab} ${selectedPlatform === platform.id ? styles.activePlatformTab : ''}`}
+                      onClick={() => setSelectedPlatform(platform.id)}
+                      style={{ 
+                        '--platform-color': platform.color,
+                        backgroundColor: selectedPlatform === platform.id ? platform.color : undefined 
+                      } as React.CSSProperties}
+                    >
                       {platform.name} ({count})
-                    </option>
+                    </button>
                   )
                 })}
-              </select>
+              </div>
             </div>
             
             {/* Sales List */}
@@ -196,7 +225,7 @@ export default function SaleCalendarPreviewModal({
             onClick={handleApply}
             disabled={isApplying || !currentVariation || currentVariation.sales.length === 0}
           >
-            {isApplying ? 'Creating Sales...' : `Apply ${currentVariation?.name || ''} Calendar`}
+            {isApplying ? 'Creating Sales...' : `Apply ${currentVariation?.stats.totalSales || 0} Sales`}
           </button>
         </div>
       </div>
