@@ -10,7 +10,10 @@ import EditSaleModal from './components/EditSaleModal'
 import ProductManager from './components/ProductManager'
 import PlatformSettings from './components/PlatformSettings'
 import SaleCalendarPreviewModal from './components/SaleCalendarPreviewModal'
+import ClearSalesModal from './components/ClearSalesModal'
+import UndoRedoIndicator from './components/UndoRedoIndicator'
 import { generateSaleCalendar, GeneratedSale, CalendarVariation, generatedSaleToCreateFormat } from '@/lib/sale-calendar-generator'
+import { useUndo } from '@/lib/undo-context'
 import styles from './page.module.css'
 import { Sale, Platform, Product, Game, Client, SaleWithDetails, PlatformEvent } from '@/lib/types'
 
@@ -30,6 +33,11 @@ interface CalendarGenerationState {
   productId: string
   productName: string
   variations: CalendarVariation[]
+}
+
+interface ClearSalesState {
+  productId: string
+  productName: string
 }
 
 export default function GameDriveDashboard() {
@@ -53,14 +61,83 @@ export default function GameDriveDashboard() {
   const [calendarGeneration, setCalendarGeneration] = useState<CalendarGenerationState | null>(null)
   const [isApplyingCalendar, setIsApplyingCalendar] = useState(false)
   
+  // Clear sales state
+  const [clearSalesState, setClearSalesState] = useState<ClearSalesState | null>(null)
+  
   // Filter state
   const [filterClientId, setFilterClientId] = useState<string>('')
   const [filterGameId, setFilterGameId] = useState<string>('')
+  
+  // Undo/Redo
+  const { pushAction, setHandlers, canUndo, canRedo, undo, redo } = useUndo()
+  
+  // Force re-render when undo stack changes
+  const [, setForceUpdate] = useState(0)
+  useEffect(() => {
+    const handler = () => setForceUpdate(n => n + 1)
+    window.addEventListener('undo-stack-change', handler)
+    return () => window.removeEventListener('undo-stack-change', handler)
+  }, [])
+
+  // Set up undo/redo handlers
+  useEffect(() => {
+    setHandlers({
+      onCreateSale: async (data) => {
+        const { data: newSale, error } = await supabase
+          .from('sales')
+          .insert([data])
+          .select()
+          .single()
+        
+        if (error) throw error
+        return newSale.id
+      },
+      onUpdateSale: async (id, data) => {
+        const { error } = await supabase
+          .from('sales')
+          .update(data)
+          .eq('id', id)
+        
+        if (error) throw error
+      },
+      onDeleteSale: async (id) => {
+        const { error } = await supabase
+          .from('sales')
+          .delete()
+          .eq('id', id)
+        
+        if (error) throw error
+      },
+      onRefresh: async () => {
+        await fetchSales()
+      }
+    })
+  }, [setHandlers])
 
   // Fetch all data on mount
   useEffect(() => {
     fetchData()
   }, [])
+
+  async function fetchSales() {
+    const { data: salesData, error: salesError } = await supabase
+      .from('sales')
+      .select(`
+        *,
+        product:products(
+          *,
+          game:games(
+            *,
+            client:clients(*)
+          )
+        ),
+        platform:platforms(*)
+      `)
+      .order('start_date')
+    
+    if (salesError) throw salesError
+    setSales(salesData || [])
+  }
 
   async function fetchData() {
     setLoading(true)
@@ -124,24 +201,8 @@ export default function GameDriveDashboard() {
       if (productsError) throw productsError
       setProducts(productsData || [])
 
-      // Fetch sales with product, game, client, and platform details
-      const { data: salesData, error: salesError } = await supabase
-        .from('sales')
-        .select(`
-          *,
-          product:products(
-            *,
-            game:games(
-              *,
-              client:clients(*)
-            )
-          ),
-          platform:platforms(*)
-        `)
-        .order('start_date')
-      
-      if (salesError) throw salesError
-      setSales(salesData || [])
+      // Fetch sales
+      await fetchSales()
 
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to load data'
@@ -171,7 +232,19 @@ export default function GameDriveDashboard() {
 
   // Optimistic update for sales - updates local state immediately
   async function handleSaleUpdate(saleId: string, updates: Partial<Sale>) {
-    // Optimistically update local state first - preserve product and platform
+    // Get current sale data for undo
+    const currentSale = sales.find(s => s.id === saleId)
+    if (!currentSale) return
+    
+    const previousData: Record<string, unknown> = {}
+    const newData: Record<string, unknown> = {}
+    
+    for (const key of Object.keys(updates)) {
+      previousData[key] = currentSale[key as keyof SaleWithDetails]
+      newData[key] = updates[key as keyof typeof updates]
+    }
+    
+    // Optimistically update local state first
     setSales(prev => prev.map(sale => 
       sale.id === saleId 
         ? { ...sale, ...updates } as SaleWithDetails
@@ -185,6 +258,14 @@ export default function GameDriveDashboard() {
         .eq('id', saleId)
       
       if (error) throw error
+      
+      // Push to undo stack
+      pushAction({
+        type: 'UPDATE_SALE',
+        saleId,
+        previousData,
+        newData
+      })
       
       // Silently refresh to get any server-side changes
       const { data: updatedSale } = await supabase
@@ -212,13 +293,28 @@ export default function GameDriveDashboard() {
       const errorMessage = err instanceof Error ? err.message : 'Failed to update sale'
       console.error('Error updating sale:', err)
       setError(errorMessage)
-      // Refresh data on error to restore correct state
       await fetchData()
     }
   }
 
   async function handleSaleDelete(saleId: string) {
     if (!confirm('Are you sure you want to delete this sale?')) return
+    
+    // Get sale data for undo
+    const saleToDelete = sales.find(s => s.id === saleId)
+    if (!saleToDelete) return
+    
+    const saleData: Record<string, unknown> = {
+      product_id: saleToDelete.product_id,
+      platform_id: saleToDelete.platform_id,
+      start_date: saleToDelete.start_date,
+      end_date: saleToDelete.end_date,
+      discount_percentage: saleToDelete.discount_percentage,
+      sale_name: saleToDelete.sale_name,
+      sale_type: saleToDelete.sale_type,
+      status: saleToDelete.status,
+      notes: saleToDelete.notes
+    }
     
     // Optimistically remove from local state
     const previousSales = sales
@@ -231,11 +327,17 @@ export default function GameDriveDashboard() {
         .eq('id', saleId)
       
       if (error) throw error
+      
+      // Push to undo stack
+      pushAction({
+        type: 'DELETE_SALE',
+        saleId,
+        saleData
+      })
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to delete sale'
       console.error('Error deleting sale:', err)
       setError(errorMessage)
-      // Restore on error
       setSales(previousSales)
     }
   }
@@ -260,11 +362,17 @@ export default function GameDriveDashboard() {
       
       if (error) throw error
       
-      // Add to local state
       if (data) {
         setSales(prev => [...prev, data].sort((a, b) => 
           new Date(a.start_date).getTime() - new Date(b.start_date).getTime()
         ))
+        
+        // Push to undo stack
+        pushAction({
+          type: 'CREATE_SALE',
+          saleId: data.id,
+          saleData: sale as Record<string, unknown>
+        })
       }
       
       setShowAddModal(false)
@@ -280,19 +388,16 @@ export default function GameDriveDashboard() {
     setEditingSale(sale)
   }, [])
 
-  // Handle click-to-create from timeline - MEMOIZED to prevent recreation
   const handleTimelineCreate = useCallback((prefill: SalePrefill) => {
     setSalePrefill(prefill)
     setShowAddModal(true)
   }, [])
 
-  // Close modal and clear prefill
   const handleCloseAddModal = useCallback(() => {
     setShowAddModal(false)
     setSalePrefill(null)
   }, [])
 
-  // Handle generate calendar button click
   const handleGenerateCalendar = useCallback((productId: string, productName: string) => {
     const currentYear = new Date().getFullYear()
     
@@ -311,16 +416,13 @@ export default function GameDriveDashboard() {
     })
   }, [platforms, platformEvents])
 
-  // Handle applying generated calendar
   const handleApplyCalendar = useCallback(async (generatedSales: GeneratedSale[]) => {
     setIsApplyingCalendar(true)
     setError(null)
     
     try {
-      // Convert generated sales to database format
       const salesToCreate = generatedSales.map(sale => generatedSaleToCreateFormat(sale))
       
-      // Insert all sales in batch
       const { data, error } = await supabase
         .from('sales')
         .insert(salesToCreate)
@@ -338,14 +440,24 @@ export default function GameDriveDashboard() {
       
       if (error) throw error
       
-      // Add all new sales to local state
       if (data && data.length > 0) {
         setSales(prev => [...prev, ...data].sort((a, b) => 
           new Date(a.start_date).getTime() - new Date(b.start_date).getTime()
         ))
+        
+        // Push batch action to undo stack
+        pushAction({
+          type: 'BATCH_CREATE_SALES',
+          sales: data.map(s => ({
+            id: s.id,
+            data: salesToCreate.find(sc => 
+              sc.product_id === s.product_id && 
+              sc.start_date === s.start_date
+            ) as Record<string, unknown>
+          }))
+        })
       }
       
-      // Close the modal
       setCalendarGeneration(null)
       
     } catch (err: unknown) {
@@ -355,7 +467,70 @@ export default function GameDriveDashboard() {
     } finally {
       setIsApplyingCalendar(false)
     }
+  }, [pushAction])
+
+  // Clear sales handler
+  const handleClearSales = useCallback((productId: string, productName: string) => {
+    setClearSalesState({ productId, productName })
   }, [])
+
+  const handleConfirmClearSales = useCallback(async (productId: string, platformId: string | null) => {
+    const salesToDelete = sales.filter(s => 
+      s.product_id === productId && 
+      (platformId === null || s.platform_id === platformId)
+    )
+    
+    if (salesToDelete.length === 0) {
+      setClearSalesState(null)
+      return
+    }
+    
+    // Store sale data for undo
+    const saleDataList = salesToDelete.map(s => ({
+      id: s.id,
+      data: {
+        product_id: s.product_id,
+        platform_id: s.platform_id,
+        start_date: s.start_date,
+        end_date: s.end_date,
+        discount_percentage: s.discount_percentage,
+        sale_name: s.sale_name,
+        sale_type: s.sale_type,
+        status: s.status,
+        notes: s.notes
+      } as Record<string, unknown>
+    }))
+    
+    // Optimistically remove
+    setSales(prev => prev.filter(s => 
+      !(s.product_id === productId && (platformId === null || s.platform_id === platformId))
+    ))
+    
+    try {
+      // Delete from database
+      for (const sale of salesToDelete) {
+        const { error } = await supabase
+          .from('sales')
+          .delete()
+          .eq('id', sale.id)
+        
+        if (error) throw error
+      }
+      
+      // Push batch delete to undo stack
+      pushAction({
+        type: 'BATCH_DELETE_SALES',
+        sales: saleDataList
+      })
+      
+      setClearSalesState(null)
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to delete sales'
+      console.error('Error clearing sales:', err)
+      setError(errorMessage)
+      await fetchSales()
+    }
+  }, [sales, pushAction])
 
   async function handleClientCreate(client: Omit<Client, 'id' | 'created_at'>) {
     try {
@@ -389,7 +564,6 @@ export default function GameDriveDashboard() {
     }
   }
 
-  // Returns the created product so it can be used for auto-generating calendar
   async function handleProductCreate(product: Omit<Product, 'id' | 'created_at'>): Promise<Product | undefined> {
     try {
       const { data, error } = await supabase
@@ -417,10 +591,8 @@ export default function GameDriveDashboard() {
         .eq('id', clientId)
       
       if (error) throw error
-      // Reset filter if deleted client was selected
       if (filterClientId === clientId) setFilterClientId('')
       setClients(prev => prev.filter(c => c.id !== clientId))
-      // Remove associated games, products, and sales from state
       const deletedGameIds = games.filter(g => g.client_id === clientId).map(g => g.id)
       setGames(prev => prev.filter(g => g.client_id !== clientId))
       setProducts(prev => prev.filter(p => !deletedGameIds.includes(p.game_id)))
@@ -439,10 +611,8 @@ export default function GameDriveDashboard() {
         .eq('id', gameId)
       
       if (error) throw error
-      // Reset filter if deleted game was selected
       if (filterGameId === gameId) setFilterGameId('')
       setGames(prev => prev.filter(g => g.id !== gameId))
-      // Remove associated products and sales
       const deletedProductIds = products.filter(p => p.game_id === gameId).map(p => p.id)
       setProducts(prev => prev.filter(p => p.game_id !== gameId))
       setSales(prev => prev.filter(s => !deletedProductIds.includes(s.product_id)))
@@ -468,13 +638,11 @@ export default function GameDriveDashboard() {
     }
   }
 
-  // Filter games by selected client
   const filteredGames = useMemo(() => {
     if (!filterClientId) return games
     return games.filter(g => g.client_id === filterClientId)
   }, [games, filterClientId])
 
-  // Filter products by selected game or client
   const filteredProducts = useMemo(() => {
     let result = products
     if (filterGameId) {
@@ -485,7 +653,6 @@ export default function GameDriveDashboard() {
     return result
   }, [products, filterClientId, filterGameId])
 
-  // Filter sales by selected game or client
   const filteredSales = useMemo(() => {
     let result = sales
     if (filterGameId) {
@@ -496,17 +663,14 @@ export default function GameDriveDashboard() {
     return result
   }, [sales, filterClientId, filterGameId])
 
-  // Calculate stats from filtered data
   const activeSales = filteredSales.filter(s => s.status === 'live' || s.status === 'confirmed').length
-  const conflicts = 0 // TODO: Calculate actual conflicts
+  const conflicts = 0
   const upcomingEvents = platformEvents.filter(e => new Date(e.start_date) > new Date()).length
 
-  // Timeline settings
   const timelineStart = new Date()
-  timelineStart.setDate(1) // Start of current month
+  timelineStart.setDate(1)
   const monthCount = 12
 
-  // Reset game filter when client changes
   useEffect(() => {
     if (filterClientId && filterGameId) {
       const game = games.find(g => g.id === filterGameId)
@@ -533,6 +697,14 @@ export default function GameDriveDashboard() {
         <h1>GameDrive Sales Planning</h1>
         <p>Interactive sales timeline with drag-and-drop scheduling</p>
       </header>
+
+      {/* Undo/Redo Indicator */}
+      <UndoRedoIndicator 
+        canUndo={canUndo} 
+        canRedo={canRedo}
+        onUndo={undo}
+        onRedo={redo}
+      />
 
       {error && (
         <div className={styles.errorBanner}>
@@ -679,6 +851,7 @@ export default function GameDriveDashboard() {
             onSaleEdit={handleSaleEdit}
             onCreateSale={handleTimelineCreate}
             onGenerateCalendar={handleGenerateCalendar}
+            onClearSales={handleClearSales}
             allSales={sales}
             showEvents={showEvents}
           />
@@ -761,7 +934,7 @@ export default function GameDriveDashboard() {
         onClose={() => setShowPlatformSettings(false)}
         onEventsChange={() => {
           fetchPlatformEvents()
-          fetchData() // Also refresh platforms in case rules changed
+          fetchData()
         }}
       />
 
@@ -774,6 +947,19 @@ export default function GameDriveDashboard() {
           variations={calendarGeneration.variations}
           onApply={handleApplyCalendar}
           isApplying={isApplyingCalendar}
+        />
+      )}
+
+      {/* Clear Sales Modal */}
+      {clearSalesState && (
+        <ClearSalesModal
+          isOpen={true}
+          onClose={() => setClearSalesState(null)}
+          productId={clearSalesState.productId}
+          productName={clearSalesState.productName}
+          platforms={platforms}
+          sales={sales}
+          onConfirm={handleConfirmClearSales}
         />
       )}
     </div>
