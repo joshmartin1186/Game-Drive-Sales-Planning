@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { format, addDays, parseISO } from 'date-fns'
+import { format, addDays, parseISO, differenceInDays } from 'date-fns'
 import { Sale, Platform, Product, Game, Client, SaleWithDetails } from '@/lib/types'
 import { validateSale } from '@/lib/validation'
 import styles from './AddSaleModal.module.css'
@@ -14,6 +14,8 @@ interface AddSaleModalProps {
   onClose: () => void
   initialDate?: Date
   initialProductId?: string
+  initialPlatformId?: string
+  initialEndDate?: Date
 }
 
 // Database constraint: 'custom' | 'seasonal' | 'festival' | 'special'
@@ -26,14 +28,21 @@ export default function AddSaleModal({
   onSave,
   onClose,
   initialDate,
-  initialProductId
+  initialProductId,
+  initialPlatformId,
+  initialEndDate
 }: AddSaleModalProps) {
+  // Calculate initial duration from start and end dates
+  const initialDuration = initialDate && initialEndDate 
+    ? differenceInDays(initialEndDate, initialDate) + 1 
+    : 7
+
   const [productId, setProductId] = useState(initialProductId || '')
-  const [platformId, setPlatformId] = useState('')
+  const [platformId, setPlatformId] = useState(initialPlatformId || '')
   const [startDate, setStartDate] = useState(
     initialDate ? format(initialDate, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd')
   )
-  const [duration, setDuration] = useState(7)
+  const [duration, setDuration] = useState(initialDuration)
   const [discountPercentage, setDiscountPercentage] = useState(50)
   const [saleName, setSaleName] = useState('')
   const [saleType, setSaleType] = useState<SaleType>('custom')
@@ -43,6 +52,7 @@ export default function AddSaleModal({
   const [validationError, setValidationError] = useState<string | null>(null)
   
   const selectedPlatform = platforms.find(p => p.id === platformId)
+  const selectedProduct = products.find(p => p.id === productId)
   
   // Calculate end date from start date + duration
   const endDate = startDate 
@@ -131,6 +141,19 @@ export default function AddSaleModal({
           <h2>Add New Sale</h2>
           <button className={styles.closeBtn} onClick={onClose}>×</button>
         </div>
+        
+        {/* Pre-filled indicator */}
+        {(initialProductId || initialPlatformId) && (
+          <div className={styles.prefillNotice}>
+            {selectedProduct && selectedPlatform ? (
+              <>Creating sale for <strong>{selectedProduct.name}</strong> on <strong>{selectedPlatform.name}</strong></>
+            ) : selectedProduct ? (
+              <>Creating sale for <strong>{selectedProduct.name}</strong></>
+            ) : (
+              <>Creating sale from timeline selection</>
+            )}
+          </div>
+        )}
         
         <form onSubmit={handleSubmit} className={styles.form}>
           {validationError && (
