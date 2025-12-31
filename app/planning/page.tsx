@@ -248,6 +248,9 @@ export default function PlanningPage() {
     ? sales
     : sales.filter(s => s.product?.game?.client?.id === selectedClient)
   
+  // DEBUG: Log the callback we're about to pass
+  console.log('[Planning] About to render GanttChart with onCreateSale:', typeof handleTimelineCreate)
+  
   if (loading) {
     return (
       <div className={styles.container}>
