@@ -189,6 +189,17 @@
   text-transform: uppercase;
 }
 
+/* Launch Date Badge in product label */
+.launchDateBadge {
+  font-size: 0.5625rem;
+  color: #16a34a;
+  background: #f0fdf4;
+  padding: 1px 4px;
+  border-radius: 3px;
+  margin-left: 4px;
+  white-space: nowrap;
+}
+
 /* Product Actions Container - holds generate and clear buttons */
 .productActions {
   display: flex;
@@ -352,6 +363,72 @@
 @keyframes selectionPulse {
   0%, 100% { opacity: 0.8; }
   50% { opacity: 1; }
+}
+
+/* Launch Date Marker */
+.launchMarker {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  width: 28px;
+  z-index: 15;
+  cursor: ew-resize;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.launchMarker:hover .launchMarkerLine {
+  background: #16a34a;
+  width: 3px;
+}
+
+.launchMarker:hover .launchMarkerFlag {
+  transform: scale(1.1);
+}
+
+.launchMarkerDragging .launchMarkerLine {
+  background: #16a34a;
+  width: 3px;
+}
+
+.launchMarkerDragging .launchMarkerFlag {
+  transform: scale(1.15);
+}
+
+.launchMarkerLine {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 2px;
+  height: 100%;
+  background: #22c55e;
+  transition: width 0.15s, background 0.15s;
+}
+
+.launchMarkerFlag {
+  position: absolute;
+  top: 2px;
+  background: #22c55e;
+  color: white;
+  padding: 2px 4px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+  transition: transform 0.15s;
+  z-index: 16;
+}
+
+/* Launch marker line extension into platform rows */
+.launchMarkerLineExtension {
+  position: absolute;
+  top: 0;
+  width: 2px;
+  height: 100%;
+  background: #22c55e;
+  opacity: 0.5;
+  z-index: 1;
+  pointer-events: none;
 }
 
 /* Platform Event Shading - different from cooldown */
