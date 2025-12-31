@@ -41,6 +41,7 @@ export interface Product {
   product_type: 'base' | 'edition' | 'dlc' | 'soundtrack' | 'bundle'
   base_price_usd?: number
   steam_product_id?: string
+  launch_date?: string | null
   created_at: string
   game?: Game
 }
