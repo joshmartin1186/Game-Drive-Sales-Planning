@@ -389,7 +389,8 @@ export default function GameDriveDashboard() {
     }
   }
 
-  async function handleProductCreate(product: Omit<Product, 'id' | 'created_at'>) {
+  // Returns the created product so it can be used for auto-generating calendar
+  async function handleProductCreate(product: Omit<Product, 'id' | 'created_at'>): Promise<Product | undefined> {
     try {
       const { data, error } = await supabase
         .from('products')
@@ -398,7 +399,10 @@ export default function GameDriveDashboard() {
         .single()
       
       if (error) throw error
-      if (data) setProducts(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)))
+      if (data) {
+        setProducts(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)))
+        return data
+      }
     } catch (err: unknown) {
       console.error('Error creating product:', err)
       throw err
@@ -746,6 +750,7 @@ export default function GameDriveDashboard() {
           onClientDelete={handleClientDelete}
           onGameDelete={handleGameDelete}
           onProductDelete={handleProductDelete}
+          onGenerateCalendar={handleGenerateCalendar}
           onClose={() => setShowProductManager(false)}
         />
       )}
