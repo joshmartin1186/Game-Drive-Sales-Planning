@@ -19,8 +19,9 @@ interface GanttChartProps {
   onSaleDelete: (saleId: string) => Promise<void>
   onSaleEdit: (sale: SaleWithDetails) => void
   onCreateSale?: (prefill: { productId: string; platformId: string; startDate: string; endDate: string }) => void
-  onGenerateCalendar?: (productId: string, productName: string) => void
+  onGenerateCalendar?: (productId: string, productName: string, launchDate?: string) => void
   onClearSales?: (productId: string, productName: string) => void
+  onLaunchDateChange?: (productId: string, newLaunchDate: string) => Promise<void>
   allSales: SaleWithDetails[]
   showEvents?: boolean
 }
@@ -30,6 +31,12 @@ interface SelectionState {
   platformId: string
   startDayIndex: number
   endDayIndex: number
+}
+
+interface LaunchDateDragState {
+  productId: string
+  originalDate: string
+  currentDayIndex: number
 }
 
 const DAY_WIDTH = 28
@@ -50,6 +57,7 @@ export default function GanttChart(props: GanttChartProps) {
     onCreateSale,
     onGenerateCalendar,
     onClearSales,
+    onLaunchDateChange,
     allSales,
     showEvents = true
   } = props
@@ -58,6 +66,7 @@ export default function GanttChart(props: GanttChartProps) {
   const [validationError, setValidationError] = useState<string | null>(null)
   const [optimisticUpdates, setOptimisticUpdates] = useState<Record<string, { startDate: string; endDate: string }>>({})
   const [selection, setSelection] = useState<SelectionState | null>(null)
+  const [launchDateDrag, setLaunchDateDrag] = useState<LaunchDateDragState | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   
   // Refs for selection - store everything needed at mousedown time
@@ -65,6 +74,13 @@ export default function GanttChart(props: GanttChartProps) {
     data: SelectionState
     callback: typeof onCreateSale
     days: Date[]
+  } | null>(null)
+  
+  // Ref for launch date drag
+  const launchDragRef = useRef<{
+    productId: string
+    originalDate: string
+    startX: number
   } | null>(null)
   
   const sensors = useSensors(
@@ -155,6 +171,11 @@ export default function GanttChart(props: GanttChartProps) {
     const daysDiff = differenceInDays(e, s) + 1
     return daysDiff * DAY_WIDTH
   }, [])
+  
+  const getDayIndexForDate = useCallback((date: Date | string): number => {
+    const d = typeof date === 'string' ? parseISO(date) : date
+    return differenceInDays(d, days[0])
+  }, [days])
   
   // Get events for a specific platform, clamped to timeline bounds
   const getEventsForPlatform = useCallback((platformId: string) => {
@@ -273,8 +294,8 @@ export default function GanttChart(props: GanttChartProps) {
   
   // Selection handlers for click-to-create
   const handleSelectionStart = useCallback((productId: string, platformId: string, dayIndex: number, e: React.MouseEvent) => {
-    // Don't start selection if clicking on a sale block
-    if ((e.target as HTMLElement).closest('[data-sale-block]')) {
+    // Don't start selection if clicking on a sale block or launch marker
+    if ((e.target as HTMLElement).closest('[data-sale-block]') || (e.target as HTMLElement).closest('[data-launch-marker]')) {
       return
     }
     
@@ -313,9 +334,70 @@ export default function GanttChart(props: GanttChartProps) {
     setSelection(newSelection)
   }, [])
   
-  // Window-level mouseup handler
+  // Launch date drag handlers
+  const handleLaunchDragStart = useCallback((productId: string, launchDate: string, e: React.MouseEvent) => {
+    if (e.button !== 0) return
+    if (!onLaunchDateChange) return
+    
+    e.preventDefault()
+    e.stopPropagation()
+    
+    launchDragRef.current = {
+      productId,
+      originalDate: launchDate,
+      startX: e.clientX
+    }
+    
+    setLaunchDateDrag({
+      productId,
+      originalDate: launchDate,
+      currentDayIndex: getDayIndexForDate(launchDate)
+    })
+  }, [onLaunchDateChange, getDayIndexForDate])
+  
+  const handleLaunchDragMove = useCallback((e: MouseEvent) => {
+    if (!launchDragRef.current || !launchDateDrag) return
+    
+    const deltaX = e.clientX - launchDragRef.current.startX
+    const daysDelta = Math.round(deltaX / DAY_WIDTH)
+    const originalDayIndex = getDayIndexForDate(launchDragRef.current.originalDate)
+    const newDayIndex = Math.max(0, Math.min(originalDayIndex + daysDelta, days.length - 1))
+    
+    setLaunchDateDrag(prev => prev ? { ...prev, currentDayIndex: newDayIndex } : null)
+  }, [launchDateDrag, getDayIndexForDate, days.length])
+  
+  const handleLaunchDragEnd = useCallback(async () => {
+    if (!launchDragRef.current || !launchDateDrag || !onLaunchDateChange) {
+      launchDragRef.current = null
+      setLaunchDateDrag(null)
+      return
+    }
+    
+    const { productId, originalDate } = launchDragRef.current
+    const newDate = format(days[launchDateDrag.currentDayIndex], 'yyyy-MM-dd')
+    
+    launchDragRef.current = null
+    setLaunchDateDrag(null)
+    
+    if (newDate !== originalDate) {
+      await onLaunchDateChange(productId, newDate)
+    }
+  }, [launchDateDrag, onLaunchDateChange, days])
+  
+  // Window-level mouse handlers
   useEffect(() => {
+    const handleWindowMouseMove = (e: MouseEvent) => {
+      if (launchDragRef.current) {
+        handleLaunchDragMove(e)
+      }
+    }
+    
     const handleWindowMouseUp = () => {
+      if (launchDragRef.current) {
+        handleLaunchDragEnd()
+        return
+      }
+      
       if (!selectionRef.current) return
       
       // Get the final day index from the selection data
@@ -324,12 +406,14 @@ export default function GanttChart(props: GanttChartProps) {
     }
     
     // Use capture phase to get event before DndContext
+    window.addEventListener('mousemove', handleWindowMouseMove)
     window.addEventListener('mouseup', handleWindowMouseUp, { capture: true })
     
     return () => {
+      window.removeEventListener('mousemove', handleWindowMouseMove)
       window.removeEventListener('mouseup', handleWindowMouseUp, { capture: true })
     }
-  }, [completeSelection])
+  }, [completeSelection, handleLaunchDragMove, handleLaunchDragEnd])
   
   // Get selection visual properties
   const getSelectionStyle = useCallback((productId: string, platformId: string) => {
@@ -351,6 +435,25 @@ export default function GanttChart(props: GanttChartProps) {
       borderColor: platform?.color_hex || '#3b82f6'
     }
   }, [selection, platforms])
+  
+  // Get launch date position for a product (considering drag state)
+  const getLaunchDatePosition = useCallback((product: Product) => {
+    if (!product.launch_date) return null
+    
+    // If this product is being dragged, use the drag state
+    if (launchDateDrag && launchDateDrag.productId === product.id) {
+      const left = launchDateDrag.currentDayIndex * DAY_WIDTH
+      const date = days[launchDateDrag.currentDayIndex]
+      return { left, date, isDragging: true }
+    }
+    
+    // Otherwise use the actual launch date
+    const dayIndex = getDayIndexForDate(product.launch_date)
+    if (dayIndex < 0 || dayIndex >= days.length) return null
+    
+    const left = dayIndex * DAY_WIDTH
+    return { left, date: parseISO(product.launch_date), isDragging: false }
+  }, [launchDateDrag, getDayIndexForDate, days])
   
   const handleDragStart = (event: DragStartEvent) => {
     const saleId = event.active.id as string
@@ -532,6 +635,7 @@ export default function GanttChart(props: GanttChartProps) {
                   {gameProducts.map(product => {
                     const productPlatforms = getPlatformsForProduct(product.id)
                     const saleCount = getSaleCount(product.id)
+                    const launchPosition = getLaunchDatePosition(product)
                     
                     return (
                       <div key={product.id} className={styles.productGroup}>
@@ -541,12 +645,17 @@ export default function GanttChart(props: GanttChartProps) {
                             <div className={styles.productLabelContent}>
                               <span className={styles.productName}>{product.name}</span>
                               <span className={styles.productType}>{product.product_type}</span>
+                              {product.launch_date && (
+                                <span className={styles.launchDateBadge}>
+                                  🚀 {format(parseISO(product.launch_date), 'MMM d')}
+                                </span>
+                              )}
                             </div>
                             <div className={styles.productActions}>
                               {onGenerateCalendar && (
                                 <button
                                   className={styles.generateButton}
-                                  onClick={() => onGenerateCalendar(product.id, product.name)}
+                                  onClick={() => onGenerateCalendar(product.id, product.name, product.launch_date || undefined)}
                                   title="Auto-generate sale calendar for this product"
                                 >
                                   🗓️
@@ -575,6 +684,22 @@ export default function GanttChart(props: GanttChartProps) {
                                 />
                               )
                             })}
+                            
+                            {/* Launch Date Marker */}
+                            {launchPosition && onLaunchDateChange && (
+                              <div
+                                data-launch-marker
+                                className={`${styles.launchMarker} ${launchPosition.isDragging ? styles.launchMarkerDragging : ''}`}
+                                style={{ left: launchPosition.left }}
+                                onMouseDown={(e) => handleLaunchDragStart(product.id, product.launch_date!, e)}
+                                title={`Launch Date: ${format(launchPosition.date, 'MMM d, yyyy')}\nDrag to shift all sales`}
+                              >
+                                <div className={styles.launchMarkerLine} />
+                                <div className={styles.launchMarkerFlag}>
+                                  🚀
+                                </div>
+                              </div>
+                            )}
                           </div>
                         </div>
                         
@@ -610,6 +735,14 @@ export default function GanttChart(props: GanttChartProps) {
                                     />
                                   )
                                 })}
+                                
+                                {/* Launch date line extension into platform rows */}
+                                {launchPosition && (
+                                  <div
+                                    className={styles.launchMarkerLineExtension}
+                                    style={{ left: launchPosition.left + DAY_WIDTH / 2 - 1 }}
+                                  />
+                                )}
                                 
                                 {/* Selection preview */}
                                 {selectionStyle && (
