@@ -115,6 +115,11 @@ export default function GanttChart({
     return map
   }, [platformEvents, days, showEvents])
   
+  // Get platform IDs that have visible events
+  const platformsWithEvents = useMemo(() => {
+    return new Set(eventsByPlatform.keys())
+  }, [eventsByPlatform])
+  
   const getPositionForDate = useCallback((date: Date | string): number => {
     const d = typeof date === 'string' ? parseISO(date) : date
     const daysDiff = differenceInDays(d, days[0])
@@ -167,15 +172,22 @@ export default function GanttChart({
       })
   }, [sales, optimisticUpdates])
   
-  // Get unique platforms that have sales for a product
+  // Get platforms to show for a product (those with sales OR those with visible events)
   const getPlatformsForProduct = useCallback((productId: string) => {
     const productSales = getSalesForProduct(productId)
-    const platformIds = Array.from(new Set(productSales.map(s => s.platform_id)))
-    return platformIds
+    const platformIdsWithSales = new Set(productSales.map(s => s.platform_id))
+    
+    // Combine platforms with sales and platforms with visible events
+    const allPlatformIds = new Set([
+      ...platformIdsWithSales,
+      ...(showEvents ? platformsWithEvents : [])
+    ])
+    
+    return Array.from(allPlatformIds)
       .map(id => platforms.find(p => p.id === id))
       .filter((p): p is Platform => p !== undefined)
       .sort((a, b) => a.name.localeCompare(b.name))
-  }, [getSalesForProduct, platforms])
+  }, [getSalesForProduct, platforms, platformsWithEvents, showEvents])
   
   // Get sales for a specific product and platform
   const getSalesForProductPlatform = useCallback((productId: string, platformId: string) => {
@@ -367,7 +379,6 @@ export default function GanttChart({
                   
                   {gameProducts.map(product => {
                     const productPlatforms = getPlatformsForProduct(product.id)
-                    const hasSales = productPlatforms.length > 0
                     
                     return (
                       <div key={product.id} className={styles.productGroup}>
@@ -392,10 +403,10 @@ export default function GanttChart({
                           </div>
                         </div>
                         
-                        {/* Platform sub-rows for products with sales */}
+                        {/* Platform sub-rows for products with sales OR events */}
                         {productPlatforms.map(platform => {
                           const platformSales = getSalesForProductPlatform(product.id, platform.id)
-                          const platformEvents = getEventsForPlatform(platform.id)
+                          const platformEventsForRow = getEventsForPlatform(platform.id)
                           
                           return (
                             <div key={`${product.id}-${platform.id}`} className={styles.platformRow}>
@@ -420,7 +431,7 @@ export default function GanttChart({
                                 })}
                                 
                                 {/* Platform Events as shaded backgrounds */}
-                                {showEvents && platformEvents.map(event => (
+                                {showEvents && platformEventsForRow.map(event => (
                                   <div
                                     key={`event-${event.id}`}
                                     className={styles.platformEventShade}
