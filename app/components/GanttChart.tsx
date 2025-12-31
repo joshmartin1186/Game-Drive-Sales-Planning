@@ -15,13 +15,13 @@ interface GanttChartProps {
   platformEvents: PlatformEvent[]
   timelineStart: Date
   monthCount: number
-  onSaleUpdate: (saleId: string, updates: Partial<Sale>) => Promise&lt;void&gt;
-  onSaleDelete: (saleId: string) => Promise&lt;void&gt;
+  onSaleUpdate: (saleId: string, updates: Partial<Sale>) => Promise<void>
+  onSaleDelete: (saleId: string) => Promise<void>
   onSaleEdit: (sale: SaleWithDetails) => void
   onCreateSale?: (prefill: { productId: string; platformId: string; startDate: string; endDate: string }) => void
   onGenerateCalendar?: (productId: string, productName: string, launchDate?: string) => void
   onClearSales?: (productId: string, productName: string) => void
-  onLaunchDateChange?: (productId: string, newLaunchDate: string) => Promise&lt;void&gt;
+  onLaunchDateChange?: (productId: string, newLaunchDate: string) => Promise<void>
   allSales: SaleWithDetails[]
   showEvents?: boolean
 }
@@ -68,35 +68,35 @@ export default function GanttChart(props: GanttChartProps) {
     showEvents = true
   } = props
   
-  const [draggedSale, setDraggedSale] = useState&lt;SaleWithDetails | null&gt;(null)
-  const [validationError, setValidationError] = useState&lt;string | null&gt;(null)
-  const [optimisticUpdates, setOptimisticUpdates] = useState&lt;Record&lt;string, { startDate: string; endDate: string }&gt;&gt;({})
-  const [selection, setSelection] = useState&lt;SelectionState | null&gt;(null)
-  const [launchDateDrag, setLaunchDateDrag] = useState&lt;LaunchDateDragState | null&gt;(null)
+  const [draggedSale, setDraggedSale] = useState<SaleWithDetails | null>(null)
+  const [validationError, setValidationError] = useState<string | null>(null)
+  const [optimisticUpdates, setOptimisticUpdates] = useState<Record<string, { startDate: string; endDate: string }>>({})
+  const [selection, setSelection] = useState<SelectionState | null>(null)
+  const [launchDateDrag, setLaunchDateDrag] = useState<LaunchDateDragState | null>(null)
   const [isGrabbing, setIsGrabbing] = useState(false)
   const [scrollProgress, setScrollProgress] = useState(0)
-  const containerRef = useRef&lt;HTMLDivElement&gt;(null)
-  const scrollContainerRef = useRef&lt;HTMLDivElement&gt;(null)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
   
   // Refs for selection - store everything needed at mousedown time
-  const selectionRef = useRef&lt;{
+  const selectionRef = useRef<{
     data: SelectionState
     callback: typeof onCreateSale
     days: Date[]
-  } | null&gt;(null)
+  } | null>(null)
   
   // Ref for launch date drag
-  const launchDragRef = useRef&lt;{
+  const launchDragRef = useRef<{
     productId: string
     originalDate: string
     startX: number
-  } | null&gt;(null)
+  } | null>(null)
   
   // Ref for scroll grab
-  const scrollGrabRef = useRef&lt;{
+  const scrollGrabRef = useRef<{
     startX: number
     startScrollLeft: number
-  } | null&gt;(null)
+  } | null>(null)
   
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -110,7 +110,7 @@ export default function GanttChart(props: GanttChartProps) {
     const monthsArr: { date: Date; days: number }[] = []
     const daysArr: Date[] = []
     
-    for (let i = 0; i &lt; monthCount; i++) {
+    for (let i = 0; i < monthCount; i++) {
       const monthDate = new Date(timelineStart.getFullYear(), timelineStart.getMonth() + i, 1)
       const monthDays = eachDayOfInterval({
         start: startOfMonth(monthDate),
@@ -125,7 +125,7 @@ export default function GanttChart(props: GanttChartProps) {
   
   const groupedProducts = useMemo(() => {
     const groups: { game: Game & { client: Client }; products: (Product & { game: Game & { client: Client } })[] }[] = []
-    const gameMap = new Map&lt;string, (Product & { game: Game & { client: Client } })[]&gt;()
+    const gameMap = new Map<string, (Product & { game: Game & { client: Client } })[]>()
     
     for (const product of products) {
       if (!product.game) continue
@@ -147,7 +147,7 @@ export default function GanttChart(props: GanttChartProps) {
   
   // Group platform events by platform ID for quick lookup
   const eventsByPlatform = useMemo(() => {
-    const map = new Map&lt;string, PlatformEvent[]&gt;()
+    const map = new Map<string, PlatformEvent[]>()
     if (!showEvents) return map
     
     const timelineEnd = days[days.length - 1]
@@ -157,7 +157,7 @@ export default function GanttChart(props: GanttChartProps) {
       const eventEnd = parseISO(event.end_date)
       
       // Only include events that overlap with timeline
-      if (eventEnd >= days[0] && eventStart &lt;= timelineEnd) {
+      if (eventEnd >= days[0] && eventStart <= timelineEnd) {
         const platformId = event.platform_id
         if (!map.has(platformId)) {
           map.set(platformId, [])
@@ -199,7 +199,7 @@ export default function GanttChart(props: GanttChartProps) {
       const eventStart = parseISO(event.start_date)
       const eventEnd = parseISO(event.end_date)
       // Clamp to timeline bounds
-      const displayStart = eventStart &lt; days[0] ? days[0] : eventStart
+      const displayStart = eventStart < days[0] ? days[0] : eventStart
       const displayEnd = eventEnd > days[days.length - 1] ? days[days.length - 1] : eventEnd
       const left = getPositionForDate(displayStart)
       const width = getWidthForRange(displayStart, displayEnd)
@@ -303,10 +303,10 @@ export default function GanttChart(props: GanttChartProps) {
       const saleDuration = differenceInDays(saleEnd, saleStart)
       
       // Only check sales that are after the moved sale ends
-      if (saleStart &lt;= newEnd) continue
+      if (saleStart <= newEnd) continue
       
       // If this sale starts during the cooldown of the previous sale
-      if (saleStart &lt; currentCooldownEnd) {
+      if (saleStart < currentCooldownEnd) {
         // Calculate how many days to shift forward
         const shiftAmount = differenceInDays(currentCooldownEnd, saleStart) + 1
         const newSaleStart = addDays(saleStart, shiftAmount)
@@ -328,7 +328,7 @@ export default function GanttChart(props: GanttChartProps) {
     
     // Backward cascade: Sales BEFORE the moved sale that now have cooldowns overlapping
     // We need to check if any sale's cooldown would overlap with the new start
-    const salesBeforeMoved = otherSales.filter(s => parseISO(s.end_date) &lt; newStart)
+    const salesBeforeMoved = otherSales.filter(s => parseISO(s.end_date) < newStart)
     
     for (const sale of salesBeforeMoved) {
       // Skip if this sale is already being shifted
@@ -608,7 +608,7 @@ export default function GanttChart(props: GanttChartProps) {
     
     // Otherwise use the actual launch date
     const dayIndex = getDayIndexForDate(product.launch_date)
-    if (dayIndex &lt; 0 || dayIndex >= days.length) return null
+    if (dayIndex < 0 || dayIndex >= days.length) return null
     
     const left = dayIndex * DAY_WIDTH
     return { left, date: parseISO(product.launch_date), isDragging: false }
@@ -706,7 +706,7 @@ export default function GanttChart(props: GanttChartProps) {
     }
     
     // Optimistic update - immediately show new positions for all affected sales
-    const newOptimistic: Record&lt;string, { startDate: string; endDate: string }&gt; = {
+    const newOptimistic: Record<string, { startDate: string; endDate: string }> = {
       [draggedSale.id]: { startDate: newStartStr, endDate: newEndStr }
     }
     for (const shift of cascadeShifts) {
@@ -773,88 +773,88 @@ export default function GanttChart(props: GanttChartProps) {
   const totalWidth = totalDays * DAY_WIDTH
   
   return (
-    &lt;div 
+    <div 
       className={`${styles.container} ${draggedSale ? styles.dragging : ''}`}
       onMouseLeave={handleMouseLeave}
       ref={containerRef}
-    &gt;
+    >
       {validationError && (
-        &lt;div className={`${styles.validationError} ${validationError.includes('Auto-shifted') ? styles.infoMessage : ''}`}&gt;
-          &lt;span&gt;{validationError.includes('Auto-shifted') ? 'ℹ️' : '⚠️'} {validationError}&lt;/span&gt;
-        &lt;/div&gt;
+        <div className={`${styles.validationError} ${validationError.includes('Auto-shifted') ? styles.infoMessage : ''}`}>
+          <span>{validationError.includes('Auto-shifted') ? 'ℹ️' : '⚠️'} {validationError}</span>
+        </div>
       )}
       
-      &lt;div className={styles.legend}&gt;
-        &lt;span className={styles.legendTitle}&gt;PLATFORMS:&lt;/span&gt;
+      <div className={styles.legend}>
+        <span className={styles.legendTitle}>PLATFORMS:</span>
         {platforms.slice(0, 8).map(platform => (
-          &lt;div key={platform.id} className={styles.legendItem}&gt;
-            &lt;span 
+          <div key={platform.id} className={styles.legendItem}>
+            <span 
               className={styles.legendColor}
               style={{ backgroundColor: platform.color_hex }}
-            /&gt;
-            &lt;span&gt;{platform.name}&lt;/span&gt;
-            &lt;span className={styles.legendCooldown}&gt;({platform.cooldown_days}d cooldown)&lt;/span&gt;
-          &lt;/div&gt;
+            />
+            <span>{platform.name}</span>
+            <span className={styles.legendCooldown}>({platform.cooldown_days}d cooldown)</span>
+          </div>
         ))}
-      &lt;/div&gt;
+      </div>
       
       {/* Scroll Grab Bar */}
-      &lt;div 
+      <div 
         className={`${styles.scrollGrabBar} ${isGrabbing ? styles.grabbing : ''}`}
         onMouseDown={handleScrollGrabStart}
-      &gt;
-        &lt;div className={styles.scrollGrabTrack}&gt;
-          &lt;div className={styles.scrollGrabThumb} style={scrollThumbStyle}&gt;
-            &lt;span className={styles.scrollGrabIcon}&gt;⟷&lt;/span&gt;
-          &lt;/div&gt;
-        &lt;/div&gt;
-        &lt;span className={styles.scrollGrabHint}&gt;Drag to scroll timeline&lt;/span&gt;
-      &lt;/div&gt;
+      >
+        <div className={styles.scrollGrabTrack}>
+          <div className={styles.scrollGrabThumb} style={scrollThumbStyle}>
+            <span className={styles.scrollGrabIcon}>⟷</span>
+          </div>
+        </div>
+        <span className={styles.scrollGrabHint}>Drag to scroll timeline</span>
+      </div>
       
-      &lt;div className={styles.scrollContainer} ref={scrollContainerRef}&gt;
-        &lt;DndContext
+      <div className={styles.scrollContainer} ref={scrollContainerRef}>
+        <DndContext
           sensors={sensors}
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
-        &gt;
-          &lt;div className={styles.timeline} style={{ width: totalWidth }}&gt;
-            &lt;div className={styles.monthHeaders}&gt;
+        >
+          <div className={styles.timeline} style={{ width: totalWidth }}>
+            <div className={styles.monthHeaders}>
               {months.map(({ date, days: daysInMonth }, idx) => (
-                &lt;div 
+                <div 
                   key={idx}
                   className={styles.monthHeader}
                   style={{ width: daysInMonth * DAY_WIDTH }}
-                &gt;
+                >
                   {format(date, 'MMMM yyyy')}
-                &lt;/div&gt;
+                </div>
               ))}
-            &lt;/div&gt;
+            </div>
             
-            &lt;div className={styles.dayHeaders}&gt;
+            <div className={styles.dayHeaders}>
               {days.map((day, idx) => {
                 const isWeekend = day.getDay() === 0 || day.getDay() === 6
                 const isFirstOfMonth = day.getDate() === 1
                 return (
-                  &lt;div 
+                  <div 
                     key={idx}
                     className={`${styles.dayHeader} ${isWeekend ? styles.weekend : ''} ${isFirstOfMonth ? styles.monthStart : ''}`}
                     style={{ width: DAY_WIDTH }}
-                  &gt;
+                  >
                     {day.getDate()}
-                  &lt;/div&gt;
+                  </div>
                 )
               })}
-            &lt;/div&gt;
+            </div>
             
-            &lt;div className={styles.productRows}&gt;
+            <div className={styles.productRows}>
               {groupedProducts.map(({ game, products: gameProducts }) => (
-                &lt;div key={game.id} className={styles.gameGroup}&gt;
-                  &lt;div className={styles.gameHeader}&gt;
-                    &lt;div className={styles.productLabel}&gt;
-                      &lt;span className={styles.gameName}&gt;{game.name}&lt;/span&gt;
-                      &lt;span className={styles.clientName}&gt;{game.client?.name}&lt;/span&gt;
-                    &lt;/div&gt;
-                  &lt;/div&gt;
+                <div key={game.id} className={styles.gameGroup}>
+                  <div className={styles.gameHeader}>
+                    <div className={styles.productLabel}>
+                      <span className={styles.gameName}>{game.name}</span>
+                      <span className={styles.clientName}>{game.client?.name}</span>
+                    </div>
+                  </div>
                   
                   {gameProducts.map(product => {
                     const productPlatforms = getPlatformsForProduct(product.id)
@@ -862,70 +862,70 @@ export default function GanttChart(props: GanttChartProps) {
                     const launchPosition = getLaunchDatePosition(product)
                     
                     return (
-                      &lt;div key={product.id} className={styles.productGroup}&gt;
+                      <div key={product.id} className={styles.productGroup}>
                         {/* Product header row */}
-                        &lt;div className={styles.productRow}&gt;
-                          &lt;div className={styles.productLabel}&gt;
-                            &lt;div className={styles.productLabelContent}&gt;
-                              &lt;span className={styles.productName}&gt;{product.name}&lt;/span&gt;
-                              &lt;span className={styles.productType}&gt;{product.product_type}&lt;/span&gt;
+                        <div className={styles.productRow}>
+                          <div className={styles.productLabel}>
+                            <div className={styles.productLabelContent}>
+                              <span className={styles.productName}>{product.name}</span>
+                              <span className={styles.productType}>{product.product_type}</span>
                               {product.launch_date && (
-                                &lt;span className={styles.launchDateBadge}&gt;
+                                <span className={styles.launchDateBadge}>
                                   🚀 {format(parseISO(product.launch_date), 'MMM d')}
-                                &lt;/span&gt;
+                                </span>
                               )}
-                            &lt;/div&gt;
-                            &lt;div className={styles.productActions}&gt;
+                            </div>
+                            <div className={styles.productActions}>
                               {onGenerateCalendar && (
-                                &lt;button
+                                <button
                                   className={styles.generateButton}
                                   onClick={() => onGenerateCalendar(product.id, product.name, product.launch_date || undefined)}
                                   title="Auto-generate sale calendar for this product"
-                                &gt;
+                                >
                                   🗓️
-                                &lt;/button&gt;
+                                </button>
                               )}
                               {onClearSales && saleCount > 0 && (
-                                &lt;button
+                                <button
                                   className={styles.clearButton}
                                   onClick={() => onClearSales(product.id, product.name)}
                                   title={`Clear sales for this product (${saleCount})`}
-                                &gt;
+                                >
                                   🗑️
-                                &lt;/button&gt;
+                                </button>
                               )}
-                            &lt;/div&gt;
-                          &lt;/div&gt;
+                            </div>
+                          </div>
                           
-                          &lt;div className={styles.timelineRow} style={{ width: totalWidth }}&gt;
+                          <div className={styles.timelineRow} style={{ width: totalWidth }}>
                             {days.map((day, idx) => {
                               const isWeekend = day.getDay() === 0 || day.getDay() === 6
                               return (
-                                &lt;div
+                                <div
                                   key={idx}
                                   className={`${styles.dayCell} ${isWeekend ? styles.weekendCell : ''}`}
                                   style={{ left: idx * DAY_WIDTH, width: DAY_WIDTH }}
-                                /&gt;
+                                />
                               )
                             })}
                             
                             {/* Launch Date Marker - inside timeline row for proper clipping */}
                             {launchPosition && onLaunchDateChange && (
-                              &lt;div
+                              <div
                                 data-launch-marker
                                 className={`${styles.launchMarker} ${launchPosition.isDragging ? styles.launchMarkerDragging : ''}`}
                                 style={{ left: launchPosition.left }}
                                 onMouseDown={(e) => handleLaunchDragStart(product.id, product.launch_date!, e)}
                                 title={`Launch Date: ${format(launchPosition.date, 'MMM d, yyyy')}\nDrag to shift all sales`}
-                              &gt;
-                                &lt;div className={styles.launchMarkerLine} /&gt;
-                                &lt;div className={styles.launchMarkerFlag}&gt;
+                              >
+                                <div className={styles.launchMarkerLine} />
+                                <div className={styles.launchMarkerFlag}>
                                   🚀
-                                &lt;/div&gt;
-                              &lt;/div&gt;
+                                </div>
+                              </div>
                             )}
-                          &lt;/div&gt;
-                        &lt;/div&gt;
+                          </div>
+                        </div>
                         
                         {/* Platform sub-rows for products with sales OR events */}
                         {productPlatforms.map(platform => {
@@ -934,43 +934,43 @@ export default function GanttChart(props: GanttChartProps) {
                           const selectionStyle = getSelectionStyle(product.id, platform.id)
                           
                           return (
-                            &lt;div key={`${product.id}-${platform.id}`} className={styles.platformRow}&gt;
-                              &lt;div className={styles.platformLabel}&gt;
-                                &lt;span 
+                            <div key={`${product.id}-${platform.id}`} className={styles.platformRow}>
+                              <div className={styles.platformLabel}>
+                                <span 
                                   className={styles.platformIndicator}
                                   style={{ backgroundColor: platform.color_hex }}
-                                /&gt;
-                                &lt;span className={styles.platformName}&gt;{platform.name}&lt;/span&gt;
-                              &lt;/div&gt;
+                                />
+                                <span className={styles.platformName}>{platform.name}</span>
+                              </div>
                               
-                              &lt;div 
+                              <div 
                                 className={`${styles.timelineRow} ${styles.clickableTimeline}`}
                                 style={{ width: totalWidth }}
-                              &gt;
+                              >
                                 {days.map((day, idx) => {
                                   const isWeekend = day.getDay() === 0 || day.getDay() === 6
                                   return (
-                                    &lt;div
+                                    <div
                                       key={idx}
                                       className={`${styles.dayCell} ${isWeekend ? styles.weekendCell : ''}`}
                                       style={{ left: idx * DAY_WIDTH, width: DAY_WIDTH }}
                                       onMouseDown={(e) => handleSelectionStart(product.id, platform.id, idx, e)}
                                       onMouseEnter={() => handleSelectionMove(idx)}
-                                    /&gt;
+                                    />
                                   )
                                 })}
                                 
                                 {/* Launch date line extension into platform rows */}
                                 {launchPosition && (
-                                  &lt;div
+                                  <div
                                     className={styles.launchMarkerLineExtension}
                                     style={{ left: launchPosition.left + DAY_WIDTH / 2 - 1 }}
-                                  /&gt;
+                                  />
                                 )}
                                 
                                 {/* Selection preview */}
                                 {selectionStyle && (
-                                  &lt;div
+                                  <div
                                     className={styles.selectionPreview}
                                     style={{
                                       left: selectionStyle.left,
@@ -979,16 +979,16 @@ export default function GanttChart(props: GanttChartProps) {
                                       borderColor: selectionStyle.borderColor,
                                       pointerEvents: 'none',
                                     }}
-                                  &gt;
-                                    &lt;span className={styles.selectionLabel}&gt;
+                                  >
+                                    <span className={styles.selectionLabel}>
                                       {format(days[Math.min(selection!.startDayIndex, selection!.endDayIndex)], 'MMM d')} - {format(days[Math.max(selection!.startDayIndex, selection!.endDayIndex)], 'MMM d')}
-                                    &lt;/span&gt;
-                                  &lt;/div&gt;
+                                    </span>
+                                  </div>
                                 )}
                                 
                                 {/* Platform Events as shaded backgrounds */}
                                 {showEvents && platformEventsForRow.map(event => (
-                                  &lt;div
+                                  <div
                                     key={`event-${event.id}`}
                                     className={styles.platformEventShade}
                                     style={{
@@ -998,12 +998,12 @@ export default function GanttChart(props: GanttChartProps) {
                                       borderColor: platform.color_hex,
                                     }}
                                     title={`${event.name}\n${format(event.displayStart, 'MMM d')} - ${format(event.displayEnd, 'MMM d, yyyy')}${!event.requires_cooldown ? '\n★ No cooldown required' : ''}`}
-                                  &gt;
-                                    &lt;span className={styles.platformEventLabel}&gt;
+                                  >
+                                    <span className={styles.platformEventLabel}>
                                       {event.name}
-                                      {!event.requires_cooldown && &lt;span className={styles.noCooldownStar}&gt;★&lt;/span&gt;}
-                                    &lt;/span&gt;
-                                  &lt;/div&gt;
+                                      {!event.requires_cooldown && <span className={styles.noCooldownStar}>★</span>}
+                                    </span>
+                                  </div>
                                 ))}
                                 
                                 {/* Cooldowns and Sales */}
@@ -1013,63 +1013,63 @@ export default function GanttChart(props: GanttChartProps) {
                                   const cooldown = getCooldownForSale(sale)
                                   
                                   return (
-                                    &lt;div key={sale.id} data-sale-block&gt;
+                                    <div key={sale.id} data-sale-block>
                                       {cooldown && (
-                                        &lt;div
+                                        <div
                                           className={styles.cooldownBlock}
                                           style={{
                                             left: cooldown.left,
                                             width: cooldown.width
                                           }}
                                           title={`Cooldown until ${format(cooldown.end, 'MMM d, yyyy')}`}
-                                        &gt;
-                                          &lt;span&gt;COOLDOWN&lt;/span&gt;
-                                        &lt;/div&gt;
+                                        >
+                                          <span>COOLDOWN</span>
+                                        </div>
                                       )}
                                       
-                                      &lt;SaleBlock
+                                      <SaleBlock
                                         sale={sale}
                                         left={left}
                                         width={width}
                                         onEdit={onSaleEdit}
                                         onDelete={onSaleDelete}
-                                      /&gt;
-                                    &lt;/div&gt;
+                                      />
+                                    </div>
                                   )
                                 })}
-                              &lt;/div&gt;
-                            &lt;/div&gt;
+                              </div>
+                            </div>
                           )
                         })}
-                      &lt;/div&gt;
+                      </div>
                     )
                   })}
-                &lt;/div&gt;
+                </div>
               ))}
               
               {groupedProducts.length === 0 && (
-                &lt;div className={styles.emptyState}&gt;
-                  &lt;p&gt;No products found. Add products to start planning sales.&lt;/p&gt;
-                &lt;/div&gt;
+                <div className={styles.emptyState}>
+                  <p>No products found. Add products to start planning sales.</p>
+                </div>
               )}
-            &lt;/div&gt;
-          &lt;/div&gt;
+            </div>
+          </div>
           
-          &lt;DragOverlay&gt;
+          <DragOverlay>
             {draggedSale && (
-              &lt;div 
+              <div 
                 className={styles.dragOverlay}
                 style={{ 
                   backgroundColor: draggedSale.platform?.color_hex || '#3b82f6',
                   width: getWidthForRange(draggedSale.start_date, draggedSale.end_date)
                 }}
-              &gt;
+              >
                 {draggedSale.sale_name || 'Sale'} -{draggedSale.discount_percentage}%
-              &lt;/div&gt;
+              </div>
             )}
-          &lt;/DragOverlay&gt;
-        &lt;/DndContext&gt;
-      &lt;/div&gt;
-    &lt;/div&gt;
+          </DragOverlay>
+        </DndContext>
+      </div>
+    </div>
   )
 }
