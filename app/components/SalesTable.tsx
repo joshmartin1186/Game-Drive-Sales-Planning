@@ -3,6 +3,7 @@
 import { format, parseISO, differenceInDays, addDays } from 'date-fns'
 import { SaleWithDetails, Platform } from '@/lib/types'
 import styles from './SalesTable.module.css'
+import * as XLSX from 'xlsx'
 
 interface SalesTableProps {
   sales: SaleWithDetails[]
@@ -27,6 +28,59 @@ export default function SalesTable({ sales, platforms, onDelete, onEdit }: Sales
     
     const cooldownEnd = addDays(parseISO(endDate), platform.cooldown_days)
     return format(cooldownEnd, 'dd/MM/yyyy')
+  }
+  
+  const exportToExcel = () => {
+    // Prepare data for Excel
+    const excelData = sortedSales.map(sale => {
+      const platform = platforms.find(p => p.id === sale.platform_id)
+      return {
+        'Start Date': format(parseISO(sale.start_date), 'dd/MM/yyyy'),
+        'End Date': format(parseISO(sale.end_date), 'dd/MM/yyyy'),
+        'Days': calculateDays(sale.start_date, sale.end_date),
+        'Platform': platform?.name || '',
+        'Cooldown (days)': platform?.cooldown_days || 0,
+        'Sale Name': sale.sale_name || 'Custom',
+        'Product': sale.product?.name || '',
+        'Game': sale.product?.game?.name || '',
+        'Client': sale.product?.game?.client?.name || '',
+        'Discount %': sale.discount_percentage || '',
+        'Status': sale.status || 'planned',
+        'Goal': sale.goal_type || '',
+        'Cooldown Until': calculateCooldownUntil(sale.end_date, sale.platform_id),
+        'Notes': sale.notes || ''
+      }
+    })
+    
+    // Create workbook and worksheet
+    const wb = XLSX.utils.book_new()
+    const ws = XLSX.utils.json_to_sheet(excelData)
+    
+    // Set column widths for better readability
+    ws['!cols'] = [
+      { wch: 12 }, // Start Date
+      { wch: 12 }, // End Date
+      { wch: 6 },  // Days
+      { wch: 15 }, // Platform
+      { wch: 12 }, // Cooldown
+      { wch: 25 }, // Sale Name
+      { wch: 25 }, // Product
+      { wch: 20 }, // Game
+      { wch: 15 }, // Client
+      { wch: 10 }, // Discount
+      { wch: 10 }, // Status
+      { wch: 12 }, // Goal
+      { wch: 14 }, // Cooldown Until
+      { wch: 30 }, // Notes
+    ]
+    
+    XLSX.utils.book_append_sheet(wb, ws, 'Sales Schedule')
+    
+    // Generate filename with date
+    const filename = `sales_schedule_${format(new Date(), 'yyyy-MM-dd')}.xlsx`
+    
+    // Download file
+    XLSX.writeFile(wb, filename)
   }
   
   const exportToCSV = () => {
@@ -93,9 +147,14 @@ export default function SalesTable({ sales, platforms, onDelete, onEdit }: Sales
     <div className={styles.container}>
       <div className={styles.header}>
         <span className={styles.count}>{sales.length} sales scheduled</span>
-        <button className={styles.exportBtn} onClick={exportToCSV}>
-          ⬇ Export CSV
-        </button>
+        <div className={styles.exportButtons}>
+          <button className={styles.exportBtn} onClick={exportToExcel} title="Export to Excel">
+            📊 Export Excel
+          </button>
+          <button className={styles.exportBtnSecondary} onClick={exportToCSV} title="Export to CSV">
+            📄 CSV
+          </button>
+        </div>
       </div>
       
       <div className={styles.tableWrapper}>
