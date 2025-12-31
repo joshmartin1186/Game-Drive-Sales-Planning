@@ -7,8 +7,9 @@ import SalesTable from './components/SalesTable'
 import AddSaleModal from './components/AddSaleModal'
 import EditSaleModal from './components/EditSaleModal'
 import ProductManager from './components/ProductManager'
+import PlatformSettings from './components/PlatformSettings'
 import styles from './page.module.css'
-import { Sale, Platform, Product, Game, Client, SaleWithDetails } from '@/lib/types'
+import { Sale, Platform, Product, Game, Client, SaleWithDetails, PlatformEvent } from '@/lib/types'
 
 // Initialize Supabase client
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
@@ -21,12 +22,15 @@ export default function GameDriveDashboard() {
   const [games, setGames] = useState<(Game & { client: Client })[]>([])
   const [products, setProducts] = useState<(Product & { game: Game & { client: Client } })[]>([])
   const [platforms, setPlatforms] = useState<Platform[]>([])
+  const [platformEvents, setPlatformEvents] = useState<PlatformEvent[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [showAddModal, setShowAddModal] = useState(false)
   const [showProductManager, setShowProductManager] = useState(false)
+  const [showPlatformSettings, setShowPlatformSettings] = useState(false)
   const [editingSale, setEditingSale] = useState<SaleWithDetails | null>(null)
   const [viewMode, setViewMode] = useState<'gantt' | 'table'>('gantt')
+  const [showEvents, setShowEvents] = useState(true)
   
   // Filter state
   const [filterClientId, setFilterClientId] = useState<string>('')
@@ -50,6 +54,18 @@ export default function GameDriveDashboard() {
       
       if (platformsError) throw platformsError
       setPlatforms(platformsData || [])
+
+      // Fetch platform events
+      const { data: eventsData, error: eventsError } = await supabase
+        .from('platform_events')
+        .select(`
+          *,
+          platform:platforms(*)
+        `)
+        .order('start_date')
+      
+      if (eventsError) throw eventsError
+      setPlatformEvents(eventsData || [])
 
       // Fetch clients
       const { data: clientsData, error: clientsError } = await supabase
@@ -112,6 +128,23 @@ export default function GameDriveDashboard() {
       setError(errorMessage)
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function fetchPlatformEvents() {
+    try {
+      const { data: eventsData, error: eventsError } = await supabase
+        .from('platform_events')
+        .select(`
+          *,
+          platform:platforms(*)
+        `)
+        .order('start_date')
+      
+      if (eventsError) throw eventsError
+      setPlatformEvents(eventsData || [])
+    } catch (err) {
+      console.error('Error fetching platform events:', err)
     }
   }
 
@@ -363,6 +396,7 @@ export default function GameDriveDashboard() {
   // Calculate stats from filtered data
   const activeSales = filteredSales.filter(s => s.status === 'live' || s.status === 'confirmed').length
   const conflicts = 0 // TODO: Calculate actual conflicts
+  const upcomingEvents = platformEvents.filter(e => new Date(e.start_date) > new Date()).length
 
   // Timeline settings
   const timelineStart = new Date()
@@ -425,11 +459,11 @@ export default function GameDriveDashboard() {
         </div>
 
         <div className={styles.statCard}>
-          <div className={styles.statIcon} style={{backgroundColor: '#8b5cf6'}}>⭐</div>
+          <div className={styles.statIcon} style={{backgroundColor: '#8b5cf6'}}>📅</div>
           <div className={styles.statContent}>
-            <h3>Active Sales</h3>
-            <p className={styles.statValue}>{activeSales}</p>
-            <span className={styles.statChange}>Live or confirmed</span>
+            <h3>Platform Events</h3>
+            <p className={styles.statValue}>{upcomingEvents}</p>
+            <span className={styles.statChange}>Upcoming sales events</span>
           </div>
         </div>
 
@@ -473,6 +507,17 @@ export default function GameDriveDashboard() {
           </select>
         </div>
 
+        <div className={styles.filterGroup}>
+          <label className={styles.checkboxLabel}>
+            <input 
+              type="checkbox" 
+              checked={showEvents} 
+              onChange={(e) => setShowEvents(e.target.checked)}
+            />
+            Show Platform Events
+          </label>
+        </div>
+
         {(filterClientId || filterGameId) && (
           <button 
             className={styles.clearFilters}
@@ -507,6 +552,9 @@ export default function GameDriveDashboard() {
           <button className={styles.secondaryBtn} onClick={() => setShowProductManager(true)}>
             ⚙️ Manage Products
           </button>
+          <button className={styles.secondaryBtn} onClick={() => setShowPlatformSettings(true)}>
+            📅 Platform Settings
+          </button>
           <button className={styles.secondaryBtn} onClick={fetchData}>
             🔄 Refresh
           </button>
@@ -520,13 +568,14 @@ export default function GameDriveDashboard() {
             sales={filteredSales}
             products={filteredProducts}
             platforms={platforms}
-            events={[]}
+            platformEvents={platformEvents}
             timelineStart={timelineStart}
             monthCount={monthCount}
             onSaleUpdate={handleSaleUpdate}
             onSaleDelete={handleSaleDelete}
             onSaleEdit={handleSaleEdit}
             allSales={sales}
+            showEvents={showEvents}
           />
         ) : (
           <SalesTable
@@ -595,6 +644,16 @@ export default function GameDriveDashboard() {
           onClose={() => setShowProductManager(false)}
         />
       )}
+
+      {/* Platform Settings Modal */}
+      <PlatformSettings
+        isOpen={showPlatformSettings}
+        onClose={() => setShowPlatformSettings(false)}
+        onEventsChange={() => {
+          fetchPlatformEvents()
+          fetchData() // Also refresh platforms in case rules changed
+        }}
+      />
     </div>
   )
 }
