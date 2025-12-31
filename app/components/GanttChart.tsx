@@ -74,6 +74,7 @@ export default function GanttChart(props: GanttChartProps) {
   const [selection, setSelection] = useState<SelectionState | null>(null)
   const [launchDateDrag, setLaunchDateDrag] = useState<LaunchDateDragState | null>(null)
   const [isGrabbing, setIsGrabbing] = useState(false)
+  const [scrollProgress, setScrollProgress] = useState(0)
   const containerRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   
@@ -275,6 +276,7 @@ export default function GanttChart(props: GanttChartProps) {
   }, [getPositionForDate, getWidthForRange])
   
   // Calculate cascade shifts for sales that would conflict with a moved sale
+  // This handles BOTH directions - pushing forward AND pulling backward
   const calculateCascadeShifts = useCallback((
     movedSaleId: string,
     newStart: Date,
@@ -292,18 +294,20 @@ export default function GanttChart(props: GanttChartProps) {
     
     if (otherSales.length === 0) return shifts
     
-    // Calculate when the moved sale's cooldown ends
+    // Forward cascade: Sales AFTER the moved sale that now conflict
     let currentCooldownEnd = addDays(newEnd, cooldownDays)
     
-    // Find all sales that now conflict and need to shift
     for (const sale of otherSales) {
       const saleStart = parseISO(sale.start_date)
       const saleEnd = parseISO(sale.end_date)
       const saleDuration = differenceInDays(saleEnd, saleStart)
       
+      // Only check sales that are after the moved sale ends
+      if (saleStart <= newEnd) continue
+      
       // If this sale starts during the cooldown of the previous sale
-      if (saleStart < currentCooldownEnd && saleStart > newEnd) {
-        // Calculate how many days to shift
+      if (saleStart < currentCooldownEnd) {
+        // Calculate how many days to shift forward
         const shiftAmount = differenceInDays(currentCooldownEnd, saleStart) + 1
         const newSaleStart = addDays(saleStart, shiftAmount)
         const newSaleEnd = addDays(newSaleStart, saleDuration)
@@ -316,14 +320,46 @@ export default function GanttChart(props: GanttChartProps) {
         
         // Update cooldown end for next iteration
         currentCooldownEnd = addDays(newSaleEnd, cooldownDays)
-      } else if (saleStart >= currentCooldownEnd) {
+      } else {
         // No conflict, but update cooldown end in case there are more sales after
         currentCooldownEnd = addDays(saleEnd, cooldownDays)
       }
     }
     
+    // Backward cascade: Sales BEFORE the moved sale that now have cooldowns overlapping
+    // We need to check if any sale's cooldown would overlap with the new start
+    const salesBeforeMoved = otherSales.filter(s => parseISO(s.end_date) < newStart)
+    
+    for (const sale of salesBeforeMoved) {
+      // Skip if this sale is already being shifted
+      if (shifts.some(s => s.saleId === sale.id)) continue
+      
+      const saleStart = parseISO(sale.start_date)
+      const saleEnd = parseISO(sale.end_date)
+      const saleDuration = differenceInDays(saleEnd, saleStart)
+      const saleCooldownEnd = addDays(saleEnd, cooldownDays)
+      
+      // If the sale's cooldown overlaps with the moved sale's start
+      if (saleCooldownEnd > newStart) {
+        // We need to shift the moved sale back - but since we can't modify the moved sale
+        // in cascade, we shift THIS sale earlier so its cooldown doesn't overlap
+        const overlapDays = differenceInDays(saleCooldownEnd, newStart) + 1
+        const newSaleStart = addDays(saleStart, -overlapDays)
+        const newSaleEnd = addDays(newSaleStart, saleDuration)
+        
+        // Only add shift if it doesn't put the sale in negative territory
+        if (newSaleStart >= days[0]) {
+          shifts.push({
+            saleId: sale.id,
+            newStart: format(newSaleStart, 'yyyy-MM-dd'),
+            newEnd: format(newSaleEnd, 'yyyy-MM-dd')
+          })
+        }
+      }
+    }
+    
     return shifts
-  }, [allSales])
+  }, [allSales, days])
   
   // Complete selection and open modal
   const completeSelection = useCallback((endDayIndex: number) => {
@@ -475,6 +511,29 @@ export default function GanttChart(props: GanttChartProps) {
     setIsGrabbing(false)
   }, [])
   
+  // Update scroll progress when scrolling
+  const handleScroll = useCallback(() => {
+    if (!scrollContainerRef.current) return
+    const { scrollLeft, scrollWidth, clientWidth } = scrollContainerRef.current
+    const maxScroll = scrollWidth - clientWidth
+    const progress = maxScroll > 0 ? scrollLeft / maxScroll : 0
+    setScrollProgress(progress)
+  }, [])
+  
+  // Add scroll listener
+  useEffect(() => {
+    const scrollContainer = scrollContainerRef.current
+    if (!scrollContainer) return
+    
+    scrollContainer.addEventListener('scroll', handleScroll)
+    // Initial calculation
+    handleScroll()
+    
+    return () => {
+      scrollContainer.removeEventListener('scroll', handleScroll)
+    }
+  }, [handleScroll])
+  
   // Window-level mouse handlers
   useEffect(() => {
     const handleWindowMouseMove = (e: MouseEvent) => {
@@ -555,14 +614,19 @@ export default function GanttChart(props: GanttChartProps) {
     return { left, date: parseISO(product.launch_date), isDragging: false }
   }, [launchDateDrag, getDayIndexForDate, days])
   
-  // Calculate scroll thumb style
+  // Calculate scroll thumb style with position
   const scrollThumbStyle = useMemo(() => {
-    if (!scrollContainerRef.current) return { width: '20%', left: '0%' }
     const totalWidth = totalDays * DAY_WIDTH
-    const containerWidth = scrollContainerRef.current.clientWidth || 800
+    const containerWidth = scrollContainerRef.current?.clientWidth || 800
     const thumbWidthPercent = Math.max(10, Math.min(100, (containerWidth / totalWidth) * 100))
-    return { width: `${thumbWidthPercent}%` }
-  }, [totalDays])
+    const maxLeftPercent = 100 - thumbWidthPercent
+    const leftPercent = scrollProgress * maxLeftPercent
+    
+    return { 
+      width: `${thumbWidthPercent}%`,
+      left: `${leftPercent}%`
+    }
+  }, [totalDays, scrollProgress])
   
   const handleDragStart = (event: DragStartEvent) => {
     const saleId = event.active.id as string
@@ -845,7 +909,7 @@ export default function GanttChart(props: GanttChartProps) {
                               )
                             })}
                             
-                            {/* Launch Date Marker */}
+                            {/* Launch Date Marker - inside timeline row for proper clipping */}
                             {launchPosition && onLaunchDateChange && (
                               <div
                                 data-launch-marker
