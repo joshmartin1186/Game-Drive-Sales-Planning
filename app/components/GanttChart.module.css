@@ -108,6 +108,83 @@
   border-left: 2px solid #cbd5e1;
 }
 
+/* Platform Events Row */
+.eventsRow {
+  display: flex;
+  min-height: 44px;
+  background: linear-gradient(to bottom, #eef2ff, #f5f3ff);
+  border-bottom: 2px solid #c7d2fe;
+}
+
+.eventsLabel {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 200px;
+  padding: 0 1rem;
+  background: linear-gradient(to right, #e0e7ff, #ede9fe);
+  border-right: 1px solid #c7d2fe;
+  position: sticky;
+  left: 0;
+  z-index: 10;
+}
+
+.eventsLabel span {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #4338ca;
+}
+
+.eventsIcon {
+  font-size: 1rem;
+}
+
+.eventsTimeline {
+  position: relative;
+  height: 100%;
+  flex: 1;
+  min-height: 44px;
+}
+
+.eventBlock {
+  position: absolute;
+  top: 6px;
+  height: calc(100% - 12px);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 0 10px;
+  color: white;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: default;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+  z-index: 5;
+  opacity: 0.9;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.eventBlock:hover {
+  opacity: 1;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.2);
+  z-index: 6;
+}
+
+.eventName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.eventNoCooldown {
+  color: #fef08a;
+  font-size: 0.875rem;
+}
+
 .productRows {
   position: relative;
 }
