@@ -55,8 +55,9 @@ export default function GanttChart({
   const [isSelecting, setIsSelecting] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
   
-  // Ref to track if we're currently in a selection drag
+  // Ref to track selection data - survives across renders
   const selectionDataRef = useRef<SelectionState | null>(null)
+  const isSelectingRef = useRef(false)
   
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -250,13 +251,16 @@ export default function GanttChart({
       endDayIndex: dayIndex
     }
     
+    // Update both state and refs
     setIsSelecting(true)
     setSelection(newSelection)
+    isSelectingRef.current = true
     selectionDataRef.current = newSelection
   }, [])
   
   const handleSelectionMove = useCallback((dayIndex: number) => {
-    if (!isSelecting || !selectionDataRef.current) return
+    // Use ref to check if selecting (more reliable than state)
+    if (!isSelectingRef.current || !selectionDataRef.current) return
     
     const newSelection = {
       ...selectionDataRef.current,
@@ -265,17 +269,28 @@ export default function GanttChart({
     
     setSelection(newSelection)
     selectionDataRef.current = newSelection
-  }, [isSelecting])
+  }, [])
   
-  // Handle selection end - called on mouseup on day cells
-  const handleSelectionEnd = useCallback((e: React.MouseEvent) => {
-    if (!isSelecting || !selectionDataRef.current) return
+  // Handle selection end - called directly on day cell mouseup
+  const handleSelectionEnd = useCallback((dayIndex: number, e: React.MouseEvent) => {
+    // Use refs to check state (more reliable)
+    if (!isSelectingRef.current || !selectionDataRef.current) {
+      return
+    }
     
     e.preventDefault()
     e.stopPropagation()
     
-    const sel = selectionDataRef.current
+    // Capture the data before clearing
+    const sel = { ...selectionDataRef.current, endDayIndex: dayIndex }
     
+    // Clear state immediately
+    isSelectingRef.current = false
+    selectionDataRef.current = null
+    setIsSelecting(false)
+    setSelection(null)
+    
+    // Call onCreate with captured data
     if (onCreateSale && days.length > 0) {
       const startIdx = Math.min(sel.startDayIndex, sel.endDayIndex)
       const endIdx = Math.max(sel.startDayIndex, sel.endDayIndex)
@@ -287,27 +302,17 @@ export default function GanttChart({
       const startDate = format(days[safeStartIdx], 'yyyy-MM-dd')
       const endDate = format(days[safeEndIdx], 'yyyy-MM-dd')
       
-      // Clear state first
-      setIsSelecting(false)
-      setSelection(null)
-      selectionDataRef.current = null
-      
-      // Then call the handler (use setTimeout to ensure state is cleared)
-      setTimeout(() => {
+      // Use requestAnimationFrame to ensure DOM updates complete first
+      requestAnimationFrame(() => {
         onCreateSale({
           productId: sel.productId,
           platformId: sel.platformId,
           startDate,
           endDate
         })
-      }, 0)
-    } else {
-      // Clear selection state
-      setIsSelecting(false)
-      setSelection(null)
-      selectionDataRef.current = null
+      })
     }
-  }, [isSelecting, days, onCreateSale])
+  }, [days, onCreateSale])
   
   // Get selection visual properties
   const getSelectionStyle = useCallback((productId: string, platformId: string) => {
@@ -422,19 +427,22 @@ export default function GanttChart({
     }, 500)
   }
   
+  // Clear selection if mouse leaves the container
+  const handleMouseLeave = useCallback(() => {
+    if (isSelectingRef.current) {
+      isSelectingRef.current = false
+      selectionDataRef.current = null
+      setIsSelecting(false)
+      setSelection(null)
+    }
+  }, [])
+  
   const totalWidth = totalDays * DAY_WIDTH
   
   return (
     <div 
       className={styles.container}
-      onMouseLeave={() => {
-        if (isSelecting) {
-          setIsSelecting(false)
-          setSelection(null)
-          selectionDataRef.current = null
-        }
-      }}
-      onMouseUp={handleSelectionEnd}
+      onMouseLeave={handleMouseLeave}
     >
       {validationError && (
         <div className={styles.validationError}>
@@ -556,6 +564,7 @@ export default function GanttChart({
                                       style={{ left: idx * DAY_WIDTH, width: DAY_WIDTH }}
                                       onMouseDown={(e) => handleSelectionStart(product.id, platform.id, idx, e)}
                                       onMouseEnter={() => handleSelectionMove(idx)}
+                                      onMouseUp={(e) => handleSelectionEnd(idx, e)}
                                     />
                                   )
                                 })}
