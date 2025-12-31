@@ -35,11 +35,6 @@ const ROW_HEIGHT = 40
 const HEADER_HEIGHT = 60
 
 export default function GanttChart(props: GanttChartProps) {
-  // DEBUG: Log ALL props to see what we're receiving
-  console.log('[GanttChart] ALL PROPS:', Object.keys(props))
-  console.log('[GanttChart] onCreateSale prop value:', props.onCreateSale)
-  console.log('[GanttChart] onSaleEdit prop value:', typeof props.onSaleEdit)
-  
   const {
     sales,
     products,
@@ -246,14 +241,11 @@ export default function GanttChart(props: GanttChartProps) {
     
     const { data, callback, days: capturedDays } = selectionRef.current
     
-    console.log('[Selection] Completing with callback:', !!callback)
-    
     // Clear selection
     selectionRef.current = null
     setSelection(null)
     
     if (!callback || capturedDays.length === 0) {
-      console.log('[Selection] No callback or days, aborting')
       return
     }
     
@@ -266,8 +258,6 @@ export default function GanttChart(props: GanttChartProps) {
     
     const startDate = format(capturedDays[safeStartIdx], 'yyyy-MM-dd')
     const endDate = format(capturedDays[safeEndIdx], 'yyyy-MM-dd')
-    
-    console.log('[Selection] Calling callback with:', { productId: data.productId, platformId: data.platformId, startDate, endDate })
     
     callback({
       productId: data.productId,
@@ -298,7 +288,6 @@ export default function GanttChart(props: GanttChartProps) {
     }
     
     // Capture EVERYTHING needed at mousedown time - callback and days
-    // Use props.onCreateSale directly to ensure we get the latest value
     selectionRef.current = {
       data: newSelection,
       callback: props.onCreateSale,
@@ -306,8 +295,6 @@ export default function GanttChart(props: GanttChartProps) {
     }
     
     setSelection(newSelection)
-    
-    console.log('[Selection] Started, callback captured:', !!props.onCreateSale)
   }, [props.onCreateSale, days])
   
   const handleSelectionMove = useCallback((dayIndex: number) => {
@@ -324,10 +311,8 @@ export default function GanttChart(props: GanttChartProps) {
   
   // Window-level mouseup handler
   useEffect(() => {
-    const handleWindowMouseUp = (e: MouseEvent) => {
+    const handleWindowMouseUp = () => {
       if (!selectionRef.current) return
-      
-      console.log('[Selection] Window mouseup detected')
       
       // Get the final day index from the selection data
       const endDayIndex = selectionRef.current.data.endDayIndex
@@ -458,7 +443,6 @@ export default function GanttChart(props: GanttChartProps) {
   // Clear selection if mouse leaves the container
   const handleMouseLeave = useCallback(() => {
     if (selectionRef.current) {
-      console.log('[Selection] Mouse left container, clearing selection')
       selectionRef.current = null
       setSelection(null)
     }
