@@ -15,11 +15,20 @@ interface ProductManagerProps {
   onClientDelete?: (id: string) => Promise<void>
   onGameDelete?: (id: string) => Promise<void>
   onProductDelete?: (id: string) => Promise<void>
+  onClientUpdate?: (id: string, updates: Partial<Client>) => Promise<void>
+  onGameUpdate?: (id: string, updates: Partial<Game>) => Promise<void>
+  onProductUpdate?: (id: string, updates: Partial<Product>) => Promise<void>
   onGenerateCalendar?: (productId: string, productName: string, launchDate?: string) => void
   onClose: () => void
 }
 
 type Tab = 'clients' | 'games' | 'products'
+
+interface EditingState {
+  type: 'client' | 'game' | 'product'
+  id: string
+  data: any
+}
 
 export default function ProductManager({
   clients,
@@ -31,6 +40,9 @@ export default function ProductManager({
   onClientDelete,
   onGameDelete,
   onProductDelete,
+  onClientUpdate,
+  onGameUpdate,
+  onProductUpdate,
   onGenerateCalendar,
   onClose
 }: ProductManagerProps) {
@@ -38,6 +50,7 @@ export default function ProductManager({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [deleteConfirm, setDeleteConfirm] = useState<{ type: string; id: string; name: string } | null>(null)
+  const [editing, setEditing] = useState<EditingState | null>(null)
   
   // Client form
   const [clientName, setClientName] = useState('')
@@ -54,7 +67,7 @@ export default function ProductManager({
   const [productType, setProductType] = useState<'base' | 'edition' | 'dlc' | 'soundtrack'>('base')
   const [steamProductId, setSteamProductId] = useState('')
   const [launchDate, setLaunchDate] = useState(format(new Date(), 'yyyy-MM-dd'))
-  const [autoGenerateCalendar, setAutoGenerateCalendar] = useState(true) // Default to checked
+  const [autoGenerateCalendar, setAutoGenerateCalendar] = useState(true)
 
   const handleCreateClient = async () => {
     if (!clientName.trim()) {
@@ -125,7 +138,6 @@ export default function ProductManager({
         launch_date: launchDateToUse
       })
       
-      // If auto-generate is checked and we got a product back, trigger calendar generation
       if (autoGenerateCalendar && createdProduct && onGenerateCalendar) {
         onGenerateCalendar(createdProduct.id, createdProduct.name, launchDateToUse)
       }
@@ -162,18 +174,93 @@ export default function ProductManager({
     }
   }
 
+  // Start editing
+  const startEditClient = (client: Client) => {
+    setEditing({
+      type: 'client',
+      id: client.id,
+      data: { name: client.name, email: client.email || '' }
+    })
+  }
+
+  const startEditGame = (game: Game & { client: Client }) => {
+    setEditing({
+      type: 'game',
+      id: game.id,
+      data: { name: game.name, client_id: game.client_id, steam_app_id: game.steam_app_id || '' }
+    })
+  }
+
+  const startEditProduct = (product: Product & { game: Game & { client: Client } }) => {
+    setEditing({
+      type: 'product',
+      id: product.id,
+      data: { 
+        name: product.name, 
+        game_id: product.game_id, 
+        product_type: product.product_type,
+        steam_product_id: product.steam_product_id || '',
+        launch_date: product.launch_date || format(new Date(), 'yyyy-MM-dd')
+      }
+    })
+  }
+
+  // Save edits
+  const handleSaveEdit = async () => {
+    if (!editing) return
+    
+    setLoading(true)
+    setError(null)
+    
+    try {
+      if (editing.type === 'client' && onClientUpdate) {
+        await onClientUpdate(editing.id, {
+          name: editing.data.name.trim(),
+          email: editing.data.email.trim() || undefined
+        })
+      } else if (editing.type === 'game' && onGameUpdate) {
+        await onGameUpdate(editing.id, {
+          name: editing.data.name.trim(),
+          client_id: editing.data.client_id,
+          steam_app_id: editing.data.steam_app_id.trim() || undefined
+        })
+      } else if (editing.type === 'product' && onProductUpdate) {
+        await onProductUpdate(editing.id, {
+          name: editing.data.name.trim(),
+          game_id: editing.data.game_id,
+          product_type: editing.data.product_type,
+          steam_product_id: editing.data.steam_product_id.trim() || undefined,
+          launch_date: editing.data.launch_date
+        })
+      }
+      setEditing(null)
+    } catch (err: any) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const updateEditData = (field: string, value: any) => {
+    if (!editing) return
+    setEditing({
+      ...editing,
+      data: { ...editing.data, [field]: value }
+    })
+  }
+
   return (
     <div className={styles.overlay}>
       <div className={styles.modal}>
         <div className={styles.header}>
           <h2>Manage Products</h2>
-          <button className={styles.closeBtn} onClick={onClose}>X</button>
+          <button className={styles.closeBtn} onClick={onClose}>×</button>
         </div>
 
         {error && (
           <div className={styles.error}>
             {error}
-            <button onClick={() => setError(null)}>x</button>
+            <button onClick={() => setError(null)}>×</button>
           </div>
         )}
 
@@ -252,19 +339,55 @@ export default function ProductManager({
                 ) : (
                   <ul>
                     {clients.map(client => (
-                      <li key={client.id}>
-                        <div className={styles.itemInfo}>
-                          <strong>{client.name}</strong>
-                          {client.email && <span> - {client.email}</span>}
-                        </div>
-                        {onClientDelete && (
-                          <button 
-                            className={styles.deleteBtn}
-                            onClick={() => setDeleteConfirm({ type: 'client', id: client.id, name: client.name })}
-                            title="Delete client"
-                          >
-                            🗑️
-                          </button>
+                      <li key={client.id} className={editing?.type === 'client' && editing?.id === client.id ? styles.editing : ''}>
+                        {editing?.type === 'client' && editing?.id === client.id ? (
+                          <div className={styles.editForm}>
+                            <input
+                              type="text"
+                              value={editing.data.name}
+                              onChange={(e) => updateEditData('name', e.target.value)}
+                              placeholder="Client Name"
+                            />
+                            <input
+                              type="email"
+                              value={editing.data.email}
+                              onChange={(e) => updateEditData('email', e.target.value)}
+                              placeholder="Email"
+                            />
+                            <div className={styles.editActions}>
+                              <button className={styles.saveBtn} onClick={handleSaveEdit} disabled={loading}>
+                                {loading ? '...' : '✓'}
+                              </button>
+                              <button className={styles.cancelEditBtn} onClick={() => setEditing(null)}>✕</button>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            <div className={styles.itemInfo}>
+                              <strong>{client.name}</strong>
+                              {client.email && <span> - {client.email}</span>}
+                            </div>
+                            <div className={styles.itemActions}>
+                              {onClientUpdate && (
+                                <button 
+                                  className={styles.editBtn}
+                                  onClick={() => startEditClient(client)}
+                                  title="Edit client"
+                                >
+                                  ✏️
+                                </button>
+                              )}
+                              {onClientDelete && (
+                                <button 
+                                  className={styles.deleteBtn}
+                                  onClick={() => setDeleteConfirm({ type: 'client', id: client.id, name: client.name })}
+                                  title="Delete client"
+                                >
+                                  🗑️
+                                </button>
+                              )}
+                            </div>
+                          </>
                         )}
                       </li>
                     ))}
@@ -332,20 +455,64 @@ export default function ProductManager({
                 ) : (
                   <ul>
                     {games.map(game => (
-                      <li key={game.id}>
-                        <div className={styles.itemInfo}>
-                          <strong>{game.name}</strong>
-                          <span className={styles.meta}> ({game.client?.name})</span>
-                          {game.steam_app_id && <span className={styles.meta}> - Steam: {game.steam_app_id}</span>}
-                        </div>
-                        {onGameDelete && (
-                          <button 
-                            className={styles.deleteBtn}
-                            onClick={() => setDeleteConfirm({ type: 'game', id: game.id, name: game.name })}
-                            title="Delete game"
-                          >
-                            🗑️
-                          </button>
+                      <li key={game.id} className={editing?.type === 'game' && editing?.id === game.id ? styles.editing : ''}>
+                        {editing?.type === 'game' && editing?.id === game.id ? (
+                          <div className={styles.editForm}>
+                            <select
+                              value={editing.data.client_id}
+                              onChange={(e) => updateEditData('client_id', e.target.value)}
+                            >
+                              {clients.map(client => (
+                                <option key={client.id} value={client.id}>{client.name}</option>
+                              ))}
+                            </select>
+                            <input
+                              type="text"
+                              value={editing.data.name}
+                              onChange={(e) => updateEditData('name', e.target.value)}
+                              placeholder="Game Name"
+                            />
+                            <input
+                              type="text"
+                              value={editing.data.steam_app_id}
+                              onChange={(e) => updateEditData('steam_app_id', e.target.value)}
+                              placeholder="Steam App ID"
+                            />
+                            <div className={styles.editActions}>
+                              <button className={styles.saveBtn} onClick={handleSaveEdit} disabled={loading}>
+                                {loading ? '...' : '✓'}
+                              </button>
+                              <button className={styles.cancelEditBtn} onClick={() => setEditing(null)}>✕</button>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            <div className={styles.itemInfo}>
+                              <strong>{game.name}</strong>
+                              <span className={styles.meta}> ({game.client?.name})</span>
+                              {game.steam_app_id && <span className={styles.meta}> - Steam: {game.steam_app_id}</span>}
+                            </div>
+                            <div className={styles.itemActions}>
+                              {onGameUpdate && (
+                                <button 
+                                  className={styles.editBtn}
+                                  onClick={() => startEditGame(game)}
+                                  title="Edit game"
+                                >
+                                  ✏️
+                                </button>
+                              )}
+                              {onGameDelete && (
+                                <button 
+                                  className={styles.deleteBtn}
+                                  onClick={() => setDeleteConfirm({ type: 'game', id: game.id, name: game.name })}
+                                  title="Delete game"
+                                >
+                                  🗑️
+                                </button>
+                              )}
+                            </div>
+                          </>
                         )}
                       </li>
                     ))}
@@ -420,7 +587,6 @@ export default function ProductManager({
                     />
                   </div>
                   
-                  {/* Auto-generate calendar checkbox */}
                   {onGenerateCalendar && (
                     <div className={styles.checkboxField}>
                       <label className={styles.checkboxLabel}>
@@ -456,25 +622,85 @@ export default function ProductManager({
                 ) : (
                   <ul>
                     {products.map(product => (
-                      <li key={product.id}>
-                        <div className={styles.itemInfo}>
-                          <strong>{product.name}</strong>
-                          <span className={styles.badge}>{product.product_type}</span>
-                          {product.launch_date && (
-                            <span className={styles.launchBadge}>
-                              🚀 {format(new Date(product.launch_date), 'MMM d, yyyy')}
-                            </span>
-                          )}
-                          <span className={styles.meta}> - {product.game?.name} ({product.game?.client?.name})</span>
-                        </div>
-                        {onProductDelete && (
-                          <button 
-                            className={styles.deleteBtn}
-                            onClick={() => setDeleteConfirm({ type: 'product', id: product.id, name: product.name })}
-                            title="Delete product"
-                          >
-                            🗑️
-                          </button>
+                      <li key={product.id} className={editing?.type === 'product' && editing?.id === product.id ? styles.editing : ''}>
+                        {editing?.type === 'product' && editing?.id === product.id ? (
+                          <div className={styles.editForm}>
+                            <select
+                              value={editing.data.game_id}
+                              onChange={(e) => updateEditData('game_id', e.target.value)}
+                            >
+                              {games.map(game => (
+                                <option key={game.id} value={game.id}>
+                                  {game.name} ({game.client?.name})
+                                </option>
+                              ))}
+                            </select>
+                            <input
+                              type="text"
+                              value={editing.data.name}
+                              onChange={(e) => updateEditData('name', e.target.value)}
+                              placeholder="Product Name"
+                            />
+                            <select
+                              value={editing.data.product_type}
+                              onChange={(e) => updateEditData('product_type', e.target.value)}
+                            >
+                              <option value="base">Base Game</option>
+                              <option value="dlc">DLC</option>
+                              <option value="edition">Edition/Bundle</option>
+                              <option value="soundtrack">Soundtrack</option>
+                            </select>
+                            <input
+                              type="date"
+                              value={editing.data.launch_date}
+                              onChange={(e) => updateEditData('launch_date', e.target.value)}
+                            />
+                            <input
+                              type="text"
+                              value={editing.data.steam_product_id}
+                              onChange={(e) => updateEditData('steam_product_id', e.target.value)}
+                              placeholder="Steam Product ID"
+                            />
+                            <div className={styles.editActions}>
+                              <button className={styles.saveBtn} onClick={handleSaveEdit} disabled={loading}>
+                                {loading ? '...' : '✓'}
+                              </button>
+                              <button className={styles.cancelEditBtn} onClick={() => setEditing(null)}>✕</button>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            <div className={styles.itemInfo}>
+                              <strong>{product.name}</strong>
+                              <span className={styles.badge}>{product.product_type}</span>
+                              {product.launch_date && (
+                                <span className={styles.launchBadge}>
+                                  🚀 {format(new Date(product.launch_date), 'MMM d, yyyy')}
+                                </span>
+                              )}
+                              <span className={styles.meta}> - {product.game?.name} ({product.game?.client?.name})</span>
+                            </div>
+                            <div className={styles.itemActions}>
+                              {onProductUpdate && (
+                                <button 
+                                  className={styles.editBtn}
+                                  onClick={() => startEditProduct(product)}
+                                  title="Edit product"
+                                >
+                                  ✏️
+                                </button>
+                              )}
+                              {onProductDelete && (
+                                <button 
+                                  className={styles.deleteBtn}
+                                  onClick={() => setDeleteConfirm({ type: 'product', id: product.id, name: product.name })}
+                                  title="Delete product"
+                                >
+                                  🗑️
+                                </button>
+                              )}
+                            </div>
+                          </>
                         )}
                       </li>
                     ))}
