@@ -22,6 +22,7 @@ interface GanttChartProps {
   onGenerateCalendar?: (productId: string, productName: string, launchDate?: string) => void
   onClearSales?: (productId: string, productName: string) => void
   onLaunchDateChange?: (productId: string, newLaunchDate: string) => Promise<void>
+  onEditLaunchDate?: (productId: string, productName: string, currentLaunchDate: string) => void
   allSales: SaleWithDetails[]
   showEvents?: boolean
 }
@@ -64,6 +65,7 @@ export default function GanttChart(props: GanttChartProps) {
     onGenerateCalendar,
     onClearSales,
     onLaunchDateChange,
+    onEditLaunchDate,
     allSales,
     showEvents = true
   } = props
@@ -77,6 +79,7 @@ export default function GanttChart(props: GanttChartProps) {
   const [scrollProgress, setScrollProgress] = useState(0)
   const containerRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
+  const scrollTrackRef = useRef<HTMLDivElement>(null)
   
   // Refs for selection - store everything needed at mousedown time
   const selectionRef = useRef<{
@@ -90,12 +93,14 @@ export default function GanttChart(props: GanttChartProps) {
     productId: string
     originalDate: string
     startX: number
+    hasMoved: boolean
   } | null>(null)
   
-  // Ref for scroll grab
+  // Ref for scroll grab - now tracks if grabbing thumb or track
   const scrollGrabRef = useRef<{
     startX: number
     startScrollLeft: number
+    isThumbDrag: boolean
   } | null>(null)
   
   const sensors = useSensors(
@@ -276,7 +281,6 @@ export default function GanttChart(props: GanttChartProps) {
   }, [getPositionForDate, getWidthForRange])
   
   // Calculate cascade shifts for sales that would conflict with a moved sale
-  // This handles BOTH directions - pushing forward AND pulling backward
   const calculateCascadeShifts = useCallback((
     movedSaleId: string,
     newStart: Date,
@@ -327,7 +331,6 @@ export default function GanttChart(props: GanttChartProps) {
     }
     
     // Backward cascade: Sales BEFORE the moved sale that now have cooldowns overlapping
-    // We need to check if any sale's cooldown would overlap with the new start
     const salesBeforeMoved = otherSales.filter(s => parseISO(s.end_date) < newStart)
     
     for (const sale of salesBeforeMoved) {
@@ -341,8 +344,6 @@ export default function GanttChart(props: GanttChartProps) {
       
       // If the sale's cooldown overlaps with the moved sale's start
       if (saleCooldownEnd > newStart) {
-        // We need to shift the moved sale back - but since we can't modify the moved sale
-        // in cascade, we shift THIS sale earlier so its cooldown doesn't overlap
         const overlapDays = differenceInDays(saleCooldownEnd, newStart) + 1
         const newSaleStart = addDays(saleStart, -overlapDays)
         const newSaleEnd = addDays(newSaleStart, saleDuration)
@@ -446,7 +447,8 @@ export default function GanttChart(props: GanttChartProps) {
     launchDragRef.current = {
       productId,
       originalDate: launchDate,
-      startX: e.clientX
+      startX: e.clientX,
+      hasMoved: false
     }
     
     setLaunchDateDrag({
@@ -460,6 +462,12 @@ export default function GanttChart(props: GanttChartProps) {
     if (!launchDragRef.current || !launchDateDrag) return
     
     const deltaX = e.clientX - launchDragRef.current.startX
+    
+    // Track if we've moved significantly (more than 5px)
+    if (Math.abs(deltaX) > 5) {
+      launchDragRef.current.hasMoved = true
+    }
+    
     const daysDelta = Math.round(deltaX / DAY_WIDTH)
     const originalDayIndex = getDayIndexForDate(launchDragRef.current.originalDate)
     const newDayIndex = Math.max(0, Math.min(originalDayIndex + daysDelta, days.length - 1))
@@ -468,43 +476,98 @@ export default function GanttChart(props: GanttChartProps) {
   }, [launchDateDrag, getDayIndexForDate, days.length])
   
   const handleLaunchDragEnd = useCallback(async () => {
-    if (!launchDragRef.current || !launchDateDrag || !onLaunchDateChange) {
+    if (!launchDragRef.current || !launchDateDrag) {
       launchDragRef.current = null
       setLaunchDateDrag(null)
       return
     }
     
-    const { productId, originalDate } = launchDragRef.current
+    const { productId, originalDate, hasMoved } = launchDragRef.current
     const newDate = format(days[launchDateDrag.currentDayIndex], 'yyyy-MM-dd')
     
     launchDragRef.current = null
     setLaunchDateDrag(null)
     
-    if (newDate !== originalDate) {
+    // If didn't move significantly, treat as click -> open edit modal
+    if (!hasMoved && onEditLaunchDate) {
+      const product = products.find(p => p.id === productId)
+      if (product) {
+        onEditLaunchDate(productId, product.name, originalDate)
+      }
+      return
+    }
+    
+    // Otherwise, save the drag result
+    if (newDate !== originalDate && onLaunchDateChange) {
       await onLaunchDateChange(productId, newDate)
     }
-  }, [launchDateDrag, onLaunchDateChange, days])
+  }, [launchDateDrag, onLaunchDateChange, onEditLaunchDate, days, products])
   
-  // Scroll grab handlers
-  const handleScrollGrabStart = useCallback((e: React.MouseEvent) => {
+  // Scroll grab handlers - now with real-time updates
+  const updateScrollFromPosition = useCallback((clientX: number, isThumbDrag: boolean) => {
+    if (!scrollContainerRef.current || !scrollTrackRef.current) return
+    
+    const trackRect = scrollTrackRef.current.getBoundingClientRect()
+    const { scrollWidth, clientWidth } = scrollContainerRef.current
+    const maxScroll = scrollWidth - clientWidth
+    
+    if (isThumbDrag && scrollGrabRef.current) {
+      // Thumb drag - move relative to start position
+      const deltaX = clientX - scrollGrabRef.current.startX
+      const trackWidth = trackRect.width
+      const scrollDelta = (deltaX / trackWidth) * maxScroll
+      const newScrollLeft = Math.max(0, Math.min(scrollGrabRef.current.startScrollLeft + scrollDelta, maxScroll))
+      scrollContainerRef.current.scrollLeft = newScrollLeft
+    } else {
+      // Track click - jump to position
+      const clickX = clientX - trackRect.left
+      const trackWidth = trackRect.width
+      const progress = clickX / trackWidth
+      const newScrollLeft = Math.max(0, Math.min(progress * maxScroll, maxScroll))
+      scrollContainerRef.current.scrollLeft = newScrollLeft
+    }
+  }, [])
+  
+  const handleScrollThumbStart = useCallback((e: React.MouseEvent) => {
     if (e.button !== 0) return
     if (!scrollContainerRef.current) return
     
     e.preventDefault()
+    e.stopPropagation()
     
     scrollGrabRef.current = {
       startX: e.clientX,
-      startScrollLeft: scrollContainerRef.current.scrollLeft
+      startScrollLeft: scrollContainerRef.current.scrollLeft,
+      isThumbDrag: true
     }
     setIsGrabbing(true)
   }, [])
   
-  const handleScrollGrabMove = useCallback((e: MouseEvent) => {
-    if (!scrollGrabRef.current || !scrollContainerRef.current) return
+  const handleScrollTrackClick = useCallback((e: React.MouseEvent) => {
+    if (e.button !== 0) return
+    // Don't handle if clicking on the thumb itself
+    if ((e.target as HTMLElement).classList.contains(styles.scrollGrabThumb)) return
     
-    const deltaX = e.clientX - scrollGrabRef.current.startX
-    scrollContainerRef.current.scrollLeft = scrollGrabRef.current.startScrollLeft - deltaX
-  }, [])
+    e.preventDefault()
+    
+    // Jump to clicked position
+    updateScrollFromPosition(e.clientX, false)
+    
+    // Start drag from this position
+    if (scrollContainerRef.current) {
+      scrollGrabRef.current = {
+        startX: e.clientX,
+        startScrollLeft: scrollContainerRef.current.scrollLeft,
+        isThumbDrag: false
+      }
+      setIsGrabbing(true)
+    }
+  }, [updateScrollFromPosition])
+  
+  const handleScrollGrabMove = useCallback((e: MouseEvent) => {
+    if (!scrollGrabRef.current) return
+    updateScrollFromPosition(e.clientX, scrollGrabRef.current.isThumbDrag)
+  }, [updateScrollFromPosition])
   
   const handleScrollGrabEnd = useCallback(() => {
     scrollGrabRef.current = null
@@ -801,14 +864,23 @@ export default function GanttChart(props: GanttChartProps) {
       {/* Scroll Grab Bar */}
       <div 
         className={`${styles.scrollGrabBar} ${isGrabbing ? styles.grabbing : ''}`}
-        onMouseDown={handleScrollGrabStart}
       >
-        <div className={styles.scrollGrabTrack}>
-          <div className={styles.scrollGrabThumb} style={scrollThumbStyle}>
+        <div 
+          className={styles.scrollGrabTrack}
+          ref={scrollTrackRef}
+          onMouseDown={handleScrollTrackClick}
+        >
+          <div 
+            className={styles.scrollGrabThumb} 
+            style={scrollThumbStyle}
+            onMouseDown={handleScrollThumbStart}
+          >
             <span className={styles.scrollGrabIcon}>⟷</span>
           </div>
         </div>
-        <span className={styles.scrollGrabHint}>Drag to scroll timeline</span>
+        <span className={styles.scrollGrabHint}>
+          {isGrabbing ? 'Dragging...' : 'Click or drag to scroll timeline'}
+        </span>
       </div>
       
       <div className={styles.scrollContainer} ref={scrollContainerRef}>
@@ -870,7 +942,11 @@ export default function GanttChart(props: GanttChartProps) {
                               <span className={styles.productName}>{product.name}</span>
                               <span className={styles.productType}>{product.product_type}</span>
                               {product.launch_date && (
-                                <span className={styles.launchDateBadge}>
+                                <span 
+                                  className={`${styles.launchDateBadge} ${onEditLaunchDate ? styles.clickable : ''}`}
+                                  onClick={() => onEditLaunchDate && product.launch_date && onEditLaunchDate(product.id, product.name, product.launch_date)}
+                                  title="Click to edit launch date"
+                                >
                                   🚀 {format(parseISO(product.launch_date), 'MMM d')}
                                 </span>
                               )}
@@ -910,13 +986,13 @@ export default function GanttChart(props: GanttChartProps) {
                             })}
                             
                             {/* Launch Date Marker - inside timeline row for proper clipping */}
-                            {launchPosition && onLaunchDateChange && (
+                            {launchPosition && (onLaunchDateChange || onEditLaunchDate) && (
                               <div
                                 data-launch-marker
                                 className={`${styles.launchMarker} ${launchPosition.isDragging ? styles.launchMarkerDragging : ''}`}
                                 style={{ left: launchPosition.left }}
-                                onMouseDown={(e) => handleLaunchDragStart(product.id, product.launch_date!, e)}
-                                title={`Launch Date: ${format(launchPosition.date, 'MMM d, yyyy')}\nDrag to shift all sales`}
+                                onMouseDown={(e) => onLaunchDateChange && handleLaunchDragStart(product.id, product.launch_date!, e)}
+                                title={`Launch Date: ${format(launchPosition.date, 'MMM d, yyyy')}\n${onLaunchDateChange ? 'Drag to shift all sales, or click to edit' : 'Click to edit'}`}
                               >
                                 <div className={styles.launchMarkerLine} />
                                 <div className={styles.launchMarkerFlag}>
