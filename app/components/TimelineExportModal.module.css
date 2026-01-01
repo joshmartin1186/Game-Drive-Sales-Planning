@@ -152,7 +152,7 @@
   transition: all 0.2s;
 }
 
-.checkbox:hover {
+.checkbox:hover:not(.checkboxDisabled) {
   background: #f0f7ff;
   border-color: #3b82f6;
 }
@@ -181,6 +181,21 @@
 .checkboxMeta {
   font-size: 12px;
   color: #6b7280;
+}
+
+/* Disabled checkbox */
+.checkboxDisabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.checkboxDisabled input[type="checkbox"] {
+  cursor: not-allowed;
+}
+
+.checkboxDisabled .checkboxMeta {
+  color: #9ca3af;
+  font-style: italic;
 }
 
 /* Export Info */
