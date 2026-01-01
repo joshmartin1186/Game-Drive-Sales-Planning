@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { format, parseISO, differenceInDays, startOfMonth, addMonths, getMonth, getYear } from 'date-fns'
+import { format, parseISO, differenceInDays, startOfMonth, endOfMonth, addMonths, getMonth, getYear, isBefore, isAfter } from 'date-fns'
 import PptxGenJS from 'pptxgenjs'
 import { SaleWithDetails, Platform, Product, Game, Client } from '@/lib/types'
 import { CalendarVariation } from '@/lib/sale-calendar-generator'
@@ -106,6 +106,43 @@ export default function TimelineExportModal({
     return product?.name || 'Unknown'
   }
   
+  // Helper to draw slanted parallelogram shape
+  const drawSlantedBlock = (
+    slide: PptxGenJS.Slide, 
+    x: number, 
+    y: number, 
+    w: number, 
+    h: number, 
+    color: string,
+    text?: string
+  ) => {
+    // Skew offset (approximately 8 degrees = 14% of height)
+    const skewOffset = h * 0.14
+    
+    // Draw parallelogram using custom shape points
+    // Points go clockwise from top-left
+    slide.addShape('custGeom' as PptxGenJS.ShapeType, {
+      x, y, w, h,
+      fill: { color: color.replace('#', '') },
+      points: [
+        { x: skewOffset / w, y: 0 },           // Top-left (shifted right)
+        { x: 1, y: 0 },                         // Top-right
+        { x: 1 - skewOffset / w, y: 1 },        // Bottom-right (shifted left)
+        { x: 0, y: 1 },                         // Bottom-left
+        { x: skewOffset / w, y: 0 },           // Close path
+      ]
+    })
+    
+    // Add text on top if provided
+    if (text && w > 0.35) {
+      slide.addText(text, {
+        x, y, w, h,
+        fontSize: 6, fontFace: 'Arial', color: 'ffffff', bold: true,
+        align: 'center', valign: 'middle'
+      })
+    }
+  }
+  
   const handleExportPPTX = async () => {
     const datasets = getSelectedDatasets()
     if (datasets.length === 0) {
@@ -157,9 +194,15 @@ export default function TimelineExportModal({
         
         // Generate slides for each month
         for (const month of months) {
+          const monthStart = startOfMonth(month)
+          const monthEnd = endOfMonth(month)
+          
+          // Get sales that OVERLAP with this month (not just start in it)
           const monthSales = (dataset.sales as (SaleWithDetails | CalendarVariation['sales'][0])[]).filter(s => {
-            const saleDate = parseISO(s.start_date)
-            return getMonth(saleDate) === getMonth(month) && getYear(saleDate) === getYear(month)
+            const saleStart = parseISO(s.start_date)
+            const saleEnd = parseISO(s.end_date)
+            // Sale overlaps with month if: sale starts before month ends AND sale ends after month starts
+            return !isAfter(saleStart, monthEnd) && !isBefore(saleEnd, monthStart)
           }).sort((a, b) => new Date(a.start_date).getTime() - new Date(b.start_date).getTime())
           
           if (monthSales.length === 0) continue
@@ -321,13 +364,26 @@ export default function TimelineExportModal({
                 fontSize: 7, fontFace: 'Arial', color: primaryColor, valign: 'middle'
               })
               
-              // Platform badge
-              slide.addShape('rect', {
-                x: timelineX + labelWidth - 0.55, y: rowY + 0.06, w: 0.5, h: rowHeight - 0.12,
-                fill: { color: row.platformInfo.color.replace('#', '') }
+              // Platform badge (also slanted to match)
+              const badgeX = timelineX + labelWidth - 0.55
+              const badgeY = rowY + 0.06
+              const badgeW = 0.5
+              const badgeH = rowHeight - 0.12
+              const badgeSkew = badgeH * 0.14
+              
+              slide.addShape('custGeom' as PptxGenJS.ShapeType, {
+                x: badgeX, y: badgeY, w: badgeW, h: badgeH,
+                fill: { color: row.platformInfo.color.replace('#', '') },
+                points: [
+                  { x: badgeSkew / badgeW, y: 0 },
+                  { x: 1, y: 0 },
+                  { x: 1 - badgeSkew / badgeW, y: 1 },
+                  { x: 0, y: 1 },
+                  { x: badgeSkew / badgeW, y: 0 },
+                ]
               })
               slide.addText(row.platformInfo.name.substring(0, 2).toUpperCase(), {
-                x: timelineX + labelWidth - 0.55, y: rowY + 0.06, w: 0.5, h: rowHeight - 0.12,
+                x: badgeX, y: badgeY, w: badgeW, h: badgeH,
                 fontSize: 6, fontFace: 'Arial', color: 'ffffff', bold: true,
                 align: 'center', valign: 'middle'
               })
@@ -336,28 +392,33 @@ export default function TimelineExportModal({
               for (const sale of row.sales) {
                 const saleStart = parseISO(sale.start_date)
                 const saleEnd = parseISO(sale.end_date)
-                const startDay = saleStart.getDate()
-                const endDay = saleEnd.getDate()
+                
+                // Clip sale to month boundaries
+                const visibleStart = isBefore(saleStart, monthStart) ? monthStart : saleStart
+                const visibleEnd = isAfter(saleEnd, monthEnd) ? monthEnd : saleEnd
+                
+                const startDay = visibleStart.getDate()
+                const endDay = visibleEnd.getDate()
+                const visibleDays = endDay - startDay + 1
+                
+                // Skip very small slivers (less than 1.5 days visible)
+                if (visibleDays < 1.5) continue
                 
                 const blockX = chartX + (startDay - 1) * dayWidth
-                const blockW = (endDay - startDay + 1) * dayWidth
+                const blockW = visibleDays * dayWidth
                 const blockY = rowY + 0.04
                 const blockH = rowHeight - 0.08
                 
-                // Sale block
-                slide.addShape('rect', {
-                  x: blockX, y: blockY, w: Math.max(blockW, 0.1), h: blockH,
-                  fill: { color: row.platformInfo.color.replace('#', '') }
-                })
-                
-                // Discount label on block (if wide enough)
-                if (blockW > 0.35) {
-                  slide.addText(`${sale.discount_percentage}%`, {
-                    x: blockX, y: blockY, w: blockW, h: blockH,
-                    fontSize: 6, fontFace: 'Arial', color: 'ffffff', bold: true,
-                    align: 'center', valign: 'middle'
-                  })
-                }
+                // Draw slanted sale block
+                drawSlantedBlock(
+                  slide,
+                  blockX,
+                  blockY,
+                  Math.max(blockW, 0.1),
+                  blockH,
+                  row.platformInfo.color,
+                  blockW > 0.35 ? `${sale.discount_percentage}%` : undefined
+                )
               }
               
               rowIndex++
@@ -422,7 +483,7 @@ export default function TimelineExportModal({
             <p className={styles.optionHint}>
               {viewMode === 'table' 
                 ? 'Clean table with Product, Platform, Dates, and Discount columns'
-                : 'Visual Gantt-style timeline with colored sale blocks'
+                : 'Visual Gantt-style timeline with slanted colored sale blocks'
               }
             </p>
           </div>
