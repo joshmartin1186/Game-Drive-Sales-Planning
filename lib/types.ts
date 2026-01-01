@@ -77,6 +77,12 @@ export interface Sale {
   status: 'planned' | 'submitted' | 'confirmed' | 'live' | 'ended'
   goal_type?: 'acquisition' | 'visibility' | 'event' | 'revenue'
   notes?: string
+  // New fields matching client's Excel workflow
+  is_campaign?: boolean
+  is_submitted?: boolean
+  is_confirmed?: boolean
+  comment?: string
+  prev_sale_end_date?: string
   created_at: string
   product?: Product
   platform?: Platform
