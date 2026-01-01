@@ -1,0 +1,189 @@
+.overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal {
+  background: white;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 450px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.header h2 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0;
+}
+
+.closeBtn {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  color: #6b7280;
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.closeBtn:hover {
+  background: #f3f4f6;
+  color: #1f2937;
+}
+
+.content {
+  padding: 24px;
+}
+
+.productInfo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 20px;
+  padding: 12px 16px;
+  background: #f9fafb;
+  border-radius: 8px;
+}
+
+.label {
+  color: #6b7280;
+  font-size: 0.875rem;
+}
+
+.productName {
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.field {
+  margin-bottom: 20px;
+}
+
+.field label {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #374151;
+  margin-bottom: 6px;
+}
+
+.dateInput {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 1rem;
+  color: #1f2937;
+}
+
+.dateInput:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.shiftOption {
+  background: #fef3c7;
+  border: 1px solid #fcd34d;
+  border-radius: 8px;
+  padding: 16px;
+  margin-top: 16px;
+}
+
+.checkboxLabel {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.checkboxLabel input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  cursor: pointer;
+}
+
+.checkboxText {
+  font-weight: 500;
+  color: #92400e;
+}
+
+.hint {
+  margin: 10px 0 0 28px;
+  font-size: 0.813rem;
+  color: #b45309;
+  line-height: 1.4;
+}
+
+.noSalesHint {
+  margin: 0;
+  padding: 12px 16px;
+  background: #f0fdf4;
+  border-radius: 8px;
+  color: #15803d;
+  font-size: 0.875rem;
+}
+
+.footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 16px 24px;
+  border-top: 1px solid #e5e7eb;
+  background: #f9fafb;
+  border-radius: 0 0 12px 12px;
+}
+
+.cancelBtn {
+  padding: 10px 20px;
+  background: white;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #374151;
+  cursor: pointer;
+}
+
+.cancelBtn:hover {
+  background: #f3f4f6;
+}
+
+.saveBtn {
+  padding: 10px 20px;
+  background: #10b981;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: white;
+  cursor: pointer;
+}
+
+.saveBtn:hover:not(:disabled) {
+  background: #059669;
+}
+
+.saveBtn:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+}
