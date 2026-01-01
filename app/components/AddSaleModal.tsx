@@ -48,6 +48,12 @@ export default function AddSaleModal({
   const [saleType, setSaleType] = useState<SaleType>('custom')
   const [goalType, setGoalType] = useState<'acquisition' | 'visibility' | 'event' | 'revenue' | ''>('')
   const [notes, setNotes] = useState('')
+  // New fields matching client's Excel workflow
+  const [isCampaign, setIsCampaign] = useState(false)
+  const [isSubmitted, setIsSubmitted] = useState(false)
+  const [isConfirmed, setIsConfirmed] = useState(false)
+  const [comment, setComment] = useState('')
+  
   const [saving, setSaving] = useState(false)
   const [validationError, setValidationError] = useState<string | null>(null)
   
@@ -63,6 +69,17 @@ export default function AddSaleModal({
   const cooldownEndDate = endDate && selectedPlatform
     ? format(addDays(parseISO(endDate), selectedPlatform.cooldown_days), 'yyyy-MM-dd')
     : ''
+
+  // Find previous sale end date for this product/platform
+  const prevSaleEndDate = (() => {
+    if (!productId || !platformId || !startDate) return null
+    const relevantSales = existingSales.filter(s => 
+      s.product_id === productId && 
+      s.platform_id === platformId &&
+      s.end_date < startDate
+    ).sort((a, b) => new Date(b.end_date).getTime() - new Date(a.end_date).getTime())
+    return relevantSales.length > 0 ? relevantSales[0].end_date : null
+  })()
   
   // Validate on change
   useEffect(() => {
@@ -115,7 +132,12 @@ export default function AddSaleModal({
         sale_type: saleType,
         status: 'planned',
         goal_type: goalType || undefined,
-        notes: notes || undefined
+        notes: notes || undefined,
+        is_campaign: isCampaign,
+        is_submitted: isSubmitted,
+        is_confirmed: isConfirmed,
+        comment: comment || undefined,
+        prev_sale_end_date: prevSaleEndDate || undefined
       })
     } catch (err) {
       console.error('Error saving sale:', err)
@@ -297,19 +319,69 @@ export default function AddSaleModal({
               <label>Cooldown Until</label>
               <input 
                 type="text" 
-                value={cooldownEndDate ? format(parseISO(cooldownEndDate), 'MM/dd/yyyy') : '-'}
+                value={cooldownEndDate ? format(parseISO(cooldownEndDate), 'dd/MM/yyyy') : '-'}
+                disabled
+                className={styles.disabled}
+              />
+            </div>
+            
+            <div className={styles.field}>
+              <label>Prev. Sale Ends</label>
+              <input 
+                type="text" 
+                value={prevSaleEndDate ? format(parseISO(prevSaleEndDate), 'dd/MM/yyyy') : '-'}
                 disabled
                 className={styles.disabled}
               />
             </div>
           </div>
+
+          {/* Checkboxes row */}
+          <div className={styles.checkboxRow}>
+            <label className={styles.checkboxLabel}>
+              <input 
+                type="checkbox" 
+                checked={isCampaign}
+                onChange={e => setIsCampaign(e.target.checked)}
+              />
+              <span>Campaign?</span>
+            </label>
+            
+            <label className={styles.checkboxLabel}>
+              <input 
+                type="checkbox" 
+                checked={isSubmitted}
+                onChange={e => setIsSubmitted(e.target.checked)}
+              />
+              <span>Submitted?</span>
+            </label>
+            
+            <label className={styles.checkboxLabel}>
+              <input 
+                type="checkbox" 
+                checked={isConfirmed}
+                onChange={e => setIsConfirmed(e.target.checked)}
+              />
+              <span>Confirmed?</span>
+            </label>
+          </div>
           
           <div className={styles.field + ' ' + styles.fullWidth}>
-            <label>Notes</label>
+            <label>Comment</label>
+            <textarea 
+              value={comment}
+              onChange={e => setComment(e.target.value)}
+              placeholder="Any comments about this sale..."
+              rows={2}
+            />
+          </div>
+
+          <div className={styles.field + ' ' + styles.fullWidth}>
+            <label>Internal Notes</label>
             <textarea 
               value={notes}
               onChange={e => setNotes(e.target.value)}
-              placeholder="Any additional notes..."
+              placeholder="Internal notes (not exported)..."
               rows={2}
             />
           </div>
