@@ -63,6 +63,9 @@ export default function GameDriveDashboard() {
   const [calendarGeneration, setCalendarGeneration] = useState<CalendarGenerationState | null>(null)
   const [isApplyingCalendar, setIsApplyingCalendar] = useState(false)
   
+  // Store last generated calendar variations for export
+  const [lastGeneratedVariations, setLastGeneratedVariations] = useState<CalendarVariation[]>([])
+  
   // Clear sales state
   const [clearSalesState, setClearSalesState] = useState<ClearSalesState | null>(null)
   
@@ -404,6 +407,9 @@ export default function GameDriveDashboard() {
       defaultDiscount: 50,
       existingSales: sales // Pass existing sales to avoid conflicts
     })
+    
+    // Store variations for export
+    setLastGeneratedVariations(variations)
     
     setCalendarGeneration({
       productId,
@@ -893,7 +899,7 @@ export default function GameDriveDashboard() {
             className={styles.secondaryBtn} 
             onClick={() => setShowExportModal(true)}
           >
-            📷 Export PNG
+            📊 Export
           </button>
           <button className={styles.secondaryBtn} onClick={fetchData}>
             🔄 Refresh
@@ -1039,6 +1045,7 @@ export default function GameDriveDashboard() {
         platforms={platforms}
         timelineStart={timelineStart}
         monthCount={monthCount}
+        calendarVariations={lastGeneratedVariations}
       />
     </div>
   )
