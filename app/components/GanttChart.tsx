@@ -1,5 +1,7 @@
 'use client'
 
+// Cache invalidation: 2026-01-01T19:15:00Z - Force clean Vercel rebuild
+
 import { useState, useMemo, useRef, useCallback, useEffect } from 'react'
 import { DndContext, DragEndEvent, DragStartEvent, useSensor, useSensors, PointerSensor, DragOverlay } from '@dnd-kit/core'
 import { format, addDays, differenceInDays, parseISO, startOfMonth, endOfMonth, eachDayOfInterval } from 'date-fns'
