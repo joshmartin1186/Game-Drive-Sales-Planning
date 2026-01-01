@@ -1,9 +1,10 @@
 'use client'
 
-import { useRef, useState } from 'react'
-import { format, parseISO, differenceInDays, startOfMonth, addMonths, getMonth } from 'date-fns'
-import html2canvas from 'html2canvas'
+import { useState } from 'react'
+import { format, parseISO, differenceInDays, startOfMonth, addMonths, getMonth, getYear } from 'date-fns'
+import PptxGenJS from 'pptxgenjs'
 import { SaleWithDetails, Platform, Product, Game, Client } from '@/lib/types'
+import { CalendarVariation } from '@/lib/sale-calendar-generator'
 import styles from './TimelineExportModal.module.css'
 
 interface TimelineExportModalProps {
@@ -14,6 +15,17 @@ interface TimelineExportModalProps {
   platforms: Platform[]
   timelineStart: Date
   monthCount: number
+  // Optional: calendar variations from auto-generate
+  calendarVariations?: CalendarVariation[]
+}
+
+type ViewMode = 'table' | 'timeline'
+
+interface VariationSelection {
+  current: boolean
+  maxCoverage: boolean
+  balanced: boolean
+  eventsOnly: boolean
 }
 
 export default function TimelineExportModal({
@@ -23,10 +35,17 @@ export default function TimelineExportModal({
   products,
   platforms,
   timelineStart,
-  monthCount
+  monthCount,
+  calendarVariations = []
 }: TimelineExportModalProps) {
-  const exportRef = useRef<HTMLDivElement>(null)
+  const [viewMode, setViewMode] = useState<ViewMode>('table')
   const [isExporting, setIsExporting] = useState(false)
+  const [selectedVariations, setSelectedVariations] = useState<VariationSelection>({
+    current: true,
+    maxCoverage: false,
+    balanced: false,
+    eventsOnly: false
+  })
   
   if (!isOpen) return null
   
@@ -41,204 +60,441 @@ export default function TimelineExportModal({
     current = addMonths(current, 1)
   }
   
-  const handleExportPNG = async () => {
-    if (!exportRef.current) return
+  // Check if we have any variations to show
+  const hasVariations = calendarVariations.length > 0
+  const maxCoverageVariation = calendarVariations.find(v => v.name === 'Maximum Coverage')
+  const balancedVariation = calendarVariations.find(v => v.name === 'Balanced')
+  const eventsOnlyVariation = calendarVariations.find(v => v.name === 'Events Only')
+  
+  // Get selected datasets
+  const getSelectedDatasets = () => {
+    const datasets: { name: string; sales: SaleWithDetails[] | CalendarVariation['sales'] }[] = []
+    
+    if (selectedVariations.current) {
+      datasets.push({ name: 'Current Calendar', sales })
+    }
+    if (selectedVariations.maxCoverage && maxCoverageVariation) {
+      datasets.push({ name: 'Maximum Coverage', sales: maxCoverageVariation.sales as unknown as SaleWithDetails[] })
+    }
+    if (selectedVariations.balanced && balancedVariation) {
+      datasets.push({ name: 'Balanced', sales: balancedVariation.sales as unknown as SaleWithDetails[] })
+    }
+    if (selectedVariations.eventsOnly && eventsOnlyVariation) {
+      datasets.push({ name: 'Events Only', sales: eventsOnlyVariation.sales as unknown as SaleWithDetails[] })
+    }
+    
+    return datasets
+  }
+  
+  // Platform colors map
+  const platformColors: { [key: string]: string } = {}
+  platforms.forEach(p => {
+    platformColors[p.id] = p.color_hex.replace('#', '')
+  })
+  
+  // Get platform name and color from sale
+  const getPlatformInfo = (sale: SaleWithDetails | CalendarVariation['sales'][0]) => {
+    if ('platform' in sale && sale.platform) {
+      return { name: sale.platform.name, color: sale.platform.color_hex }
+    }
+    if ('platform_name' in sale) {
+      return { name: sale.platform_name, color: sale.platform_color }
+    }
+    const platform = platforms.find(p => p.id === sale.platform_id)
+    return { name: platform?.name || 'Unknown', color: platform?.color_hex || '#666666' }
+  }
+  
+  // Get product name from sale
+  const getProductName = (sale: SaleWithDetails | CalendarVariation['sales'][0]) => {
+    if ('product' in sale && sale.product) {
+      return sale.product.name
+    }
+    const product = products.find(p => p.id === sale.product_id)
+    return product?.name || 'Unknown'
+  }
+  
+  const handleExportPPTX = async () => {
+    const datasets = getSelectedDatasets()
+    if (datasets.length === 0) {
+      alert('Please select at least one calendar variation to export')
+      return
+    }
     
     setIsExporting(true)
     
     try {
-      const canvas = await html2canvas(exportRef.current, {
-        backgroundColor: '#ffffff',
-        scale: 2,
-        useCORS: true,
-        logging: false,
-        width: exportRef.current.scrollWidth,
-        height: exportRef.current.scrollHeight
-      })
+      const pptx = new PptxGenJS()
+      pptx.layout = 'LAYOUT_16x9'
+      pptx.title = `Game Drive Sales Calendar ${format(periodStart, 'yyyy')}`
+      pptx.author = 'Game Drive Sales Planning Tool'
       
-      const link = document.createElement('a')
-      link.download = `GameDrive_Sales_Calendar_${format(new Date(), 'yyyy-MM-dd_HH-mm')}.png`
-      link.href = canvas.toDataURL('image/png')
-      link.click()
+      // Define colors
+      const primaryColor = '1f2937'
+      const headerBg = '3b82f6'
+      const lightGray = 'f9fafb'
+      const borderColor = 'e5e7eb'
+      
+      for (const dataset of datasets) {
+        // Title slide for this variation
+        const titleSlide = pptx.addSlide()
+        titleSlide.addText('Game Drive', {
+          x: 0.5, y: 0.3, w: 3, h: 0.5,
+          fontSize: 18, fontFace: 'Arial', color: primaryColor, bold: true
+        })
+        titleSlide.addText('SALES PLANNING', {
+          x: 0.5, y: 0.7, w: 3, h: 0.3,
+          fontSize: 9, fontFace: 'Arial', color: '6b7280', charSpacing: 2
+        })
+        titleSlide.addText(`Sales Calendar ${format(periodStart, 'yyyy')}`, {
+          x: 0.5, y: 2.2, w: 9, h: 0.8,
+          fontSize: 36, fontFace: 'Arial', color: primaryColor, bold: true
+        })
+        titleSlide.addText(dataset.name, {
+          x: 0.5, y: 3.0, w: 9, h: 0.5,
+          fontSize: 24, fontFace: 'Arial', color: headerBg
+        })
+        titleSlide.addText(`${format(periodStart, 'MMMM yyyy')} — ${format(addMonths(periodEnd, -1), 'MMMM yyyy')}`, {
+          x: 0.5, y: 3.5, w: 9, h: 0.4,
+          fontSize: 14, fontFace: 'Arial', color: '6b7280'
+        })
+        titleSlide.addText(`Generated ${format(new Date(), 'MMM d, yyyy')}`, {
+          x: 7.5, y: 4.8, w: 2, h: 0.3,
+          fontSize: 10, fontFace: 'Arial', color: '9ca3af', align: 'right'
+        })
+        
+        // Generate slides for each month
+        for (const month of months) {
+          const monthSales = (dataset.sales as (SaleWithDetails | CalendarVariation['sales'][0])[]).filter(s => {
+            const saleDate = parseISO(s.start_date)
+            return getMonth(saleDate) === getMonth(month) && getYear(saleDate) === getYear(month)
+          }).sort((a, b) => new Date(a.start_date).getTime() - new Date(b.start_date).getTime())
+          
+          if (monthSales.length === 0) continue
+          
+          const slide = pptx.addSlide()
+          
+          // Header
+          slide.addText('Game Drive', {
+            x: 0.3, y: 0.2, w: 2, h: 0.3,
+            fontSize: 11, fontFace: 'Arial', color: primaryColor, bold: true
+          })
+          slide.addText(dataset.name, {
+            x: 7, y: 0.2, w: 2.5, h: 0.3,
+            fontSize: 10, fontFace: 'Arial', color: '6b7280', align: 'right'
+          })
+          
+          // Month title
+          slide.addText(format(month, 'MMMM yyyy'), {
+            x: 0.3, y: 0.6, w: 6, h: 0.5,
+            fontSize: 24, fontFace: 'Arial', color: primaryColor, bold: true
+          })
+          slide.addText(`${monthSales.length} sales`, {
+            x: 6.5, y: 0.7, w: 3, h: 0.3,
+            fontSize: 12, fontFace: 'Arial', color: '6b7280', align: 'right'
+          })
+          
+          // Divider line
+          slide.addShape(pptx.shapes.RECTANGLE, {
+            x: 0.3, y: 1.15, w: 9.2, h: 0.03, fill: { color: headerBg }
+          })
+          
+          if (viewMode === 'table') {
+            // TABLE VIEW
+            const tableData: PptxGenJS.TableRow[] = [
+              // Header row
+              [
+                { text: 'Product', options: { fill: { color: headerBg }, color: 'ffffff', bold: true, fontSize: 10, fontFace: 'Arial' } },
+                { text: 'Platform', options: { fill: { color: headerBg }, color: 'ffffff', bold: true, fontSize: 10, fontFace: 'Arial' } },
+                { text: 'Start', options: { fill: { color: headerBg }, color: 'ffffff', bold: true, fontSize: 10, fontFace: 'Arial' } },
+                { text: 'End', options: { fill: { color: headerBg }, color: 'ffffff', bold: true, fontSize: 10, fontFace: 'Arial' } },
+                { text: 'Days', options: { fill: { color: headerBg }, color: 'ffffff', bold: true, fontSize: 10, fontFace: 'Arial', align: 'center' } },
+                { text: 'Discount', options: { fill: { color: headerBg }, color: 'ffffff', bold: true, fontSize: 10, fontFace: 'Arial', align: 'center' } }
+              ]
+            ]
+            
+            // Data rows (max 12 per slide to avoid overflow)
+            const maxRowsPerSlide = 12
+            const salesToShow = monthSales.slice(0, maxRowsPerSlide)
+            
+            for (const sale of salesToShow) {
+              const days = differenceInDays(parseISO(sale.end_date), parseISO(sale.start_date)) + 1
+              const platformInfo = getPlatformInfo(sale)
+              const productName = getProductName(sale)
+              
+              tableData.push([
+                { text: productName, options: { fontSize: 9, fontFace: 'Arial', color: primaryColor } },
+                { text: platformInfo.name, options: { fontSize: 9, fontFace: 'Arial', color: platformInfo.color.replace('#', ''), bold: true } },
+                { text: format(parseISO(sale.start_date), 'MMM d'), options: { fontSize: 9, fontFace: 'Arial', color: '4b5563' } },
+                { text: format(parseISO(sale.end_date), 'MMM d'), options: { fontSize: 9, fontFace: 'Arial', color: '4b5563' } },
+                { text: String(days), options: { fontSize: 9, fontFace: 'Arial', color: primaryColor, align: 'center' } },
+                { text: `${sale.discount_percentage}%`, options: { fontSize: 10, fontFace: 'Arial', color: '059669', bold: true, align: 'center' } }
+              ])
+            }
+            
+            slide.addTable(tableData, {
+              x: 0.3, y: 1.3, w: 9.2,
+              colW: [2.8, 1.8, 1.1, 1.1, 0.7, 0.9],
+              border: { pt: 0.5, color: borderColor },
+              fontFace: 'Arial',
+              autoPage: false
+            })
+            
+            if (monthSales.length > maxRowsPerSlide) {
+              slide.addText(`+ ${monthSales.length - maxRowsPerSlide} more sales`, {
+                x: 0.3, y: 4.8, w: 9.2, h: 0.3,
+                fontSize: 10, fontFace: 'Arial', color: '6b7280', italic: true
+              })
+            }
+          } else {
+            // TIMELINE VIEW
+            const daysInMonth = new Date(getYear(month), getMonth(month) + 1, 0).getDate()
+            const timelineWidth = 9.2
+            const dayWidth = timelineWidth / daysInMonth
+            const timelineX = 0.3
+            const timelineY = 1.4
+            
+            // Day headers
+            for (let day = 1; day <= daysInMonth; day += 2) {
+              slide.addText(String(day), {
+                x: timelineX + (day - 1) * dayWidth,
+                y: timelineY - 0.25,
+                w: dayWidth * 2,
+                h: 0.2,
+                fontSize: 7,
+                fontFace: 'Arial',
+                color: '9ca3af',
+                align: 'center'
+              })
+            }
+            
+            // Timeline grid background
+            slide.addShape(pptx.shapes.RECTANGLE, {
+              x: timelineX, y: timelineY, w: timelineWidth, h: 3.2,
+              fill: { color: lightGray },
+              line: { color: borderColor, pt: 0.5 }
+            })
+            
+            // Week dividers
+            for (let day = 7; day < daysInMonth; day += 7) {
+              slide.addShape(pptx.shapes.RECTANGLE, {
+                x: timelineX + day * dayWidth, y: timelineY, w: 0.01, h: 3.2,
+                fill: { color: borderColor }
+              })
+            }
+            
+            // Group sales by product for vertical stacking
+            const salesByProduct: { [key: string]: typeof monthSales } = {}
+            for (const sale of monthSales) {
+              const productName = getProductName(sale)
+              if (!salesByProduct[productName]) {
+                salesByProduct[productName] = []
+              }
+              salesByProduct[productName].push(sale)
+            }
+            
+            let rowIndex = 0
+            const rowHeight = 0.35
+            const maxRows = 8
+            
+            for (const [productName, productSales] of Object.entries(salesByProduct)) {
+              if (rowIndex >= maxRows) break
+              
+              // Product label
+              slide.addText(productName, {
+                x: timelineX, y: timelineY + 0.05 + rowIndex * rowHeight, w: 2, h: rowHeight - 0.05,
+                fontSize: 8, fontFace: 'Arial', color: primaryColor, bold: true, valign: 'middle'
+              })
+              
+              // Sale blocks for this product
+              for (const sale of productSales) {
+                const saleStart = parseISO(sale.start_date)
+                const saleEnd = parseISO(sale.end_date)
+                const startDay = saleStart.getDate()
+                const endDay = saleEnd.getDate()
+                const platformInfo = getPlatformInfo(sale)
+                
+                const blockX = timelineX + (startDay - 1) * dayWidth
+                const blockW = (endDay - startDay + 1) * dayWidth
+                const blockY = timelineY + 0.05 + rowIndex * rowHeight
+                
+                // Sale block
+                slide.addShape(pptx.shapes.RECTANGLE, {
+                  x: blockX, y: blockY, w: Math.max(blockW, 0.15), h: rowHeight - 0.08,
+                  fill: { color: platformInfo.color.replace('#', '') },
+                  line: { color: platformInfo.color.replace('#', ''), pt: 0.5 }
+                })
+                
+                // Discount label on block (if wide enough)
+                if (blockW > 0.4) {
+                  slide.addText(`${sale.discount_percentage}%`, {
+                    x: blockX, y: blockY, w: blockW, h: rowHeight - 0.08,
+                    fontSize: 7, fontFace: 'Arial', color: 'ffffff', bold: true,
+                    align: 'center', valign: 'middle'
+                  })
+                }
+              }
+              
+              rowIndex++
+            }
+            
+            if (Object.keys(salesByProduct).length > maxRows) {
+              slide.addText(`+ ${Object.keys(salesByProduct).length - maxRows} more products`, {
+                x: 0.3, y: 4.8, w: 9.2, h: 0.3,
+                fontSize: 10, fontFace: 'Arial', color: '6b7280', italic: true
+              })
+            }
+          }
+          
+          // Footer
+          slide.addText('Generated by Game Drive Sales Planning Tool', {
+            x: 0.3, y: 5.0, w: 6, h: 0.2,
+            fontSize: 8, fontFace: 'Arial', color: '9ca3af', italic: true
+          })
+        }
+      }
+      
+      // Save the file
+      const fileName = `GameDrive_Sales_Calendar_${format(new Date(), 'yyyy-MM-dd_HH-mm')}.pptx`
+      await pptx.writeFile({ fileName })
+      
     } catch (err) {
       console.error('Export failed:', err)
+      alert('Export failed. Please try again.')
     } finally {
       setIsExporting(false)
     }
   }
   
-  // Products with sales
-  const productsWithSales = products.filter(p => 
-    sales.some(s => s.product_id === p.id)
-  )
-  
-  // Calculate stats
-  const totalSales = sales.length
-  const productsCount = productsWithSales.length
-  
-  // Get platform counts
-  const platformCounts = platforms.map(p => ({
-    platform: p,
-    count: sales.filter(s => s.platform_id === p.id).length
-  })).filter(p => p.count > 0).sort((a, b) => b.count - a.count)
-  
-  // Group sales by month
-  const salesByMonth = months.map(month => {
-    const monthSales = sales.filter(s => {
-      const saleMonth = getMonth(parseISO(s.start_date))
-      const saleYear = parseISO(s.start_date).getFullYear()
-      return saleMonth === getMonth(month) && saleYear === month.getFullYear()
-    }).sort((a, b) => {
-      // Sort by date, then by product name, then by platform
-      const dateCompare = new Date(a.start_date).getTime() - new Date(b.start_date).getTime()
-      if (dateCompare !== 0) return dateCompare
-      const productCompare = (a.product?.name || '').localeCompare(b.product?.name || '')
-      if (productCompare !== 0) return productCompare
-      return (a.platform?.name || '').localeCompare(b.platform?.name || '')
-    })
-    
-    return {
-      month,
-      sales: monthSales
-    }
-  }).filter(m => m.sales.length > 0)
-  
-  // Used platforms (for legend)
-  const usedPlatforms = platforms.filter(p => sales.some(s => s.platform_id === p.id))
+  const selectedCount = Object.values(selectedVariations).filter(Boolean).length
   
   return (
     <div className={styles.overlay} onClick={onClose}>
       <div className={styles.modal} onClick={e => e.stopPropagation()}>
         <div className={styles.header}>
-          <h2>Export Sales Calendar</h2>
-          <div className={styles.headerActions}>
-            <button 
-              className={styles.exportBtn}
-              onClick={handleExportPNG}
-              disabled={isExporting}
-            >
-              {isExporting ? '⏳ Exporting...' : '📸 Download PNG'}
-            </button>
-            <button className={styles.closeBtn} onClick={onClose}>×</button>
+          <h2>Export to PowerPoint</h2>
+          <button className={styles.closeBtn} onClick={onClose}>×</button>
+        </div>
+        
+        <div className={styles.exportOptions}>
+          {/* View Mode Selection */}
+          <div className={styles.optionGroup}>
+            <label className={styles.optionLabel}>View Mode</label>
+            <div className={styles.viewToggle}>
+              <button 
+                className={`${styles.viewBtn} ${viewMode === 'table' ? styles.viewBtnActive : ''}`}
+                onClick={() => setViewMode('table')}
+              >
+                📊 Table View
+              </button>
+              <button 
+                className={`${styles.viewBtn} ${viewMode === 'timeline' ? styles.viewBtnActive : ''}`}
+                onClick={() => setViewMode('timeline')}
+              >
+                📅 Timeline View
+              </button>
+            </div>
+            <p className={styles.optionHint}>
+              {viewMode === 'table' 
+                ? 'Clean table with Product, Platform, Dates, and Discount columns'
+                : 'Visual Gantt-style timeline with colored sale blocks'
+              }
+            </p>
+          </div>
+          
+          {/* Calendar Variation Selection */}
+          <div className={styles.optionGroup}>
+            <label className={styles.optionLabel}>Calendar Variations to Export</label>
+            <div className={styles.checkboxGroup}>
+              <label className={styles.checkbox}>
+                <input 
+                  type="checkbox" 
+                  checked={selectedVariations.current}
+                  onChange={(e) => setSelectedVariations(prev => ({ ...prev, current: e.target.checked }))}
+                />
+                <span className={styles.checkboxLabel}>
+                  <strong>Current Calendar</strong>
+                  <span className={styles.checkboxMeta}>{sales.length} sales</span>
+                </span>
+              </label>
+              
+              {hasVariations && (
+                <>
+                  <div className={styles.checkboxDivider}>Auto-Generated Variations</div>
+                  
+                  {maxCoverageVariation && (
+                    <label className={styles.checkbox}>
+                      <input 
+                        type="checkbox" 
+                        checked={selectedVariations.maxCoverage}
+                        onChange={(e) => setSelectedVariations(prev => ({ ...prev, maxCoverage: e.target.checked }))}
+                      />
+                      <span className={styles.checkboxLabel}>
+                        <strong>Maximum Coverage</strong>
+                        <span className={styles.checkboxMeta}>{maxCoverageVariation.stats.totalSales} sales • {maxCoverageVariation.stats.percentageOnSale}% on sale</span>
+                      </span>
+                    </label>
+                  )}
+                  
+                  {balancedVariation && (
+                    <label className={styles.checkbox}>
+                      <input 
+                        type="checkbox" 
+                        checked={selectedVariations.balanced}
+                        onChange={(e) => setSelectedVariations(prev => ({ ...prev, balanced: e.target.checked }))}
+                      />
+                      <span className={styles.checkboxLabel}>
+                        <strong>Balanced</strong>
+                        <span className={styles.checkboxMeta}>{balancedVariation.stats.totalSales} sales • {balancedVariation.stats.percentageOnSale}% on sale</span>
+                      </span>
+                    </label>
+                  )}
+                  
+                  {eventsOnlyVariation && (
+                    <label className={styles.checkbox}>
+                      <input 
+                        type="checkbox" 
+                        checked={selectedVariations.eventsOnly}
+                        onChange={(e) => setSelectedVariations(prev => ({ ...prev, eventsOnly: e.target.checked }))}
+                      />
+                      <span className={styles.checkboxLabel}>
+                        <strong>Events Only</strong>
+                        <span className={styles.checkboxMeta}>{eventsOnlyVariation.stats.totalSales} sales • {eventsOnlyVariation.stats.percentageOnSale}% on sale</span>
+                      </span>
+                    </label>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+          
+          {/* Export Info */}
+          <div className={styles.exportInfo}>
+            <div className={styles.infoItem}>
+              <span className={styles.infoIcon}>📄</span>
+              <span>One slide per month with sales</span>
+            </div>
+            <div className={styles.infoItem}>
+              <span className={styles.infoIcon}>📊</span>
+              <span>{selectedCount} variation{selectedCount !== 1 ? 's' : ''} selected</span>
+            </div>
+            <div className={styles.infoItem}>
+              <span className={styles.infoIcon}>📅</span>
+              <span>{monthCount} months ({format(periodStart, 'MMM yyyy')} - {format(addMonths(periodEnd, -1), 'MMM yyyy')})</span>
+            </div>
           </div>
         </div>
         
-        <div className={styles.previewScroll}>
-          {/* Exportable Content */}
-          <div ref={exportRef} className={styles.exportContent}>
-            {/* Header */}
-            <div className={styles.proposalHeader}>
-              <div className={styles.logoSection}>
-                <div className={styles.logoPlaceholder}>🎮</div>
-                <div className={styles.companyInfo}>
-                  <div className={styles.companyName}>Game Drive</div>
-                  <div className={styles.companyTagline}>SALES PLANNING</div>
-                </div>
-              </div>
-              <div className={styles.proposalTitle}>
-                <h1>Sales Calendar {format(periodStart, 'yyyy')}</h1>
-                <p className={styles.dateRange}>
-                  {format(periodStart, 'MMMM')} — {format(addMonths(periodEnd, -1), 'MMMM yyyy')}
-                </p>
-              </div>
-              <div className={styles.generatedDate}>
-                <div>Generated</div>
-                <div className={styles.dateValue}>{format(new Date(), 'MMM d, yyyy')}</div>
-              </div>
-            </div>
-            
-            {/* Summary Stats Row */}
-            <div className={styles.summaryStats}>
-              <div className={styles.statCard}>
-                <div className={styles.statValue}>{productsCount}</div>
-                <div className={styles.statLabel}>Products</div>
-              </div>
-              <div className={styles.statCard}>
-                <div className={styles.statValue}>{totalSales}</div>
-                <div className={styles.statLabel}>Planned Sales</div>
-              </div>
-              <div className={styles.statCard}>
-                <div className={styles.statValue}>{usedPlatforms.length}</div>
-                <div className={styles.statLabel}>Platforms</div>
-              </div>
-              {platformCounts.slice(0, 4).map(({ platform, count }) => (
-                <div key={platform.id} className={styles.statCard}>
-                  <div className={styles.statValue} style={{ color: platform.color_hex }}>{count}</div>
-                  <div className={styles.statLabel}>{platform.name}</div>
-                </div>
-              ))}
-            </div>
-
-            {/* Monthly Tables */}
-            <div className={styles.monthlySection}>
-              {salesByMonth.map(({ month, sales: monthSales }) => (
-                <div key={month.toISOString()} className={styles.monthBlock}>
-                  <div className={styles.monthHeader}>
-                    <h3>{format(month, 'MMMM yyyy')}</h3>
-                    <span className={styles.monthCount}>{monthSales.length} sales</span>
-                  </div>
-                  <table className={styles.salesTable}>
-                    <thead>
-                      <tr>
-                        <th className={styles.colProduct}>Product</th>
-                        <th className={styles.colPlatform}>Platform</th>
-                        <th className={styles.colDates}>Start</th>
-                        <th className={styles.colDates}>End</th>
-                        <th className={styles.colDays}>Days</th>
-                        <th className={styles.colDiscount}>Discount</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {monthSales.map(sale => {
-                        const days = differenceInDays(parseISO(sale.end_date), parseISO(sale.start_date)) + 1
-                        return (
-                          <tr key={sale.id}>
-                            <td className={styles.productCell}>
-                              <span className={styles.productName}>{sale.product?.name}</span>
-                            </td>
-                            <td>
-                              <span 
-                                className={styles.platformBadge}
-                                style={{ backgroundColor: sale.platform?.color_hex }}
-                              >
-                                {sale.platform?.name}
-                              </span>
-                            </td>
-                            <td className={styles.dateCell}>{format(parseISO(sale.start_date), 'MMM d')}</td>
-                            <td className={styles.dateCell}>{format(parseISO(sale.end_date), 'MMM d')}</td>
-                            <td className={styles.daysCell}>{days}</td>
-                            <td className={styles.discountCell}>{sale.discount_percentage}%</td>
-                          </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              ))}
-            </div>
-            
-            {/* Platform Legend */}
-            <div className={styles.proposalFooter}>
-              <div className={styles.legend}>
-                <span className={styles.legendTitle}>Platform Cooldowns:</span>
-                <div className={styles.legendGrid}>
-                  {usedPlatforms.slice(0, 10).map(platform => (
-                    <div key={platform.id} className={styles.legendItem}>
-                      <span 
-                        className={styles.legendColor}
-                        style={{ backgroundColor: platform.color_hex }}
-                      />
-                      <span className={styles.legendName}>{platform.name}</span>
-                      <span className={styles.legendCooldown}>{platform.cooldown_days}d</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div className={styles.footerNote}>
-                Generated by Game Drive Sales Planning Tool • All dates subject to platform approval
-              </div>
-            </div>
-          </div>
+        <div className={styles.footer}>
+          <button className={styles.cancelBtn} onClick={onClose}>
+            Cancel
+          </button>
+          <button 
+            className={styles.exportBtn}
+            onClick={handleExportPPTX}
+            disabled={isExporting || selectedCount === 0}
+          >
+            {isExporting ? '⏳ Generating...' : '📥 Export PowerPoint'}
+          </button>
         </div>
       </div>
     </div>
