@@ -86,12 +86,6 @@ export default function TimelineExportModal({
     return datasets
   }
   
-  // Platform colors map
-  const platformColors: { [key: string]: string } = {}
-  platforms.forEach(p => {
-    platformColors[p.id] = p.color_hex.replace('#', '')
-  })
-  
   // Get platform name and color from sale
   const getPlatformInfo = (sale: SaleWithDetails | CalendarVariation['sales'][0]) => {
     if ('platform' in sale && sale.platform) {
@@ -193,8 +187,8 @@ export default function TimelineExportModal({
             fontSize: 12, fontFace: 'Arial', color: '6b7280', align: 'right'
           })
           
-          // Divider line
-          slide.addShape(pptx.shapes.RECTANGLE, {
+          // Divider line - use 'rect' string instead of pptx.shapes.RECTANGLE
+          slide.addShape('rect', {
             x: 0.3, y: 1.15, w: 9.2, h: 0.03, fill: { color: headerBg }
           })
           
@@ -268,7 +262,7 @@ export default function TimelineExportModal({
             }
             
             // Timeline grid background
-            slide.addShape(pptx.shapes.RECTANGLE, {
+            slide.addShape('rect', {
               x: timelineX, y: timelineY, w: timelineWidth, h: 3.2,
               fill: { color: lightGray },
               line: { color: borderColor, pt: 0.5 }
@@ -276,7 +270,7 @@ export default function TimelineExportModal({
             
             // Week dividers
             for (let day = 7; day < daysInMonth; day += 7) {
-              slide.addShape(pptx.shapes.RECTANGLE, {
+              slide.addShape('rect', {
                 x: timelineX + day * dayWidth, y: timelineY, w: 0.01, h: 3.2,
                 fill: { color: borderColor }
               })
@@ -318,7 +312,7 @@ export default function TimelineExportModal({
                 const blockY = timelineY + 0.05 + rowIndex * rowHeight
                 
                 // Sale block
-                slide.addShape(pptx.shapes.RECTANGLE, {
+                slide.addShape('rect', {
                   x: blockX, y: blockY, w: Math.max(blockW, 0.15), h: rowHeight - 0.08,
                   fill: { color: platformInfo.color.replace('#', '') },
                   line: { color: platformInfo.color.replace('#', ''), pt: 0.5 }
