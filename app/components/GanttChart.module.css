@@ -58,6 +58,8 @@
   width: 12px;
   height: 12px;
   border-radius: 2px;
+  /* Slant the legend color swatch to match sale blocks */
+  transform: skewX(-8deg);
 }
 
 .legendCooldown {
@@ -448,6 +450,8 @@
   z-index: 8;
   pointer-events: none;
   animation: selectionPulse 0.8s ease-in-out infinite;
+  /* Slant the selection preview to match sale blocks */
+  transform: skewX(-8deg);
 }
 
 .selectionLabel {
@@ -458,6 +462,8 @@
   padding: 2px 6px;
   border-radius: 3px;
   white-space: nowrap;
+  /* Counter-rotate text to keep it readable */
+  transform: skewX(8deg);
 }
 
 @keyframes selectionPulse {
@@ -579,7 +585,8 @@
   font-size: 0.625rem;
 }
 
-/* Sale Block */
+/* Sale Block - SLANTED/ANGLED design per client request */
+/* "since the sale doesn't start at 00.00 every day, it is presented with a slight lean" */
 .saleBlock {
   position: absolute;
   top: 4px;
@@ -587,7 +594,7 @@
   border-radius: 4px;
   display: flex;
   align-items: center;
-  padding: 0 8px;
+  padding: 0 10px;
   color: white;
   font-size: 0.6875rem;
   font-weight: 500;
@@ -595,13 +602,23 @@
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
   transition: left 0.15s ease-out, width 0.15s ease-out, box-shadow 0.15s, transform 0.1s;
   z-index: 5;
+  /* SLANT EFFECT - creates parallelogram shape */
+  transform: skewX(-8deg);
+}
+
+/* Keep text readable inside slanted block */
+.saleBlockContent {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transform: skewX(8deg);
 }
 
 .saleBlock:hover {
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.2);
   z-index: 6;
 }
 
@@ -619,7 +636,7 @@
   50% { opacity: 0.7; }
 }
 
-/* Cooldown Block - diagonal stripes */
+/* Cooldown Block - diagonal stripes, also slanted */
 .cooldownBlock {
   position: absolute;
   top: 4px;
@@ -639,6 +656,8 @@
   z-index: 2;
   pointer-events: none;
   transition: left 0.15s ease-out, width 0.15s ease-out;
+  /* Slant to match sale blocks */
+  transform: skewX(-8deg);
 }
 
 .cooldownBlock span {
@@ -647,20 +666,27 @@
   color: #94a3b8;
   text-transform: uppercase;
   letter-spacing: 0.5px;
+  /* Counter-rotate text */
+  transform: skewX(8deg);
 }
 
-/* Drag Overlay */
+/* Drag Overlay - also slanted for consistency */
 .dragOverlay {
   height: 32px;
   border-radius: 4px;
   display: flex;
   align-items: center;
-  padding: 0 8px;
+  padding: 0 10px;
   color: white;
   font-size: 0.6875rem;
   font-weight: 500;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   opacity: 0.9;
+  transform: skewX(-8deg);
+}
+
+.dragOverlay span {
+  transform: skewX(8deg);
 }
 
 /* Empty State */
