@@ -12,6 +12,7 @@ import PlatformSettings from './components/PlatformSettings'
 import SaleCalendarPreviewModal from './components/SaleCalendarPreviewModal'
 import ClearSalesModal from './components/ClearSalesModal'
 import TimelineExportModal from './components/TimelineExportModal'
+import EditLaunchDateModal from './components/EditLaunchDateModal'
 import { generateSaleCalendar, GeneratedSale, CalendarVariation, generatedSaleToCreateFormat } from '@/lib/sale-calendar-generator'
 import { useUndo } from '@/lib/undo-context'
 import styles from './page.module.css'
@@ -41,6 +42,12 @@ interface ClearSalesState {
   productName: string
 }
 
+interface EditLaunchDateState {
+  productId: string
+  productName: string
+  currentLaunchDate: string
+}
+
 export default function GameDriveDashboard() {
   const [sales, setSales] = useState<SaleWithDetails[]>([])
   const [clients, setClients] = useState<Client[]>([])
@@ -68,6 +75,9 @@ export default function GameDriveDashboard() {
   
   // Clear sales state
   const [clearSalesState, setClearSalesState] = useState<ClearSalesState | null>(null)
+  
+  // Edit launch date state
+  const [editLaunchDateState, setEditLaunchDateState] = useState<EditLaunchDateState | null>(null)
   
   // Filter state
   const [filterClientId, setFilterClientId] = useState<string>('')
@@ -535,7 +545,7 @@ export default function GameDriveDashboard() {
     }
   }, [sales, pushAction])
 
-  // Launch date change handler - shifts all sales for a product
+  // Launch date change handler - shifts all sales for a product (drag)
   const handleLaunchDateChange = useCallback(async (productId: string, newLaunchDate: string) => {
     const product = products.find(p => p.id === productId)
     if (!product) return
@@ -605,6 +615,43 @@ export default function GameDriveDashboard() {
     }
   }, [products, sales])
 
+  // Edit launch date handler - opens modal (click)
+  const handleEditLaunchDate = useCallback((productId: string, productName: string, currentLaunchDate: string) => {
+    setEditLaunchDateState({ productId, productName, currentLaunchDate })
+  }, [])
+
+  // Save launch date from modal (without shifting sales)
+  const handleSaveLaunchDate = useCallback(async (productId: string, newLaunchDate: string, shiftSales: boolean) => {
+    const product = products.find(p => p.id === productId)
+    if (!product) return
+    
+    if (shiftSales) {
+      // Use the existing handler that shifts sales
+      await handleLaunchDateChange(productId, newLaunchDate)
+    } else {
+      // Just update the launch date without shifting sales
+      setProducts(prev => prev.map(p => 
+        p.id === productId ? { ...p, launch_date: newLaunchDate } : p
+      ))
+      
+      try {
+        const { error } = await supabase
+          .from('products')
+          .update({ launch_date: newLaunchDate })
+          .eq('id', productId)
+        
+        if (error) throw error
+      } catch (err: unknown) {
+        const errorMessage = err instanceof Error ? err.message : 'Failed to update launch date'
+        console.error('Error updating launch date:', err)
+        setError(errorMessage)
+        await fetchData()
+      }
+    }
+    
+    setEditLaunchDateState(null)
+  }, [products, handleLaunchDateChange])
+
   async function handleClientCreate(client: Omit<Client, 'id' | 'created_at'>) {
     try {
       const { data, error } = await supabase
@@ -652,6 +699,83 @@ export default function GameDriveDashboard() {
       }
     } catch (err: unknown) {
       console.error('Error creating product:', err)
+      throw err
+    }
+  }
+
+  // Update handlers for clients, games, products
+  async function handleClientUpdate(clientId: string, updates: Partial<Client>) {
+    try {
+      const { error } = await supabase
+        .from('clients')
+        .update(updates)
+        .eq('id', clientId)
+      
+      if (error) throw error
+      setClients(prev => prev.map(c => 
+        c.id === clientId ? { ...c, ...updates } : c
+      ).sort((a, b) => a.name.localeCompare(b.name)))
+      
+      // Update games that reference this client
+      if (updates.name) {
+        setGames(prev => prev.map(g => 
+          g.client_id === clientId ? { ...g, client: { ...g.client, ...updates } } : g
+        ))
+        setProducts(prev => prev.map(p => 
+          p.game?.client_id === clientId 
+            ? { ...p, game: { ...p.game, client: { ...p.game.client, ...updates } } } 
+            : p
+        ))
+      }
+    } catch (err: unknown) {
+      console.error('Error updating client:', err)
+      throw err
+    }
+  }
+
+  async function handleGameUpdate(gameId: string, updates: Partial<Game>) {
+    try {
+      const { data, error } = await supabase
+        .from('games')
+        .update(updates)
+        .eq('id', gameId)
+        .select(`*, client:clients(*)`)
+        .single()
+      
+      if (error) throw error
+      if (data) {
+        setGames(prev => prev.map(g => 
+          g.id === gameId ? data : g
+        ).sort((a, b) => a.name.localeCompare(b.name)))
+        
+        // Update products that reference this game
+        setProducts(prev => prev.map(p => 
+          p.game_id === gameId ? { ...p, game: data } : p
+        ))
+      }
+    } catch (err: unknown) {
+      console.error('Error updating game:', err)
+      throw err
+    }
+  }
+
+  async function handleProductUpdate(productId: string, updates: Partial<Product>) {
+    try {
+      const { data, error } = await supabase
+        .from('products')
+        .update(updates)
+        .eq('id', productId)
+        .select(`*, game:games(*, client:clients(*))`)
+        .single()
+      
+      if (error) throw error
+      if (data) {
+        setProducts(prev => prev.map(p => 
+          p.id === productId ? data : p
+        ).sort((a, b) => a.name.localeCompare(b.name)))
+      }
+    } catch (err: unknown) {
+      console.error('Error updating product:', err)
       throw err
     }
   }
@@ -924,6 +1048,7 @@ export default function GameDriveDashboard() {
             onGenerateCalendar={handleGenerateCalendar}
             onClearSales={handleClearSales}
             onLaunchDateChange={handleLaunchDateChange}
+            onEditLaunchDate={handleEditLaunchDate}
             allSales={sales}
             showEvents={showEvents}
           />
@@ -995,6 +1120,9 @@ export default function GameDriveDashboard() {
           onClientDelete={handleClientDelete}
           onGameDelete={handleGameDelete}
           onProductDelete={handleProductDelete}
+          onClientUpdate={handleClientUpdate}
+          onGameUpdate={handleGameUpdate}
+          onProductUpdate={handleProductUpdate}
           onGenerateCalendar={handleGenerateCalendar}
           onClose={() => setShowProductManager(false)}
         />
@@ -1033,6 +1161,19 @@ export default function GameDriveDashboard() {
           platforms={platforms}
           sales={sales}
           onConfirm={handleConfirmClearSales}
+        />
+      )}
+
+      {/* Edit Launch Date Modal */}
+      {editLaunchDateState && (
+        <EditLaunchDateModal
+          isOpen={true}
+          onClose={() => setEditLaunchDateState(null)}
+          productId={editLaunchDateState.productId}
+          productName={editLaunchDateState.productName}
+          currentLaunchDate={editLaunchDateState.currentLaunchDate}
+          onSave={handleSaveLaunchDate}
+          salesCount={sales.filter(s => s.product_id === editLaunchDateState.productId).length}
         />
       )}
 
