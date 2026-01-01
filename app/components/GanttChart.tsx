@@ -849,7 +849,7 @@ export default function GanttChart(props: GanttChartProps) {
       
       <div className={styles.legend}>
         <span className={styles.legendTitle}>PLATFORMS:</span>
-        {platforms.slice(0, 8).map(platform => (
+        {platforms.map(platform => (
           <div key={platform.id} className={styles.legendItem}>
             <span 
               className={styles.legendColor}
