@@ -16,7 +16,7 @@
   background: #ffffff;
   border-radius: 16px;
   width: 95%;
-  max-width: 1200px;
+  max-width: 900px;
   max-height: 90vh;
   display: flex;
   flex-direction: column;
@@ -43,35 +43,6 @@
   display: flex;
   align-items: center;
   gap: 12px;
-}
-
-.formatToggle {
-  display: flex;
-  background: #f3f4f6;
-  border-radius: 8px;
-  padding: 4px;
-}
-
-.formatBtn {
-  padding: 8px 16px;
-  border: none;
-  background: transparent;
-  border-radius: 6px;
-  font-size: 14px;
-  font-weight: 500;
-  color: #6b7280;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.formatBtn:hover {
-  color: #374151;
-}
-
-.formatBtn.active {
-  background: #ffffff;
-  color: #1f2937;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .exportBtn {
@@ -128,7 +99,7 @@
   background: #ffffff;
   border-radius: 8px;
   padding: 40px 48px;
-  width: 900px;
+  width: 800px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
@@ -138,8 +109,8 @@
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  margin-bottom: 32px;
-  padding-bottom: 24px;
+  margin-bottom: 28px;
+  padding-bottom: 20px;
   border-bottom: 2px solid #1f2937;
 }
 
@@ -150,14 +121,14 @@
 }
 
 .logoPlaceholder {
-  width: 48px;
-  height: 48px;
+  width: 44px;
+  height: 44px;
   background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
-  border-radius: 12px;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 24px;
+  font-size: 22px;
 }
 
 .companyInfo {
@@ -166,13 +137,13 @@
 }
 
 .companyName {
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 700;
   color: #1f2937;
 }
 
 .companyTagline {
-  font-size: 10px;
+  font-size: 9px;
   color: #6b7280;
   text-transform: uppercase;
   letter-spacing: 2px;
@@ -186,26 +157,26 @@
 
 .proposalTitle h1 {
   margin: 0 0 4px;
-  font-size: 24px;
+  font-size: 22px;
   font-weight: 700;
   color: #1f2937;
 }
 
 .dateRange {
   margin: 0;
-  font-size: 14px;
+  font-size: 13px;
   color: #6b7280;
 }
 
 .generatedDate {
   text-align: right;
-  font-size: 11px;
+  font-size: 10px;
   color: #9ca3af;
 }
 
 .dateValue {
   font-weight: 600;
-  font-size: 12px;
+  font-size: 11px;
   color: #6b7280;
   margin-top: 2px;
 }
@@ -213,29 +184,29 @@
 /* Summary Stats */
 .summaryStats {
   display: flex;
-  gap: 12px;
-  margin-bottom: 32px;
+  gap: 10px;
+  margin-bottom: 28px;
   flex-wrap: wrap;
 }
 
 .statCard {
   background: #f9fafb;
   border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  padding: 12px 20px;
+  border-radius: 6px;
+  padding: 10px 16px;
   text-align: center;
-  min-width: 80px;
+  min-width: 70px;
 }
 
 .statCard .statValue {
-  font-size: 24px;
+  font-size: 20px;
   font-weight: 700;
   color: #1f2937;
   line-height: 1;
 }
 
 .statCard .statLabel {
-  font-size: 10px;
+  font-size: 9px;
   color: #6b7280;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -243,63 +214,33 @@
   font-weight: 500;
 }
 
-/* ===== VISUAL TIMELINE ===== */
-.timelineSection {
-  margin-bottom: 32px;
-}
-
-.timelineHeader {
-  display: flex;
-  border-bottom: 2px solid #374151;
-  padding-bottom: 8px;
-  margin-bottom: 16px;
-}
-
-.productColumnHeader {
-  width: 180px;
-  flex-shrink: 0;
-  font-size: 11px;
-  font-weight: 700;
-  color: #374151;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.monthsRow {
-  flex: 1;
-  display: flex;
-}
-
-.monthLabel {
-  flex: 1;
-  text-align: center;
-  font-size: 11px;
-  font-weight: 600;
-  color: #374151;
-  text-transform: uppercase;
-}
-
-/* Game Section */
-.gameSection {
+/* ===== MONTHLY TABLES ===== */
+.monthlySection {
   margin-bottom: 24px;
 }
 
-.gameHeader {
+.monthBlock {
+  margin-bottom: 24px;
+  page-break-inside: avoid;
+}
+
+.monthHeader {
   display: flex;
+  justify-content: space-between;
   align-items: center;
-  gap: 12px;
   padding: 8px 0;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 2px solid #3b82f6;
   margin-bottom: 8px;
 }
 
-.gameName {
+.monthHeader h3 {
+  margin: 0;
+  font-size: 15px;
   font-weight: 700;
-  font-size: 14px;
   color: #1f2937;
 }
 
-.clientBadge {
+.monthCount {
   font-size: 11px;
   color: #6b7280;
   background: #f3f4f6;
@@ -307,201 +248,134 @@
   border-radius: 4px;
 }
 
-/* Product Row - Single row per product */
-.productRow {
-  display: flex;
-  padding: 8px 0;
-  min-height: 44px;
-  align-items: center;
-}
-
-.productColumn {
-  width: 180px;
-  flex-shrink: 0;
-  padding-right: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.productName {
-  font-weight: 600;
-  font-size: 13px;
-  color: #374151;
-}
-
-.salesCount {
-  font-size: 10px;
-  color: #9ca3af;
-}
-
-.timelineArea {
-  flex: 1;
-  position: relative;
-  height: 36px;
-  background: #fafafa;
-  border-radius: 4px;
-  border: 1px solid #e5e7eb;
-}
-
-.monthGrid {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  display: flex;
-}
-
-.monthGridLine {
-  flex: 1;
-  border-right: 1px dashed #e5e7eb;
-}
-
-.monthGridLine:last-child {
-  border-right: none;
-}
-
-/* Sale Blocks */
-.saleBlock {
-  position: absolute;
-  height: 14px;
-  border-radius: 3px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 8px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
-}
-
-.saleLabel {
-  font-size: 8px;
-  font-weight: 700;
-  color: white;
-  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.3);
-}
-
-/* ===== TABLE VIEW ===== */
-.tableSection {
-  margin-bottom: 32px;
-}
-
-.monthTable {
-  margin-bottom: 24px;
-}
-
-.monthTitle {
-  margin: 0 0 12px;
-  font-size: 16px;
-  font-weight: 700;
-  color: #1f2937;
-  padding-bottom: 8px;
-  border-bottom: 2px solid #3b82f6;
-}
-
 .salesTable {
   width: 100%;
   border-collapse: collapse;
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .salesTable th {
   text-align: left;
-  padding: 10px 12px;
+  padding: 8px 8px;
   background: #f9fafb;
   font-weight: 600;
   color: #374151;
   text-transform: uppercase;
-  font-size: 10px;
+  font-size: 9px;
   letter-spacing: 0.5px;
   border-bottom: 1px solid #e5e7eb;
 }
 
 .salesTable td {
-  padding: 10px 12px;
+  padding: 6px 8px;
   border-bottom: 1px solid #f3f4f6;
   color: #374151;
   vertical-align: middle;
 }
 
-.salesTable tr:hover td {
+.salesTable tbody tr:hover td {
   background: #f9fafb;
+}
+
+/* Column widths */
+.colProduct {
+  width: 35%;
+}
+
+.colPlatform {
+  width: 20%;
+}
+
+.colDates {
+  width: 12%;
+}
+
+.colDays {
+  width: 8%;
+  text-align: center;
+}
+
+.colDiscount {
+  width: 13%;
+  text-align: center;
 }
 
 .productCell {
   display: flex;
   flex-direction: column;
-  gap: 2px;
 }
 
-.productCell strong {
+.productName {
   font-weight: 600;
   color: #1f2937;
-}
-
-.gameLabel {
-  font-size: 10px;
-  color: #9ca3af;
+  font-size: 11px;
 }
 
 .platformBadge {
   display: inline-block;
-  padding: 3px 8px;
-  border-radius: 4px;
+  padding: 2px 6px;
+  border-radius: 3px;
   color: white;
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 600;
+}
+
+.dateCell {
+  font-size: 10px;
+  color: #4b5563;
 }
 
 .daysCell {
   text-align: center;
   font-weight: 500;
+  font-size: 10px;
 }
 
 .discountCell {
   font-weight: 700;
   color: #059669;
   text-align: center;
+  font-size: 11px;
 }
 
 /* ===== FOOTER ===== */
 .proposalFooter {
-  margin-top: 32px;
-  padding-top: 20px;
+  margin-top: 24px;
+  padding-top: 16px;
   border-top: 2px solid #1f2937;
 }
 
 .legend {
-  margin-bottom: 16px;
+  margin-bottom: 12px;
 }
 
 .legendTitle {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   color: #374151;
   text-transform: uppercase;
   letter-spacing: 0.5px;
   display: block;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 
 .legendGrid {
   display: flex;
   flex-wrap: wrap;
-  gap: 16px;
+  gap: 12px;
 }
 
 .legendItem {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 11px;
+  gap: 4px;
+  font-size: 10px;
 }
 
 .legendColor {
-  width: 12px;
-  height: 12px;
-  border-radius: 3px;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
   flex-shrink: 0;
 }
 
@@ -512,11 +386,11 @@
 
 .legendCooldown {
   color: #9ca3af;
-  font-size: 10px;
+  font-size: 9px;
 }
 
 .footerNote {
-  font-size: 10px;
+  font-size: 9px;
   color: #9ca3af;
   font-style: italic;
 }
