@@ -133,6 +133,67 @@
   color: #dc2626;
 }
 
+/* Check cells for Campaign, Submitted, Confirmed */
+.checkCell {
+  text-align: center;
+}
+
+.checkMark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  background: #3b82f6;
+  color: white;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: bold;
+}
+
+.checkMarkGreen {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  background: #10b981;
+  color: white;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: bold;
+}
+
+/* Goal badge styles */
+.goalBadge {
+  display: inline-block;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  text-transform: capitalize;
+}
+
+.goalBadge.acquisition {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.goalBadge.visibility {
+  background: #f3e8ff;
+  color: #7c3aed;
+}
+
+.goalBadge.event {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.goalBadge.revenue {
+  background: #dcfce7;
+  color: #15803d;
+}
+
 .statusBadge {
   display: inline-block;
   padding: 0.25rem 0.5rem;
