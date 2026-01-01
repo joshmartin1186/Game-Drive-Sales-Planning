@@ -93,7 +93,7 @@ export default function TimelineExportModal({
     try {
       const canvas = await html2canvas(exportRef.current, {
         backgroundColor: '#ffffff',
-        scale: 2,
+        scale: 3, // Higher quality
         useCORS: true,
         logging: false,
         width: exportRef.current.scrollWidth,
@@ -117,7 +117,20 @@ export default function TimelineExportModal({
   const platformCounts = platforms.map(p => ({
     platform: p,
     count: sales.filter(s => s.platform_id === p.id).length
-  })).filter(p => p.count > 0)
+  })).filter(p => p.count > 0).sort((a, b) => b.count - a.count)
+  
+  // Sort sales for detailed view and split into columns
+  const sortedSales = [...sales].sort((a, b) => 
+    new Date(a.start_date).getTime() - new Date(b.start_date).getTime()
+  )
+  
+  // Split into 3 columns for detailed view
+  const columnSize = Math.ceil(sortedSales.length / 3)
+  const columns = [
+    sortedSales.slice(0, columnSize),
+    sortedSales.slice(columnSize, columnSize * 2),
+    sortedSales.slice(columnSize * 2)
+  ]
   
   return (
     <div className={styles.overlay} onClick={onClose}>
@@ -159,7 +172,7 @@ export default function TimelineExportModal({
                 <div className={styles.logoPlaceholder}>🎮</div>
                 <div className={styles.companyInfo}>
                   <div className={styles.companyName}>Game Drive</div>
-                  <div className={styles.companyTagline}>Sales Planning</div>
+                  <div className={styles.companyTagline}>SALES PLANNING</div>
                 </div>
               </div>
               <div className={styles.proposalTitle}>
@@ -178,16 +191,16 @@ export default function TimelineExportModal({
             <div className={styles.summaryStats}>
               <div className={styles.statCard}>
                 <div className={styles.statValue}>{totalProducts}</div>
-                <div className={styles.statLabel}>Products</div>
+                <div className={styles.statLabel}>PRODUCTS</div>
               </div>
               <div className={styles.statCard}>
                 <div className={styles.statValue}>{totalSales}</div>
-                <div className={styles.statLabel}>Planned Sales</div>
+                <div className={styles.statLabel}>PLANNED SALES</div>
               </div>
-              {platformCounts.slice(0, 4).map(({ platform, count }) => (
+              {platformCounts.slice(0, 5).map(({ platform, count }) => (
                 <div key={platform.id} className={styles.statCard}>
                   <div className={styles.statValue} style={{ color: platform.color_hex }}>{count}</div>
-                  <div className={styles.statLabel}>{platform.name}</div>
+                  <div className={styles.statLabel}>{platform.name.toUpperCase()}</div>
                 </div>
               ))}
             </div>
@@ -217,8 +230,8 @@ export default function TimelineExportModal({
                     const salesByPlatform = getSalesForProduct(product.id)
                     const platformIds = Object.keys(salesByPlatform)
                     
-                    if (platformIds.length === 0 && exportFormat === 'summary') {
-                      return null // Skip products without sales in summary mode
+                    if (platformIds.length === 0) {
+                      return null // Skip products without sales
                     }
                     
                     return (
@@ -229,7 +242,6 @@ export default function TimelineExportModal({
                             <span className={styles.productType}>{product.product_type}</span>
                           </div>
                           <div className={styles.timelineArea}>
-                            {/* Month grid lines */}
                             <div className={styles.monthGrid}>
                               {months.map((_, idx) => (
                                 <div key={idx} className={styles.monthGridLine} />
@@ -254,14 +266,12 @@ export default function TimelineExportModal({
                                 <span className={styles.platformName}>{platform.name}</span>
                               </div>
                               <div className={styles.timelineArea}>
-                                {/* Month grid */}
                                 <div className={styles.monthGrid}>
                                   {months.map((_, idx) => (
                                     <div key={idx} className={styles.monthGridLine} />
                                   ))}
                                 </div>
                                 
-                                {/* Sales blocks */}
                                 {platformSales.map(sale => {
                                   const left = getDayPosition(sale.start_date)
                                   const width = getSaleWidth(sale.start_date, sale.end_date)
@@ -276,7 +286,7 @@ export default function TimelineExportModal({
                                         backgroundColor: platform.color_hex
                                       }}
                                     >
-                                      {width > 2 && (
+                                      {width > 1.5 && (
                                         <span className={styles.saleLabel}>
                                           {sale.discount_percentage}%
                                         </span>
@@ -295,50 +305,51 @@ export default function TimelineExportModal({
               ))}
             </div>
             
-            {/* Sales Table (Detailed view) */}
+            {/* Sales Table (Detailed view) - Multi-column layout */}
             {exportFormat === 'detailed' && sales.length > 0 && (
-              <div className={styles.salesTable}>
+              <div className={styles.salesTableSection}>
                 <h3>Scheduled Sales Details</h3>
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Product</th>
-                      <th>Platform</th>
-                      <th>Sale Name</th>
-                      <th>Start</th>
-                      <th>End</th>
-                      <th>Discount</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sales
-                      .sort((a, b) => new Date(a.start_date).getTime() - new Date(b.start_date).getTime())
-                      .map(sale => (
-                        <tr key={sale.id}>
-                          <td>{sale.product?.name}</td>
-                          <td>
-                            <span 
-                              className={styles.tablePlatformDot}
-                              style={{ backgroundColor: sale.platform?.color_hex }}
-                            />
-                            {sale.platform?.name}
-                          </td>
-                          <td>{sale.sale_name || '-'}</td>
-                          <td>{format(parseISO(sale.start_date), 'MMM d, yyyy')}</td>
-                          <td>{format(parseISO(sale.end_date), 'MMM d, yyyy')}</td>
-                          <td>{sale.discount_percentage}%</td>
-                        </tr>
-                      ))
-                    }
-                  </tbody>
-                </table>
+                <div className={styles.multiColumnTable}>
+                  {columns.map((columnSales, colIdx) => (
+                    <div key={colIdx} className={styles.tableColumn}>
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>Product</th>
+                            <th>Platform</th>
+                            <th>Dates</th>
+                            <th>%</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {columnSales.map(sale => (
+                            <tr key={sale.id}>
+                              <td className={styles.productCell}>{sale.product?.name}</td>
+                              <td>
+                                <span 
+                                  className={styles.tablePlatformDot}
+                                  style={{ backgroundColor: sale.platform?.color_hex }}
+                                />
+                                {sale.platform?.name}
+                              </td>
+                              <td className={styles.dateCell}>
+                                {format(parseISO(sale.start_date), 'MMM d')} - {format(parseISO(sale.end_date), 'MMM d')}
+                              </td>
+                              <td className={styles.discountCell}>{sale.discount_percentage}%</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
             
             {/* Footer */}
             <div className={styles.proposalFooter}>
               <div className={styles.legend}>
-                <span className={styles.legendTitle}>Platforms:</span>
+                <span className={styles.legendTitle}>PLATFORMS:</span>
                 {platforms.filter(p => sales.some(s => s.platform_id === p.id)).map(platform => (
                   <div key={platform.id} className={styles.legendItem}>
                     <span 
