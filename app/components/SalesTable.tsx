@@ -31,24 +31,30 @@ export default function SalesTable({ sales, platforms, onDelete, onEdit }: Sales
   }
   
   const exportToExcel = () => {
-    // Prepare data for Excel
+    // Prepare data for Excel - matching client's exact column structure
+    // Client columns: Start date | End date | Days | Platform | Cooldown | Sale Name | Product | Campaign? | Goal | Discount % | Submitted? | Confirmed? | Comment | Cooldown Until | Prev. Sale Stops Date
     const excelData = sortedSales.map(sale => {
       const platform = platforms.find(p => p.id === sale.platform_id)
       return {
-        'Start Date': format(parseISO(sale.start_date), 'dd/MM/yyyy'),
-        'End Date': format(parseISO(sale.end_date), 'dd/MM/yyyy'),
+        'Start date': format(parseISO(sale.start_date), 'dd/MM/yyyy'),
+        'End date': format(parseISO(sale.end_date), 'dd/MM/yyyy'),
         'Days': calculateDays(sale.start_date, sale.end_date),
         'Platform': platform?.name || '',
-        'Cooldown (days)': platform?.cooldown_days || 0,
+        'Cooldown': platform?.cooldown_days || 0,
         'Sale Name': sale.sale_name || 'Custom',
         'Product': sale.product?.name || '',
         'Game': sale.product?.game?.name || '',
         'Client': sale.product?.game?.client?.name || '',
-        'Discount %': sale.discount_percentage || '',
-        'Status': sale.status || 'planned',
+        'Campaign?': sale.is_campaign ? 'Yes' : '',
         'Goal': sale.goal_type || '',
+        'Discount %': sale.discount_percentage ? `${sale.discount_percentage}%` : '',
+        'Submitted?': sale.is_submitted ? 'Yes' : '',
+        'Confirmed?': sale.is_confirmed ? 'Yes' : '',
+        'Comment': sale.comment || sale.notes || '',
         'Cooldown Until': calculateCooldownUntil(sale.end_date, sale.platform_id),
-        'Notes': sale.notes || ''
+        'Prev. Sale Stops Date': sale.prev_sale_end_date 
+          ? format(parseISO(sale.prev_sale_end_date), 'dd/MM/yyyy') 
+          : ''
       }
     })
     
@@ -58,20 +64,23 @@ export default function SalesTable({ sales, platforms, onDelete, onEdit }: Sales
     
     // Set column widths for better readability
     ws['!cols'] = [
-      { wch: 12 }, // Start Date
-      { wch: 12 }, // End Date
+      { wch: 12 }, // Start date
+      { wch: 12 }, // End date
       { wch: 6 },  // Days
       { wch: 15 }, // Platform
-      { wch: 12 }, // Cooldown
+      { wch: 10 }, // Cooldown
       { wch: 25 }, // Sale Name
       { wch: 25 }, // Product
       { wch: 20 }, // Game
       { wch: 15 }, // Client
-      { wch: 10 }, // Discount
-      { wch: 10 }, // Status
+      { wch: 10 }, // Campaign?
       { wch: 12 }, // Goal
+      { wch: 12 }, // Discount %
+      { wch: 10 }, // Submitted?
+      { wch: 10 }, // Confirmed?
+      { wch: 30 }, // Comment
       { wch: 14 }, // Cooldown Until
-      { wch: 30 }, // Notes
+      { wch: 18 }, // Prev. Sale Stops Date
     ]
     
     XLSX.utils.book_append_sheet(wb, ws, 'Sales Schedule')
@@ -85,8 +94,8 @@ export default function SalesTable({ sales, platforms, onDelete, onEdit }: Sales
   
   const exportToCSV = () => {
     const headers = [
-      'Start Date',
-      'End Date', 
+      'Start date',
+      'End date', 
       'Days',
       'Platform',
       'Cooldown',
@@ -94,11 +103,14 @@ export default function SalesTable({ sales, platforms, onDelete, onEdit }: Sales
       'Product',
       'Game',
       'Client',
-      'Discount %',
-      'Status',
+      'Campaign?',
       'Goal',
+      'Discount %',
+      'Submitted?',
+      'Confirmed?',
+      'Comment',
       'Cooldown Until',
-      'Notes'
+      'Prev. Sale Stops Date'
     ]
     
     const rows = sortedSales.map(sale => {
@@ -113,11 +125,16 @@ export default function SalesTable({ sales, platforms, onDelete, onEdit }: Sales
         sale.product?.name || '',
         sale.product?.game?.name || '',
         sale.product?.game?.client?.name || '',
-        sale.discount_percentage || '',
-        sale.status || '',
+        sale.is_campaign ? 'Yes' : '',
         sale.goal_type || '',
+        sale.discount_percentage ? `${sale.discount_percentage}%` : '',
+        sale.is_submitted ? 'Yes' : '',
+        sale.is_confirmed ? 'Yes' : '',
+        sale.comment || sale.notes || '',
         calculateCooldownUntil(sale.end_date, sale.platform_id),
-        sale.notes || ''
+        sale.prev_sale_end_date 
+          ? format(parseISO(sale.prev_sale_end_date), 'dd/MM/yyyy') 
+          : ''
       ]
     })
     
@@ -165,11 +182,13 @@ export default function SalesTable({ sales, platforms, onDelete, onEdit }: Sales
               <th>End Date</th>
               <th>Days</th>
               <th>Platform</th>
-              <th>Cooldown</th>
               <th>Sale Name</th>
               <th>Product</th>
               <th>Discount</th>
-              <th>Status</th>
+              <th>Campaign</th>
+              <th>Goal</th>
+              <th>Submitted</th>
+              <th>Confirmed</th>
               <th>Cooldown Until</th>
               <th>Actions</th>
             </tr>
@@ -177,7 +196,7 @@ export default function SalesTable({ sales, platforms, onDelete, onEdit }: Sales
           <tbody>
             {sortedSales.length === 0 ? (
               <tr>
-                <td colSpan={11} className={styles.emptyRow}>
+                <td colSpan={13} className={styles.emptyRow}>
                   No sales scheduled. Click "+ Add Sale" to create one.
                 </td>
               </tr>
@@ -205,7 +224,6 @@ export default function SalesTable({ sales, platforms, onDelete, onEdit }: Sales
                         {platform?.name || 'Unknown'}
                       </span>
                     </td>
-                    <td>{platform?.cooldown_days || 0}d</td>
                     <td>{sale.sale_name || 'Custom'}</td>
                     <td>
                       <div className={styles.productCell}>
@@ -216,10 +234,21 @@ export default function SalesTable({ sales, platforms, onDelete, onEdit }: Sales
                     <td className={styles.discount}>
                       {sale.discount_percentage ? `-${sale.discount_percentage}%` : '-'}
                     </td>
+                    <td className={styles.checkCell}>
+                      {sale.is_campaign && <span className={styles.checkMark}>✓</span>}
+                    </td>
                     <td>
-                      <span className={`${styles.statusBadge} ${styles[sale.status || 'planned']}`}>
-                        {sale.status || 'planned'}
-                      </span>
+                      {sale.goal_type && (
+                        <span className={`${styles.goalBadge} ${styles[sale.goal_type]}`}>
+                          {sale.goal_type}
+                        </span>
+                      )}
+                    </td>
+                    <td className={styles.checkCell}>
+                      {sale.is_submitted && <span className={styles.checkMark}>✓</span>}
+                    </td>
+                    <td className={styles.checkCell}>
+                      {sale.is_confirmed && <span className={styles.checkMarkGreen}>✓</span>}
                     </td>
                     <td>{cooldownUntil}</td>
                     <td className={styles.actionCell}>
