@@ -1,9 +1,8 @@
 'use client'
 
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { createClient } from '@supabase/supabase-js'
 import { parseISO, format } from 'date-fns'
-import html2canvas from 'html2canvas'
 import GanttChart from './components/GanttChart'
 import SalesTable from './components/SalesTable'
 import AddSaleModal from './components/AddSaleModal'
@@ -12,6 +11,7 @@ import ProductManager from './components/ProductManager'
 import PlatformSettings from './components/PlatformSettings'
 import SaleCalendarPreviewModal from './components/SaleCalendarPreviewModal'
 import ClearSalesModal from './components/ClearSalesModal'
+import TimelineExportModal from './components/TimelineExportModal'
 import { generateSaleCalendar, GeneratedSale, CalendarVariation, generatedSaleToCreateFormat } from '@/lib/sale-calendar-generator'
 import { useUndo } from '@/lib/undo-context'
 import styles from './page.module.css'
@@ -53,14 +53,11 @@ export default function GameDriveDashboard() {
   const [showAddModal, setShowAddModal] = useState(false)
   const [showProductManager, setShowProductManager] = useState(false)
   const [showPlatformSettings, setShowPlatformSettings] = useState(false)
+  const [showExportModal, setShowExportModal] = useState(false)
   const [editingSale, setEditingSale] = useState<SaleWithDetails | null>(null)
   const [viewMode, setViewMode] = useState<'gantt' | 'table'>('gantt')
   const [showEvents, setShowEvents] = useState(true)
   const [salePrefill, setSalePrefill] = useState<SalePrefill | null>(null)
-  const [isExporting, setIsExporting] = useState(false)
-  
-  // Ref for timeline export
-  const timelineRef = useRef<HTMLDivElement>(null)
   
   // Calendar generation state
   const [calendarGeneration, setCalendarGeneration] = useState<CalendarGenerationState | null>(null)
@@ -226,64 +223,6 @@ export default function GameDriveDashboard() {
       console.error('Error fetching platform events:', err)
     }
   }
-
-  // Export timeline as PNG
-  const handleExportTimelinePNG = useCallback(async () => {
-    if (!timelineRef.current) return
-    
-    setIsExporting(true)
-    
-    try {
-      // Find the scroll container inside the timeline
-      const scrollContainer = timelineRef.current.querySelector('[class*="scrollContainer"]') as HTMLElement
-      const timelineContent = timelineRef.current.querySelector('[class*="timeline"]') as HTMLElement
-      
-      if (!scrollContainer || !timelineContent) {
-        throw new Error('Timeline elements not found')
-      }
-      
-      // Store original scroll position and styles
-      const originalScrollLeft = scrollContainer.scrollLeft
-      const originalOverflow = scrollContainer.style.overflow
-      const originalWidth = scrollContainer.style.width
-      
-      // Temporarily expand the container to show full timeline
-      scrollContainer.scrollLeft = 0
-      scrollContainer.style.overflow = 'visible'
-      scrollContainer.style.width = `${timelineContent.scrollWidth}px`
-      
-      // Wait for render
-      await new Promise(resolve => setTimeout(resolve, 100))
-      
-      // Capture the full timeline
-      const canvas = await html2canvas(timelineRef.current, {
-        scale: 2,
-        useCORS: true,
-        logging: false,
-        backgroundColor: '#ffffff',
-        width: timelineContent.scrollWidth + 250, // Add sidebar width
-        windowWidth: timelineContent.scrollWidth + 250,
-      })
-      
-      // Restore original styles
-      scrollContainer.style.overflow = originalOverflow
-      scrollContainer.style.width = originalWidth
-      scrollContainer.scrollLeft = originalScrollLeft
-      
-      // Download the image
-      const link = document.createElement('a')
-      const timestamp = format(new Date(), 'yyyy-MM-dd_HH-mm')
-      link.download = `GameDrive_Timeline_${timestamp}.png`
-      link.href = canvas.toDataURL('image/png')
-      link.click()
-      
-    } catch (err) {
-      console.error('Error exporting timeline:', err)
-      setError('Failed to export timeline as PNG')
-    } finally {
-      setIsExporting(false)
-    }
-  }, [])
 
   // Optimistic update for sales - updates local state immediately
   async function handleSaleUpdate(saleId: string, updates: Partial<Sale>) {
@@ -950,15 +889,12 @@ export default function GameDriveDashboard() {
           <button className={styles.secondaryBtn} onClick={() => setShowPlatformSettings(true)}>
             📅 Platform Settings
           </button>
-          {viewMode === 'gantt' && (
-            <button 
-              className={styles.secondaryBtn} 
-              onClick={handleExportTimelinePNG}
-              disabled={isExporting}
-            >
-              {isExporting ? '⏳ Exporting...' : '📷 Export PNG'}
-            </button>
-          )}
+          <button 
+            className={styles.secondaryBtn} 
+            onClick={() => setShowExportModal(true)}
+          >
+            📷 Export PNG
+          </button>
           <button className={styles.secondaryBtn} onClick={fetchData}>
             🔄 Refresh
           </button>
@@ -966,7 +902,7 @@ export default function GameDriveDashboard() {
       </div>
 
       {/* Main Content */}
-      <div className={styles.mainContent} ref={timelineRef}>
+      <div className={styles.mainContent}>
         {viewMode === 'gantt' ? (
           <GanttChart
             sales={filteredSales}
@@ -1093,6 +1029,17 @@ export default function GameDriveDashboard() {
           onConfirm={handleConfirmClearSales}
         />
       )}
+
+      {/* Timeline Export Modal */}
+      <TimelineExportModal
+        isOpen={showExportModal}
+        onClose={() => setShowExportModal(false)}
+        sales={filteredSales}
+        products={filteredProducts}
+        platforms={platforms}
+        timelineStart={timelineStart}
+        monthCount={monthCount}
+      />
     </div>
   )
 }
