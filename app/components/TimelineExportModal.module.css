@@ -16,7 +16,7 @@
   background: #ffffff;
   border-radius: 16px;
   width: 95%;
-  max-width: 1400px;
+  max-width: 1200px;
   max-height: 90vh;
   display: flex;
   flex-direction: column;
@@ -123,40 +123,41 @@
   background: #f9fafb;
 }
 
-/* Exportable Content Styles - WIDE FORMAT */
+/* ===== EXPORTABLE CONTENT ===== */
 .exportContent {
   background: #ffffff;
-  border-radius: 12px;
-  padding: 48px 56px;
-  min-width: 1200px;
-  width: 1400px;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+  padding: 40px 48px;
+  width: 900px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
+/* Header */
 .proposalHeader {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  margin-bottom: 40px;
-  padding-bottom: 28px;
-  border-bottom: 3px solid #1f2937;
+  margin-bottom: 32px;
+  padding-bottom: 24px;
+  border-bottom: 2px solid #1f2937;
 }
 
 .logoSection {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
 }
 
 .logoPlaceholder {
-  width: 56px;
-  height: 56px;
+  width: 48px;
+  height: 48px;
   background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
-  border-radius: 14px;
+  border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 28px;
+  font-size: 24px;
 }
 
 .companyInfo {
@@ -165,13 +166,13 @@
 }
 
 .companyName {
-  font-size: 24px;
-  font-weight: 800;
+  font-size: 20px;
+  font-weight: 700;
   color: #1f2937;
 }
 
 .companyTagline {
-  font-size: 11px;
+  font-size: 10px;
   color: #6b7280;
   text-transform: uppercase;
   letter-spacing: 2px;
@@ -184,84 +185,84 @@
 }
 
 .proposalTitle h1 {
-  margin: 0 0 8px;
-  font-size: 32px;
-  font-weight: 800;
+  margin: 0 0 4px;
+  font-size: 24px;
+  font-weight: 700;
   color: #1f2937;
 }
 
 .dateRange {
   margin: 0;
-  font-size: 16px;
+  font-size: 14px;
   color: #6b7280;
 }
 
 .generatedDate {
   text-align: right;
-  font-size: 12px;
+  font-size: 11px;
   color: #9ca3af;
 }
 
 .dateValue {
-  font-weight: 700;
-  font-size: 14px;
+  font-weight: 600;
+  font-size: 12px;
   color: #6b7280;
-  margin-top: 4px;
+  margin-top: 2px;
 }
 
-/* Summary Stats - Larger */
+/* Summary Stats */
 .summaryStats {
   display: flex;
-  gap: 20px;
-  margin-bottom: 40px;
+  gap: 12px;
+  margin-bottom: 32px;
   flex-wrap: wrap;
 }
 
 .statCard {
   background: #f9fafb;
-  border: 2px solid #e5e7eb;
-  border-radius: 12px;
-  padding: 20px 28px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 12px 20px;
   text-align: center;
-  min-width: 120px;
+  min-width: 80px;
 }
 
 .statCard .statValue {
-  font-size: 36px;
-  font-weight: 800;
+  font-size: 24px;
+  font-weight: 700;
   color: #1f2937;
   line-height: 1;
 }
 
 .statCard .statLabel {
-  font-size: 11px;
+  font-size: 10px;
   color: #6b7280;
   text-transform: uppercase;
-  letter-spacing: 1px;
-  margin-top: 8px;
-  font-weight: 600;
+  letter-spacing: 0.5px;
+  margin-top: 4px;
+  font-weight: 500;
 }
 
-/* Timeline Section - WIDER */
+/* ===== VISUAL TIMELINE ===== */
 .timelineSection {
-  margin-bottom: 40px;
+  margin-bottom: 32px;
 }
 
 .timelineHeader {
   display: flex;
-  border-bottom: 2px solid #1f2937;
-  padding-bottom: 12px;
-  margin-bottom: 12px;
+  border-bottom: 2px solid #374151;
+  padding-bottom: 8px;
+  margin-bottom: 16px;
 }
 
-.productColumn {
-  width: 220px;
+.productColumnHeader {
+  width: 180px;
   flex-shrink: 0;
-  padding-right: 20px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 13px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #374151;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .monthsRow {
@@ -272,82 +273,75 @@
 .monthLabel {
   flex: 1;
   text-align: center;
-  font-size: 13px;
-  font-weight: 700;
+  font-size: 11px;
+  font-weight: 600;
   color: #374151;
   text-transform: uppercase;
 }
 
+/* Game Section */
 .gameSection {
-  margin-bottom: 20px;
+  margin-bottom: 24px;
 }
 
 .gameHeader {
-  padding: 10px 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
   border-bottom: 1px solid #e5e7eb;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
 }
 
 .gameName {
-  font-weight: 800;
-  font-size: 16px;
+  font-weight: 700;
+  font-size: 14px;
   color: #1f2937;
-  margin-right: 12px;
 }
 
-.clientName {
-  font-size: 13px;
-  color: #9ca3af;
-  font-weight: 500;
+.clientBadge {
+  font-size: 11px;
+  color: #6b7280;
+  background: #f3f4f6;
+  padding: 2px 8px;
+  border-radius: 4px;
 }
 
-.productSection {
-  margin-bottom: 12px;
-}
-
+/* Product Row - Single row per product */
 .productRow {
   display: flex;
   padding: 8px 0;
+  min-height: 44px;
+  align-items: center;
+}
+
+.productColumn {
+  width: 180px;
+  flex-shrink: 0;
+  padding-right: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .productName {
-  font-weight: 700;
-  font-size: 14px;
+  font-weight: 600;
+  font-size: 13px;
   color: #374151;
 }
 
-.productType {
-  font-size: 11px;
+.salesCount {
+  font-size: 10px;
   color: #9ca3af;
-  margin-left: 8px;
-  font-weight: 500;
-}
-
-.platformRow {
-  display: flex;
-  padding: 5px 0;
-  padding-left: 20px;
-}
-
-.platformIndicator {
-  width: 12px;
-  height: 12px;
-  border-radius: 3px;
-  flex-shrink: 0;
-}
-
-.platformName {
-  font-size: 13px;
-  color: #6b7280;
-  font-weight: 500;
 }
 
 .timelineArea {
   flex: 1;
   position: relative;
-  height: 28px;
+  height: 36px;
   background: #fafafa;
   border-radius: 4px;
+  border: 1px solid #e5e7eb;
 }
 
 .monthGrid {
@@ -361,156 +355,168 @@
 
 .monthGridLine {
   flex: 1;
-  border-right: 1px solid #e5e7eb;
+  border-right: 1px dashed #e5e7eb;
 }
 
 .monthGridLine:last-child {
   border-right: none;
 }
 
+/* Sale Blocks */
 .saleBlock {
   position: absolute;
-  top: 4px;
-  bottom: 4px;
-  border-radius: 4px;
+  height: 14px;
+  border-radius: 3px;
   display: flex;
   align-items: center;
   justify-content: center;
-  min-width: 6px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+  min-width: 8px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
 }
 
 .saleLabel {
-  font-size: 10px;
+  font-size: 8px;
   font-weight: 700;
   color: white;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.3);
 }
 
-/* Multi-Column Sales Table */
-.salesTableSection {
-  margin-top: 40px;
-  padding-top: 32px;
-  border-top: 3px solid #1f2937;
+/* ===== TABLE VIEW ===== */
+.tableSection {
+  margin-bottom: 32px;
 }
 
-.salesTableSection h3 {
-  margin: 0 0 20px;
-  font-size: 18px;
-  font-weight: 800;
+.monthTable {
+  margin-bottom: 24px;
+}
+
+.monthTitle {
+  margin: 0 0 12px;
+  font-size: 16px;
+  font-weight: 700;
   color: #1f2937;
+  padding-bottom: 8px;
+  border-bottom: 2px solid #3b82f6;
 }
 
-.multiColumnTable {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 24px;
-}
-
-.tableColumn table {
+.salesTable {
   width: 100%;
   border-collapse: collapse;
-  font-size: 11px;
+  font-size: 12px;
 }
 
-.tableColumn th {
+.salesTable th {
   text-align: left;
-  padding: 8px 6px;
+  padding: 10px 12px;
   background: #f9fafb;
-  font-weight: 700;
-  color: #6b7280;
+  font-weight: 600;
+  color: #374151;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
-  border-bottom: 2px solid #e5e7eb;
   font-size: 10px;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid #e5e7eb;
 }
 
-.tableColumn td {
-  padding: 6px;
+.salesTable td {
+  padding: 10px 12px;
   border-bottom: 1px solid #f3f4f6;
   color: #374151;
   vertical-align: middle;
 }
 
-.tableColumn tr:hover td {
+.salesTable tr:hover td {
   background: #f9fafb;
 }
 
-.tablePlatformDot {
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  border-radius: 2px;
-  margin-right: 4px;
-  vertical-align: middle;
-}
-
 .productCell {
-  font-weight: 600;
-  max-width: 100px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
-.dateCell {
-  white-space: nowrap;
+.productCell strong {
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.gameLabel {
   font-size: 10px;
+  color: #9ca3af;
+}
+
+.platformBadge {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 4px;
+  color: white;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.daysCell {
+  text-align: center;
+  font-weight: 500;
 }
 
 .discountCell {
   font-weight: 700;
+  color: #059669;
   text-align: center;
 }
 
-/* Footer */
+/* ===== FOOTER ===== */
 .proposalFooter {
-  margin-top: 40px;
-  padding-top: 28px;
-  border-top: 3px solid #1f2937;
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  flex-wrap: wrap;
-  gap: 20px;
+  margin-top: 32px;
+  padding-top: 20px;
+  border-top: 2px solid #1f2937;
 }
 
 .legend {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  flex-wrap: wrap;
+  margin-bottom: 16px;
 }
 
 .legendTitle {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   color: #374151;
   text-transform: uppercase;
-  letter-spacing: 1px;
+  letter-spacing: 0.5px;
+  display: block;
+  margin-bottom: 12px;
+}
+
+.legendGrid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
 }
 
 .legendItem {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
-  color: #374151;
+  font-size: 11px;
 }
 
 .legendColor {
-  width: 14px;
-  height: 14px;
+  width: 12px;
+  height: 12px;
   border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.legendName {
+  color: #374151;
+  font-weight: 500;
 }
 
 .legendCooldown {
   color: #9ca3af;
-  font-size: 11px;
+  font-size: 10px;
 }
 
 .footerNote {
-  font-size: 11px;
+  font-size: 10px;
   color: #9ca3af;
   font-style: italic;
 }
