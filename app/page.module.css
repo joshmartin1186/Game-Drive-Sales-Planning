@@ -328,51 +328,7 @@
   border-radius: 12px;
   box-shadow: 0 1px 3px rgba(0,0,0,0.1);
   border: 1px solid #e2e8f0;
-  margin-bottom: 24px;
   overflow: hidden;
-}
-
-/* Platform Legend */
-.platformLegend {
-  background: white;
-  border-radius: 12px;
-  padding: 24px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-  border: 1px solid #e2e8f0;
-}
-
-.platformLegend h3 {
-  margin: 0 0 16px 0;
-  font-size: 16px;
-  font-weight: 700;
-  color: #1e293b;
-}
-
-.legendGrid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 12px;
-}
-
-.legendItem {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 14px;
-  color: #475569;
-  font-weight: 500;
-}
-
-.legendColor {
-  width: 16px;
-  height: 16px;
-  border-radius: 4px;
-  flex-shrink: 0;
-}
-
-.legendItem strong {
-  color: #1e293b;
-  font-weight: 600;
 }
 
 /* Responsive Design */
@@ -411,10 +367,6 @@
 
 @media (max-width: 480px) {
   .statsGrid {
-    grid-template-columns: 1fr;
-  }
-  
-  .legendGrid {
     grid-template-columns: 1fr;
   }
   
