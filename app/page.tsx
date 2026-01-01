@@ -146,23 +146,19 @@ export default function GameDriveDashboard() {
     setSales(salesData || [])
   }
 
-  async function fetchPlatforms() {
-    const { data: platformsData, error: platformsError } = await supabase
-      .from('platforms')
-      .select('*')
-      .order('name')
-    
-    if (platformsError) throw platformsError
-    setPlatforms(platformsData || [])
-  }
-
   async function fetchData() {
     setLoading(true)
     setError(null)
     
     try {
       // Fetch platforms
-      await fetchPlatforms()
+      const { data: platformsData, error: platformsError } = await supabase
+        .from('platforms')
+        .select('*')
+        .order('name')
+      
+      if (platformsError) throw platformsError
+      setPlatforms(platformsData || [])
 
       // Fetch platform events
       const { data: eventsData, error: eventsError } = await supabase
@@ -839,12 +835,6 @@ export default function GameDriveDashboard() {
     }
   }
 
-  // Handler for when platform settings change - refresh platforms
-  const handlePlatformSettingsChange = useCallback(async () => {
-    await fetchPlatforms()
-    await fetchPlatformEvents()
-  }, [])
-
   const filteredGames = useMemo(() => {
     if (!filterClientId) return games
     return games.filter(g => g.client_id === filterClientId)
@@ -1072,6 +1062,24 @@ export default function GameDriveDashboard() {
         )}
       </div>
 
+      {/* Platform Legend */}
+      <div className={styles.platformLegend}>
+        <h3>Platform Cooldown Periods</h3>
+        <div className={styles.legendGrid}>
+          {platforms.map((platform) => (
+            <div key={platform.id} className={styles.legendItem}>
+              <div 
+                className={styles.legendColor}
+                style={{backgroundColor: platform.color_hex}}
+              ></div>
+              <span>
+                <strong>{platform.name}</strong>: {platform.cooldown_days} days cooldown
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+
       {/* Add Sale Modal */}
       {showAddModal && (
         <AddSaleModal
@@ -1124,7 +1132,10 @@ export default function GameDriveDashboard() {
       <PlatformSettings
         isOpen={showPlatformSettings}
         onClose={() => setShowPlatformSettings(false)}
-        onEventsChange={handlePlatformSettingsChange}
+        onEventsChange={() => {
+          fetchPlatformEvents()
+          fetchData()
+        }}
       />
 
       {/* Sale Calendar Preview Modal */}
