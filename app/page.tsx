@@ -860,7 +860,6 @@ export default function GameDriveDashboard() {
     return result
   }, [sales, filterClientId, filterGameId])
 
-  const activeSales = filteredSales.filter(s => s.status === 'live' || s.status === 'confirmed').length
   const conflicts = 0
   const upcomingEvents = platformEvents.filter(e => new Date(e.start_date) > new Date()).length
 
@@ -1060,24 +1059,6 @@ export default function GameDriveDashboard() {
             onEdit={handleSaleEdit}
           />
         )}
-      </div>
-
-      {/* Platform Legend */}
-      <div className={styles.platformLegend}>
-        <h3>Platform Cooldown Periods</h3>
-        <div className={styles.legendGrid}>
-          {platforms.map((platform) => (
-            <div key={platform.id} className={styles.legendItem}>
-              <div 
-                className={styles.legendColor}
-                style={{backgroundColor: platform.color_hex}}
-              ></div>
-              <span>
-                <strong>{platform.name}</strong>: {platform.cooldown_days} days cooldown
-              </span>
-            </div>
-          ))}
-        </div>
       </div>
 
       {/* Add Sale Modal */}
