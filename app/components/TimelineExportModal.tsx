@@ -106,43 +106,6 @@ export default function TimelineExportModal({
     return product?.name || 'Unknown'
   }
   
-  // Helper to draw slanted parallelogram shape
-  const drawSlantedBlock = (
-    slide: PptxGenJS.Slide, 
-    x: number, 
-    y: number, 
-    w: number, 
-    h: number, 
-    color: string,
-    text?: string
-  ) => {
-    // Skew offset (approximately 8 degrees = 14% of height)
-    const skewOffset = h * 0.14
-    
-    // Draw parallelogram using custom shape points
-    // Points go clockwise from top-left
-    slide.addShape('custGeom' as PptxGenJS.ShapeType, {
-      x, y, w, h,
-      fill: { color: color.replace('#', '') },
-      points: [
-        { x: skewOffset / w, y: 0 },           // Top-left (shifted right)
-        { x: 1, y: 0 },                         // Top-right
-        { x: 1 - skewOffset / w, y: 1 },        // Bottom-right (shifted left)
-        { x: 0, y: 1 },                         // Bottom-left
-        { x: skewOffset / w, y: 0 },           // Close path
-      ]
-    })
-    
-    // Add text on top if provided
-    if (text && w > 0.35) {
-      slide.addText(text, {
-        x, y, w, h,
-        fontSize: 6, fontFace: 'Arial', color: 'ffffff', bold: true,
-        align: 'center', valign: 'middle'
-      })
-    }
-  }
-  
   const handleExportPPTX = async () => {
     const datasets = getSelectedDatasets()
     if (datasets.length === 0) {
@@ -364,26 +327,14 @@ export default function TimelineExportModal({
                 fontSize: 7, fontFace: 'Arial', color: primaryColor, valign: 'middle'
               })
               
-              // Platform badge (also slanted to match)
-              const badgeX = timelineX + labelWidth - 0.55
-              const badgeY = rowY + 0.06
-              const badgeW = 0.5
-              const badgeH = rowHeight - 0.12
-              const badgeSkew = badgeH * 0.14
-              
-              slide.addShape('custGeom' as PptxGenJS.ShapeType, {
-                x: badgeX, y: badgeY, w: badgeW, h: badgeH,
+              // Platform badge
+              slide.addShape('roundRect', {
+                x: timelineX + labelWidth - 0.55, y: rowY + 0.06, w: 0.5, h: rowHeight - 0.12,
                 fill: { color: row.platformInfo.color.replace('#', '') },
-                points: [
-                  { x: badgeSkew / badgeW, y: 0 },
-                  { x: 1, y: 0 },
-                  { x: 1 - badgeSkew / badgeW, y: 1 },
-                  { x: 0, y: 1 },
-                  { x: badgeSkew / badgeW, y: 0 },
-                ]
+                rectRadius: 0.02
               })
               slide.addText(row.platformInfo.name.substring(0, 2).toUpperCase(), {
-                x: badgeX, y: badgeY, w: badgeW, h: badgeH,
+                x: timelineX + labelWidth - 0.55, y: rowY + 0.06, w: 0.5, h: rowHeight - 0.12,
                 fontSize: 6, fontFace: 'Arial', color: 'ffffff', bold: true,
                 align: 'center', valign: 'middle'
               })
@@ -401,24 +352,29 @@ export default function TimelineExportModal({
                 const endDay = visibleEnd.getDate()
                 const visibleDays = endDay - startDay + 1
                 
-                // Skip very small slivers (less than 1.5 days visible)
-                if (visibleDays < 1.5) continue
+                // Skip very small slivers (less than 2 days visible)
+                if (visibleDays < 2) continue
                 
                 const blockX = chartX + (startDay - 1) * dayWidth
                 const blockW = visibleDays * dayWidth
                 const blockY = rowY + 0.04
                 const blockH = rowHeight - 0.08
                 
-                // Draw slanted sale block
-                drawSlantedBlock(
-                  slide,
-                  blockX,
-                  blockY,
-                  Math.max(blockW, 0.1),
-                  blockH,
-                  row.platformInfo.color,
-                  blockW > 0.35 ? `${sale.discount_percentage}%` : undefined
-                )
+                // Sale block with rounded corners
+                slide.addShape('roundRect', {
+                  x: blockX, y: blockY, w: Math.max(blockW, 0.1), h: blockH,
+                  fill: { color: row.platformInfo.color.replace('#', '') },
+                  rectRadius: 0.02
+                })
+                
+                // Discount label on block (if wide enough)
+                if (blockW > 0.4) {
+                  slide.addText(`${sale.discount_percentage}%`, {
+                    x: blockX, y: blockY, w: blockW, h: blockH,
+                    fontSize: 6, fontFace: 'Arial', color: 'ffffff', bold: true,
+                    align: 'center', valign: 'middle'
+                  })
+                }
               }
               
               rowIndex++
@@ -483,7 +439,7 @@ export default function TimelineExportModal({
             <p className={styles.optionHint}>
               {viewMode === 'table' 
                 ? 'Clean table with Product, Platform, Dates, and Discount columns'
-                : 'Visual Gantt-style timeline with slanted colored sale blocks'
+                : 'Visual Gantt-style timeline with colored sale blocks'
               }
             </p>
           </div>
