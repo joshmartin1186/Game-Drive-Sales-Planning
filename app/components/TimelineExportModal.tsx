@@ -60,8 +60,7 @@ export default function TimelineExportModal({
     current = addMonths(current, 1)
   }
   
-  // Check if we have any variations to show
-  const hasVariations = calendarVariations.length > 0
+  // Find variations (may or may not exist)
   const maxCoverageVariation = calendarVariations.find(v => v.name === 'Maximum Coverage')
   const balancedVariation = calendarVariations.find(v => v.name === 'Balanced')
   const eventsOnlyVariation = calendarVariations.find(v => v.name === 'Events Only')
@@ -89,13 +88,13 @@ export default function TimelineExportModal({
   // Get platform name and color from sale
   const getPlatformInfo = (sale: SaleWithDetails | CalendarVariation['sales'][0]) => {
     if ('platform' in sale && sale.platform) {
-      return { name: sale.platform.name, color: sale.platform.color_hex }
+      return { id: sale.platform_id, name: sale.platform.name, color: sale.platform.color_hex }
     }
     if ('platform_name' in sale) {
-      return { name: sale.platform_name, color: sale.platform_color }
+      return { id: sale.platform_id, name: sale.platform_name, color: sale.platform_color }
     }
     const platform = platforms.find(p => p.id === sale.platform_id)
-    return { name: platform?.name || 'Unknown', color: platform?.color_hex || '#666666' }
+    return { id: sale.platform_id, name: platform?.name || 'Unknown', color: platform?.color_hex || '#666666' }
   }
   
   // Get product name from sale
@@ -187,7 +186,7 @@ export default function TimelineExportModal({
             fontSize: 12, fontFace: 'Arial', color: '6b7280', align: 'right'
           })
           
-          // Divider line - use 'rect' string instead of pptx.shapes.RECTANGLE
+          // Divider line
           slide.addShape('rect', {
             x: 0.3, y: 1.15, w: 9.2, h: 0.03, fill: { color: headerBg }
           })
@@ -240,30 +239,56 @@ export default function TimelineExportModal({
               })
             }
           } else {
-            // TIMELINE VIEW
+            // TIMELINE VIEW - Group by Product + Platform (separate rows)
             const daysInMonth = new Date(getYear(month), getMonth(month) + 1, 0).getDate()
             const timelineWidth = 9.2
-            const dayWidth = timelineWidth / daysInMonth
+            const labelWidth = 2.2
+            const chartWidth = timelineWidth - labelWidth
+            const dayWidth = chartWidth / daysInMonth
             const timelineX = 0.3
+            const chartX = timelineX + labelWidth
             const timelineY = 1.4
             
             // Day headers
-            for (let day = 1; day <= daysInMonth; day += 2) {
+            for (let day = 1; day <= daysInMonth; day += 3) {
               slide.addText(String(day), {
-                x: timelineX + (day - 1) * dayWidth,
+                x: chartX + (day - 1) * dayWidth,
                 y: timelineY - 0.25,
-                w: dayWidth * 2,
+                w: dayWidth * 3,
                 h: 0.2,
                 fontSize: 7,
                 fontFace: 'Arial',
                 color: '9ca3af',
-                align: 'center'
+                align: 'left'
               })
             }
             
+            // Group sales by product+platform combination for separate rows
+            const salesByRow: { [key: string]: { productName: string; platformInfo: { name: string; color: string }; sales: typeof monthSales } } = {}
+            for (const sale of monthSales) {
+              const productName = getProductName(sale)
+              const platformInfo = getPlatformInfo(sale)
+              const rowKey = `${sale.product_id}_${sale.platform_id}`
+              
+              if (!salesByRow[rowKey]) {
+                salesByRow[rowKey] = {
+                  productName,
+                  platformInfo: { name: platformInfo.name, color: platformInfo.color },
+                  sales: []
+                }
+              }
+              salesByRow[rowKey].sales.push(sale)
+            }
+            
+            const rowHeight = 0.32
+            const maxRows = 10
+            const rows = Object.values(salesByRow)
+            const rowsToShow = rows.slice(0, maxRows)
+            const gridHeight = rowsToShow.length * rowHeight
+            
             // Timeline grid background
             slide.addShape('rect', {
-              x: timelineX, y: timelineY, w: timelineWidth, h: 3.2,
+              x: chartX, y: timelineY, w: chartWidth, h: gridHeight,
               fill: { color: lightGray },
               line: { color: borderColor, pt: 0.5 }
             })
@@ -271,58 +296,65 @@ export default function TimelineExportModal({
             // Week dividers
             for (let day = 7; day < daysInMonth; day += 7) {
               slide.addShape('rect', {
-                x: timelineX + day * dayWidth, y: timelineY, w: 0.01, h: 3.2,
-                fill: { color: borderColor }
+                x: chartX + day * dayWidth, y: timelineY, w: 0.01, h: gridHeight,
+                fill: { color: 'cccccc' }
               })
             }
             
-            // Group sales by product for vertical stacking
-            const salesByProduct: { [key: string]: typeof monthSales } = {}
-            for (const sale of monthSales) {
-              const productName = getProductName(sale)
-              if (!salesByProduct[productName]) {
-                salesByProduct[productName] = []
-              }
-              salesByProduct[productName].push(sale)
-            }
-            
+            // Draw rows
             let rowIndex = 0
-            const rowHeight = 0.35
-            const maxRows = 8
-            
-            for (const [productName, productSales] of Object.entries(salesByProduct)) {
-              if (rowIndex >= maxRows) break
+            for (const row of rowsToShow) {
+              const rowY = timelineY + rowIndex * rowHeight
               
-              // Product label
-              slide.addText(productName, {
-                x: timelineX, y: timelineY + 0.05 + rowIndex * rowHeight, w: 2, h: rowHeight - 0.05,
-                fontSize: 8, fontFace: 'Arial', color: primaryColor, bold: true, valign: 'middle'
+              // Row background (alternating)
+              if (rowIndex % 2 === 1) {
+                slide.addShape('rect', {
+                  x: chartX, y: rowY, w: chartWidth, h: rowHeight,
+                  fill: { color: 'f3f4f6' }
+                })
+              }
+              
+              // Product + Platform label
+              const labelText = `${row.productName.substring(0, 12)}${row.productName.length > 12 ? '…' : ''}`
+              slide.addText(labelText, {
+                x: timelineX, y: rowY, w: labelWidth - 0.6, h: rowHeight,
+                fontSize: 7, fontFace: 'Arial', color: primaryColor, valign: 'middle'
               })
               
-              // Sale blocks for this product
-              for (const sale of productSales) {
+              // Platform badge
+              slide.addShape('rect', {
+                x: timelineX + labelWidth - 0.55, y: rowY + 0.06, w: 0.5, h: rowHeight - 0.12,
+                fill: { color: row.platformInfo.color.replace('#', '') }
+              })
+              slide.addText(row.platformInfo.name.substring(0, 2).toUpperCase(), {
+                x: timelineX + labelWidth - 0.55, y: rowY + 0.06, w: 0.5, h: rowHeight - 0.12,
+                fontSize: 6, fontFace: 'Arial', color: 'ffffff', bold: true,
+                align: 'center', valign: 'middle'
+              })
+              
+              // Sale blocks for this row
+              for (const sale of row.sales) {
                 const saleStart = parseISO(sale.start_date)
                 const saleEnd = parseISO(sale.end_date)
                 const startDay = saleStart.getDate()
                 const endDay = saleEnd.getDate()
-                const platformInfo = getPlatformInfo(sale)
                 
-                const blockX = timelineX + (startDay - 1) * dayWidth
+                const blockX = chartX + (startDay - 1) * dayWidth
                 const blockW = (endDay - startDay + 1) * dayWidth
-                const blockY = timelineY + 0.05 + rowIndex * rowHeight
+                const blockY = rowY + 0.04
+                const blockH = rowHeight - 0.08
                 
                 // Sale block
                 slide.addShape('rect', {
-                  x: blockX, y: blockY, w: Math.max(blockW, 0.15), h: rowHeight - 0.08,
-                  fill: { color: platformInfo.color.replace('#', '') },
-                  line: { color: platformInfo.color.replace('#', ''), pt: 0.5 }
+                  x: blockX, y: blockY, w: Math.max(blockW, 0.1), h: blockH,
+                  fill: { color: row.platformInfo.color.replace('#', '') }
                 })
                 
                 // Discount label on block (if wide enough)
-                if (blockW > 0.4) {
+                if (blockW > 0.35) {
                   slide.addText(`${sale.discount_percentage}%`, {
-                    x: blockX, y: blockY, w: blockW, h: rowHeight - 0.08,
-                    fontSize: 7, fontFace: 'Arial', color: 'ffffff', bold: true,
+                    x: blockX, y: blockY, w: blockW, h: blockH,
+                    fontSize: 6, fontFace: 'Arial', color: 'ffffff', bold: true,
                     align: 'center', valign: 'middle'
                   })
                 }
@@ -331,10 +363,10 @@ export default function TimelineExportModal({
               rowIndex++
             }
             
-            if (Object.keys(salesByProduct).length > maxRows) {
-              slide.addText(`+ ${Object.keys(salesByProduct).length - maxRows} more products`, {
-                x: 0.3, y: 4.8, w: 9.2, h: 0.3,
-                fontSize: 10, fontFace: 'Arial', color: '6b7280', italic: true
+            if (rows.length > maxRows) {
+              slide.addText(`+ ${rows.length - maxRows} more rows`, {
+                x: 0.3, y: timelineY + gridHeight + 0.1, w: 9.2, h: 0.3,
+                fontSize: 9, fontFace: 'Arial', color: '6b7280', italic: true
               })
             }
           }
@@ -395,10 +427,11 @@ export default function TimelineExportModal({
             </p>
           </div>
           
-          {/* Calendar Variation Selection */}
+          {/* Calendar Variation Selection - Always show all 3 */}
           <div className={styles.optionGroup}>
             <label className={styles.optionLabel}>Calendar Variations to Export</label>
             <div className={styles.checkboxGroup}>
+              {/* Current Calendar - always available */}
               <label className={styles.checkbox}>
                 <input 
                   type="checkbox" 
@@ -411,53 +444,62 @@ export default function TimelineExportModal({
                 </span>
               </label>
               
-              {hasVariations && (
-                <>
-                  <div className={styles.checkboxDivider}>Auto-Generated Variations</div>
-                  
-                  {maxCoverageVariation && (
-                    <label className={styles.checkbox}>
-                      <input 
-                        type="checkbox" 
-                        checked={selectedVariations.maxCoverage}
-                        onChange={(e) => setSelectedVariations(prev => ({ ...prev, maxCoverage: e.target.checked }))}
-                      />
-                      <span className={styles.checkboxLabel}>
-                        <strong>Maximum Coverage</strong>
-                        <span className={styles.checkboxMeta}>{maxCoverageVariation.stats.totalSales} sales • {maxCoverageVariation.stats.percentageOnSale}% on sale</span>
-                      </span>
-                    </label>
-                  )}
-                  
-                  {balancedVariation && (
-                    <label className={styles.checkbox}>
-                      <input 
-                        type="checkbox" 
-                        checked={selectedVariations.balanced}
-                        onChange={(e) => setSelectedVariations(prev => ({ ...prev, balanced: e.target.checked }))}
-                      />
-                      <span className={styles.checkboxLabel}>
-                        <strong>Balanced</strong>
-                        <span className={styles.checkboxMeta}>{balancedVariation.stats.totalSales} sales • {balancedVariation.stats.percentageOnSale}% on sale</span>
-                      </span>
-                    </label>
-                  )}
-                  
-                  {eventsOnlyVariation && (
-                    <label className={styles.checkbox}>
-                      <input 
-                        type="checkbox" 
-                        checked={selectedVariations.eventsOnly}
-                        onChange={(e) => setSelectedVariations(prev => ({ ...prev, eventsOnly: e.target.checked }))}
-                      />
-                      <span className={styles.checkboxLabel}>
-                        <strong>Events Only</strong>
-                        <span className={styles.checkboxMeta}>{eventsOnlyVariation.stats.totalSales} sales • {eventsOnlyVariation.stats.percentageOnSale}% on sale</span>
-                      </span>
-                    </label>
-                  )}
-                </>
-              )}
+              {/* Maximum Coverage */}
+              <label className={`${styles.checkbox} ${!maxCoverageVariation ? styles.checkboxDisabled : ''}`}>
+                <input 
+                  type="checkbox" 
+                  checked={selectedVariations.maxCoverage}
+                  disabled={!maxCoverageVariation}
+                  onChange={(e) => setSelectedVariations(prev => ({ ...prev, maxCoverage: e.target.checked }))}
+                />
+                <span className={styles.checkboxLabel}>
+                  <strong>Maximum Coverage</strong>
+                  <span className={styles.checkboxMeta}>
+                    {maxCoverageVariation 
+                      ? `${maxCoverageVariation.stats.totalSales} sales • ${maxCoverageVariation.stats.percentageOnSale}% on sale`
+                      : 'Generate calendar first'
+                    }
+                  </span>
+                </span>
+              </label>
+              
+              {/* Balanced */}
+              <label className={`${styles.checkbox} ${!balancedVariation ? styles.checkboxDisabled : ''}`}>
+                <input 
+                  type="checkbox" 
+                  checked={selectedVariations.balanced}
+                  disabled={!balancedVariation}
+                  onChange={(e) => setSelectedVariations(prev => ({ ...prev, balanced: e.target.checked }))}
+                />
+                <span className={styles.checkboxLabel}>
+                  <strong>Balanced</strong>
+                  <span className={styles.checkboxMeta}>
+                    {balancedVariation 
+                      ? `${balancedVariation.stats.totalSales} sales • ${balancedVariation.stats.percentageOnSale}% on sale`
+                      : 'Generate calendar first'
+                    }
+                  </span>
+                </span>
+              </label>
+              
+              {/* Events Only */}
+              <label className={`${styles.checkbox} ${!eventsOnlyVariation ? styles.checkboxDisabled : ''}`}>
+                <input 
+                  type="checkbox" 
+                  checked={selectedVariations.eventsOnly}
+                  disabled={!eventsOnlyVariation}
+                  onChange={(e) => setSelectedVariations(prev => ({ ...prev, eventsOnly: e.target.checked }))}
+                />
+                <span className={styles.checkboxLabel}>
+                  <strong>Events Only</strong>
+                  <span className={styles.checkboxMeta}>
+                    {eventsOnlyVariation 
+                      ? `${eventsOnlyVariation.stats.totalSales} sales • ${eventsOnlyVariation.stats.percentageOnSale}% on sale`
+                      : 'Generate calendar first'
+                    }
+                  </span>
+                </span>
+              </label>
             </div>
           </div>
           
