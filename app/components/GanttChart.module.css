@@ -74,7 +74,6 @@
   padding: 8px 16px;
   background: linear-gradient(to bottom, #f8fafc, #f1f5f9);
   border-bottom: 1px solid #e2e8f0;
-  cursor: grab;
   user-select: none;
 }
 
@@ -84,7 +83,6 @@
 
 .scrollGrabBar.grabbing {
   background: linear-gradient(to bottom, #e2e8f0, #cbd5e1);
-  cursor: grabbing;
 }
 
 .scrollGrabTrack {
@@ -95,6 +93,7 @@
   position: relative;
   overflow: hidden;
   box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
+  cursor: pointer;
 }
 
 .scrollGrabThumb {
@@ -107,7 +106,7 @@
   align-items: center;
   justify-content: center;
   box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3);
-  transition: left 0.05s ease-out, box-shadow 0.1s;
+  cursor: grab;
 }
 
 .scrollGrabThumb:hover {
@@ -116,7 +115,7 @@
 
 .scrollGrabBar.grabbing .scrollGrabThumb {
   box-shadow: 0 4px 12px rgba(59, 130, 246, 0.5);
-  transition: none;
+  cursor: grabbing;
 }
 
 .scrollGrabIcon {
@@ -134,12 +133,6 @@
   overflow-x: auto;
   overflow-y: auto;
   max-height: calc(100vh - 350px);
-  scroll-behavior: smooth;
-}
-
-/* When grabbing, disable smooth scroll for instant feedback */
-.scrollContainer.grabbing {
-  scroll-behavior: auto;
 }
 
 .timeline {
@@ -289,6 +282,17 @@
   padding: 1px 4px;
   border-radius: 3px;
   white-space: nowrap;
+}
+
+.launchDateBadge.clickable {
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.launchDateBadge.clickable:hover {
+  background: #dcfce7;
+  color: #15803d;
+  transform: scale(1.05);
 }
 
 /* Product Actions Container - holds generate and clear buttons */
