@@ -1,6 +1,6 @@
 'use client'
 
-// DEBUG VERSION v2 - Combined logging to avoid minification issues
+// DEBUG VERSION v3 - Add visual marker at position 308px to verify CSS positioning
 
 import { useState, useMemo, useRef, useCallback, useEffect } from 'react'
 import { DndContext, DragEndEvent, DragStartEvent, useSensor, useSensors, PointerSensor, DragOverlay } from '@dnd-kit/core'
@@ -1004,6 +1004,21 @@ Expected for Jan 12: differenceInDays=11, position=308px
                                     />
                                   )
                                 })}
+                                
+                                {/* DEBUG: Visual marker at position 308px (where Jan 12 should be) */}
+                                <div
+                                  style={{
+                                    position: 'absolute',
+                                    left: 308,
+                                    top: 0,
+                                    width: 3,
+                                    height: '100%',
+                                    background: 'red',
+                                    zIndex: 100,
+                                    pointerEvents: 'none'
+                                  }}
+                                  title="DEBUG: This red line marks position 308px (Jan 12)"
+                                />
                                 
                                 {launchPosition && (
                                   <div
