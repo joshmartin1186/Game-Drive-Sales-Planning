@@ -1,6 +1,6 @@
 'use client'
 
-// Cache invalidation: 2026-01-08T20:35:00Z - Restored from working commit
+// DEBUG VERSION - Added console logging to trace calculation error
 
 import { useState, useMemo, useRef, useCallback, useEffect } from 'react'
 import { DndContext, DragEndEvent, DragStartEvent, useSensor, useSensors, PointerSensor, DragOverlay } from '@dnd-kit/core'
@@ -73,6 +73,11 @@ export default function GanttChart(props: GanttChartProps) {
     showEvents = true
   } = props
   
+  // DEBUG: Log timelineStart
+  console.log('=== GANTT DEBUG ===')
+  console.log('timelineStart:', timelineStart)
+  console.log('timelineStart.toISOString():', timelineStart.toISOString())
+  
   const [draggedSale, setDraggedSale] = useState<SaleWithDetails | null>(null)
   const [validationError, setValidationError] = useState<string | null>(null)
   const [optimisticUpdates, setOptimisticUpdates] = useState<Record<string, { startDate: string; endDate: string }>>({})
@@ -124,6 +129,13 @@ export default function GanttChart(props: GanttChartProps) {
       monthsArr.push({ date: monthDate, days: monthDays.length })
       daysArr.push(...monthDays)
     }
+    
+    // DEBUG: Log days array info
+    console.log('days[0]:', daysArr[0])
+    console.log('days[0].toISOString():', daysArr[0]?.toISOString())
+    console.log('days[11] (Jan 12):', daysArr[11])
+    console.log('days[11].toISOString():', daysArr[11]?.toISOString())
+    console.log('Total days:', daysArr.length)
     
     return { months: monthsArr, days: daysArr, totalDays: daysArr.length }
   }, [timelineStart, monthCount])
@@ -179,6 +191,19 @@ export default function GanttChart(props: GanttChartProps) {
   const getPositionForDate = useCallback((date: Date | string): number => {
     const d = typeof date === 'string' ? normalizeToLocalDate(date) : date
     const daysDiff = differenceInDays(d, days[0])
+    
+    // DEBUG: Log position calculation for sales
+    if (typeof date === 'string' && date.includes('2026-01-12')) {
+      console.log('=== POSITION CALC for 2026-01-12 ===')
+      console.log('Input date string:', date)
+      console.log('Normalized date:', d)
+      console.log('Normalized date ISO:', d.toISOString())
+      console.log('days[0]:', days[0])
+      console.log('days[0] ISO:', days[0].toISOString())
+      console.log('differenceInDays:', daysDiff)
+      console.log('Position (px):', daysDiff * DAY_WIDTH)
+    }
+    
     return daysDiff * DAY_WIDTH
   }, [days])
   
@@ -774,6 +799,20 @@ export default function GanttChart(props: GanttChartProps) {
     return sales.filter(s => s.product_id === productId).length
   }, [sales])
   
+  // DEBUG: Log first sale if exists
+  useEffect(() => {
+    if (sales.length > 0) {
+      const firstSale = sales[0]
+      console.log('=== FIRST SALE DEBUG ===')
+      console.log('Sale:', firstSale.sale_name)
+      console.log('start_date:', firstSale.start_date)
+      console.log('end_date:', firstSale.end_date)
+      const normalized = normalizeToLocalDate(firstSale.start_date)
+      console.log('normalizeToLocalDate result:', normalized)
+      console.log('normalizeToLocalDate ISO:', normalized.toISOString())
+    }
+  }, [sales])
+  
   const totalWidth = totalDays * DAY_WIDTH
   
   return (
@@ -782,6 +821,15 @@ export default function GanttChart(props: GanttChartProps) {
       onMouseLeave={handleMouseLeave}
       ref={containerRef}
     >
+      {/* DEBUG INFO BOX */}
+      <div style={{ background: '#ffe0e0', padding: '10px', margin: '10px 0', fontSize: '12px', fontFamily: 'monospace' }}>
+        <strong>DEBUG INFO (check browser console for more)</strong><br />
+        timelineStart: {timelineStart?.toISOString()}<br />
+        days[0]: {days[0]?.toISOString()}<br />
+        days[11] (should be Jan 12): {days[11]?.toISOString()}<br />
+        First sale: {sales[0]?.sale_name} - {sales[0]?.start_date}
+      </div>
+      
       {validationError && (
         <div className={`${styles.validationError} ${validationError.includes('Auto-shifted') ? styles.infoMessage : ''}`}>
           <span>{validationError.includes('Auto-shifted') ? 'ℹ️' : '⚠️'} {validationError}</span>
@@ -1020,6 +1068,9 @@ export default function GanttChart(props: GanttChartProps) {
                                   const left = getPositionForDate(sale.start_date)
                                   const width = getWidthForRange(sale.start_date, sale.end_date)
                                   const cooldown = getCooldownForSale(sale)
+                                  
+                                  // DEBUG: Log each sale position
+                                  console.log(`Sale ${sale.sale_name}: start=${sale.start_date}, left=${left}px, dayIndex=${left/DAY_WIDTH}`)
                                   
                                   return (
                                     <div key={sale.id} data-sale-block>
