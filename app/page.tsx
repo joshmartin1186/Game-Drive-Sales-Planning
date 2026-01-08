@@ -1,5 +1,7 @@
 'use client'
 
+// Cache invalidation: 2026-01-08T20:50:00Z - Force redeploy
+
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { createClient } from '@supabase/supabase-js'
 import { parseISO, format } from 'date-fns'
@@ -898,7 +900,7 @@ export default function GameDriveDashboard() {
       {error && (
         <div className={styles.errorBanner}>
           <span>Warning: {error}</span>
-          <button onClick={() => setError(null)}>x</button>
+          <button onClick={() => setError(null)}>×</button>
         </div>
       )}
 
