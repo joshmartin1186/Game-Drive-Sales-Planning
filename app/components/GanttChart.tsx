@@ -1,6 +1,6 @@
 'use client'
 
-// Cache invalidation: 2026-01-08T20:15:00Z - Fixed emoji display
+// Cache invalidation: 2026-01-08T20:35:00Z - Restored from working commit
 
 import { useState, useMemo, useRef, useCallback, useEffect } from 'react'
 import { DndContext, DragEndEvent, DragStartEvent, useSensor, useSensors, PointerSensor, DragOverlay } from '@dnd-kit/core'
@@ -125,27 +125,8 @@ export default function GanttChart(props: GanttChartProps) {
       daysArr.push(...monthDays)
     }
     
-    console.log('[TIMELINE DEBUG] timelineStart prop:', timelineStart.toISOString(), 'local:', timelineStart.toString())
-    console.log('[TIMELINE DEBUG] days[0]:', daysArr[0]?.toISOString(), 'local:', daysArr[0]?.toString())
-    console.log('[TIMELINE DEBUG] days[9] (should be Jan 10):', daysArr[9]?.toISOString(), 'local:', daysArr[9]?.toString())
-    console.log('[TIMELINE DEBUG] totalDays:', daysArr.length)
-    
     return { months: monthsArr, days: daysArr, totalDays: daysArr.length }
   }, [timelineStart, monthCount])
-  
-  useEffect(() => {
-    console.log('[SALES DEBUG] === Sales Positioning Analysis ===')
-    sales.forEach(sale => {
-      const normalizedStart = normalizeToLocalDate(sale.start_date)
-      const daysDiff = differenceInDays(normalizedStart, days[0])
-      const left = daysDiff * DAY_WIDTH
-      console.log('[SALES DEBUG] Sale:', sale.sale_name)
-      console.log('  - Raw start_date:', sale.start_date)
-      console.log('  - Normalized:', normalizedStart.toISOString(), 'local:', normalizedStart.toString())
-      console.log('  - days[0]:', days[0]?.toISOString(), 'local:', days[0]?.toString())
-      console.log('  - daysDiff:', daysDiff, 'left:', left, 'px')
-    })
-  }, [sales, days])
   
   const groupedProducts = useMemo(() => {
     const groups: { game: Game & { client: Client }; products: (Product & { game: Game & { client: Client } })[] }[] = []
@@ -1029,3 +1010,75 @@ export default function GanttChart(props: GanttChartProps) {
                                     title={`${event.name}\n${format(event.displayStart, 'MMM d')} - ${format(event.displayEnd, 'MMM d, yyyy')}${!event.requires_cooldown ? '\n★ No cooldown required' : ''}`}
                                   >
                                     <span className={styles.platformEventLabel}>
+                                      {event.name}
+                                      {!event.requires_cooldown && <span className={styles.noCooldownStar}>★</span>}
+                                    </span>
+                                  </div>
+                                ))}
+                                
+                                {platformSales.map(sale => {
+                                  const left = getPositionForDate(sale.start_date)
+                                  const width = getWidthForRange(sale.start_date, sale.end_date)
+                                  const cooldown = getCooldownForSale(sale)
+                                  
+                                  return (
+                                    <div key={sale.id} data-sale-block>
+                                      {cooldown && (
+                                        <div
+                                          className={styles.cooldownBlock}
+                                          style={{
+                                            left: cooldown.left,
+                                            width: cooldown.width
+                                          }}
+                                          title={`Cooldown until ${format(cooldown.end, 'MMM d, yyyy')}`}
+                                        >
+                                          <span>COOLDOWN</span>
+                                        </div>
+                                      )}
+                                      
+                                      <SaleBlock
+                                        sale={sale}
+                                        left={left}
+                                        width={width}
+                                        onEdit={onSaleEdit}
+                                        onDelete={onSaleDelete}
+                                      />
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )
+                  })}
+                </div>
+              ))}
+              
+              {groupedProducts.length === 0 && (
+                <div className={styles.emptyState}>
+                  <p>No products found. Add products to start planning sales.</p>
+                </div>
+              )}
+            </div>
+          </div>
+          
+          <DragOverlay>
+            {draggedSale && (
+              <div 
+                className={styles.dragOverlay}
+                style={{ 
+                  backgroundColor: draggedSale.platform?.color_hex || '#3b82f6',
+                  width: getWidthForRange(draggedSale.start_date, draggedSale.end_date)
+                }}
+              >
+                {draggedSale.sale_name || 'Sale'} -{draggedSale.discount_percentage}%
+              </div>
+            )}
+          </DragOverlay>
+        </DndContext>
+      </div>
+    </div>
+  )
+}
