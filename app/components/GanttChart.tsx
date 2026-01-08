@@ -1,7 +1,5 @@
 'use client'
 
-// DEBUG VERSION v4 - Add markers at different positions to test alignment
-
 import { useState, useMemo, useRef, useCallback, useEffect } from 'react'
 import { DndContext, DragEndEvent, DragStartEvent, useSensor, useSensors, PointerSensor, DragOverlay } from '@dnd-kit/core'
 import { format, addDays, differenceInDays, parseISO, startOfMonth, endOfMonth, eachDayOfInterval } from 'date-fns'
@@ -83,9 +81,6 @@ export default function GanttChart(props: GanttChartProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const scrollTrackRef = useRef<HTMLDivElement>(null)
-  
-  // DEBUG: Store calculation results for display
-  const [debugInfo, setDebugInfo] = useState<string>('')
   
   const selectionRef = useRef<{
     data: SelectionState
@@ -196,34 +191,6 @@ export default function GanttChart(props: GanttChartProps) {
     const d = typeof date === 'string' ? normalizeToLocalDate(date) : date
     return differenceInDays(d, days[0])
   }, [days])
-  
-  // DEBUG: Calculate and store debug info when sales change
-  useEffect(() => {
-    if (sales.length > 0 && days.length > 0) {
-      const firstSale = sales.find(s => s.start_date.includes('2026-01-12')) || sales[0]
-      const normalizedDate = normalizeToLocalDate(firstSale.start_date)
-      const daysDiff = differenceInDays(normalizedDate, days[0])
-      const position = daysDiff * DAY_WIDTH
-      
-      // Check what day header index 11 would show
-      const dayAtIndex11 = days[11]
-      
-      const info = `
-SALE: ${firstSale.sale_name}
-start_date from DB: "${firstSale.start_date}"
-normalizeToLocalDate result: ${normalizedDate.toISOString()}
-days[0]: ${days[0].toISOString()}
-days[11]: ${dayAtIndex11?.toISOString()} (getDate: ${dayAtIndex11?.getDate()})
-differenceInDays: ${daysDiff}
-Position: ${position}px (should appear at column ${daysDiff + 1})
-timelineStart prop: ${timelineStart.toISOString()}
-Total days in array: ${days.length}
-      `.trim()
-      
-      setDebugInfo(info)
-      console.log('=== FULL DEBUG INFO ===\n' + info)
-    }
-  }, [sales, days, timelineStart])
   
   const getEventsForPlatform = useCallback((platformId: string) => {
     const events = eventsByPlatform.get(platformId) || []
@@ -813,12 +780,6 @@ Total days in array: ${days.length}
       onMouseLeave={handleMouseLeave}
       ref={containerRef}
     >
-      {/* DEBUG INFO BOX - Shows calculated values */}
-      <div style={{ background: '#ffe0e0', padding: '10px', margin: '10px 0', fontSize: '11px', fontFamily: 'monospace', whiteSpace: 'pre-wrap', border: '2px solid red' }}>
-        <strong>🔴 DEBUG - POSITION CALCULATION</strong><br />
-        {debugInfo || 'Loading...'}
-      </div>
-      
       {validationError && (
         <div className={`${styles.validationError} ${validationError.includes('Auto-shifted') ? styles.infoMessage : ''}`}>
           <span>{validationError.includes('Auto-shifted') ? 'ℹ️' : '⚠️'} {validationError}</span>
@@ -867,7 +828,6 @@ Total days in array: ${days.length}
           onDragEnd={handleDragEnd}
         >
           <div className={styles.timeline} style={{ width: totalWidth }}>
-            {/* DEBUG: Add marker in day headers at position 11 (should be Jan 12) */}
             <div className={styles.monthHeaders}>
               {months.map(({ date, days: daysInMonth }, idx) => (
                 <div 
@@ -880,21 +840,7 @@ Total days in array: ${days.length}
               ))}
             </div>
             
-            <div className={styles.dayHeaders} style={{ position: 'relative' }}>
-              {/* DEBUG: Blue marker in headers at index 11 (should align with "12") */}
-              <div
-                style={{
-                  position: 'absolute',
-                  left: 11 * DAY_WIDTH,
-                  top: 0,
-                  width: 3,
-                  height: '100%',
-                  background: 'blue',
-                  zIndex: 100,
-                  pointerEvents: 'none'
-                }}
-                title="DEBUG: Blue line at header index 11 (should be under '12')"
-              />
+            <div className={styles.dayHeaders}>
               {days.map((day, idx) => {
                 const isWeekend = day.getDay() === 0 || day.getDay() === 6
                 const isFirstOfMonth = day.getDate() === 1
@@ -1024,36 +970,6 @@ Total days in array: ${days.length}
                                     />
                                   )
                                 })}
-                                
-                                {/* DEBUG: Red marker at position 308px (where Jan 12 should be based on calculation) */}
-                                <div
-                                  style={{
-                                    position: 'absolute',
-                                    left: 308,
-                                    top: 0,
-                                    width: 3,
-                                    height: '100%',
-                                    background: 'red',
-                                    zIndex: 100,
-                                    pointerEvents: 'none'
-                                  }}
-                                  title="DEBUG: Red line at 308px (calculated position for Jan 12)"
-                                />
-                                
-                                {/* DEBUG: Green marker at position 0 (first column) */}
-                                <div
-                                  style={{
-                                    position: 'absolute',
-                                    left: 0,
-                                    top: 0,
-                                    width: 3,
-                                    height: '100%',
-                                    background: 'lime',
-                                    zIndex: 100,
-                                    pointerEvents: 'none'
-                                  }}
-                                  title="DEBUG: Green line at position 0 (should be Jan 1)"
-                                />
                                 
                                 {launchPosition && (
                                   <div
