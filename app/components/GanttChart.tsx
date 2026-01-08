@@ -1,6 +1,6 @@
 'use client'
 
-// Cache invalidation: 2026-01-08T19:45:00Z - Debug logging for Issue #2
+// Cache invalidation: 2026-01-08T20:15:00Z - Fixed emoji display
 
 import { useState, useMemo, useRef, useCallback, useEffect } from 'react'
 import { DndContext, DragEndEvent, DragStartEvent, useSensor, useSensors, PointerSensor, DragOverlay } from '@dnd-kit/core'
@@ -803,7 +803,7 @@ export default function GanttChart(props: GanttChartProps) {
     >
       {validationError && (
         <div className={`${styles.validationError} ${validationError.includes('Auto-shifted') ? styles.infoMessage : ''}`}>
-          <span>{validationError.includes('Auto-shifted') ? '\u2139\ufe0f' : '\u26a0\ufe0f'} {validationError}</span>
+          <span>{validationError.includes('Auto-shifted') ? 'ℹ️' : '⚠️'} {validationError}</span>
         </div>
       )}
       
@@ -834,7 +834,7 @@ export default function GanttChart(props: GanttChartProps) {
             style={scrollThumbStyle}
             onMouseDown={handleScrollThumbStart}
           >
-            <span className={styles.scrollGrabIcon}>\u27f7</span>
+            <span className={styles.scrollGrabIcon}>⟷</span>
           </div>
         </div>
         <span className={styles.scrollGrabHint}>
@@ -905,7 +905,7 @@ export default function GanttChart(props: GanttChartProps) {
                                   onClick={() => onEditLaunchDate && product.launch_date && onEditLaunchDate(product.id, product.name, product.launch_date)}
                                   title="Click to edit launch date"
                                 >
-                                  \ud83d\ude80 {format(normalizeToLocalDate(product.launch_date), 'MMM d')}
+                                  🚀 {format(normalizeToLocalDate(product.launch_date), 'MMM d')}
                                 </span>
                               )}
                             </div>
@@ -916,7 +916,7 @@ export default function GanttChart(props: GanttChartProps) {
                                   onClick={() => onGenerateCalendar(product.id, product.name, product.launch_date || undefined)}
                                   title="Auto-generate sale calendar for this product"
                                 >
-                                  \ud83d\uddd3\ufe0f
+                                  🗓️
                                 </button>
                               )}
                               {onClearSales && saleCount > 0 && (
@@ -925,7 +925,7 @@ export default function GanttChart(props: GanttChartProps) {
                                   onClick={() => onClearSales(product.id, product.name)}
                                   title={`Clear sales for this product (${saleCount})`}
                                 >
-                                  \ud83d\uddd1\ufe0f
+                                  🗑️
                                 </button>
                               )}
                             </div>
@@ -953,7 +953,7 @@ export default function GanttChart(props: GanttChartProps) {
                               >
                                 <div className={styles.launchMarkerLine} />
                                 <div className={styles.launchMarkerFlag}>
-                                  \ud83d\ude80
+                                  🚀
                                 </div>
                               </div>
                             )}
@@ -1026,78 +1026,6 @@ export default function GanttChart(props: GanttChartProps) {
                                       backgroundColor: `${platform.color_hex}25`,
                                       borderColor: platform.color_hex,
                                     }}
-                                    title={`${event.name}\n${format(event.displayStart, 'MMM d')} - ${format(event.displayEnd, 'MMM d, yyyy')}${!event.requires_cooldown ? '\n\u2605 No cooldown required' : ''}`}
+                                    title={`${event.name}\n${format(event.displayStart, 'MMM d')} - ${format(event.displayEnd, 'MMM d, yyyy')}${!event.requires_cooldown ? '\n★ No cooldown required' : ''}`}
                                   >
                                     <span className={styles.platformEventLabel}>
-                                      {event.name}
-                                      {!event.requires_cooldown && <span className={styles.noCooldownStar}>\u2605</span>}
-                                    </span>
-                                  </div>
-                                ))}
-                                
-                                {platformSales.map(sale => {
-                                  const left = getPositionForDate(sale.start_date)
-                                  const width = getWidthForRange(sale.start_date, sale.end_date)
-                                  const cooldown = getCooldownForSale(sale)
-                                  
-                                  return (
-                                    <div key={sale.id} data-sale-block>
-                                      {cooldown && (
-                                        <div
-                                          className={styles.cooldownBlock}
-                                          style={{
-                                            left: cooldown.left,
-                                            width: cooldown.width
-                                          }}
-                                          title={`Cooldown until ${format(cooldown.end, 'MMM d, yyyy')}`}
-                                        >
-                                          <span>COOLDOWN</span>
-                                        </div>
-                                      )}
-                                      
-                                      <SaleBlock
-                                        sale={sale}
-                                        left={left}
-                                        width={width}
-                                        onEdit={onSaleEdit}
-                                        onDelete={onSaleDelete}
-                                      />
-                                    </div>
-                                  )
-                                })}
-                              </div>
-                            </div>
-                          )
-                        })}
-                      </div>
-                    )
-                  })}
-                </div>
-              ))}
-              
-              {groupedProducts.length === 0 && (
-                <div className={styles.emptyState}>
-                  <p>No products found. Add products to start planning sales.</p>
-                </div>
-              )}
-            </div>
-          </div>
-          
-          <DragOverlay>
-            {draggedSale && (
-              <div 
-                className={styles.dragOverlay}
-                style={{ 
-                  backgroundColor: draggedSale.platform?.color_hex || '#3b82f6',
-                  width: getWidthForRange(draggedSale.start_date, draggedSale.end_date)
-                }}
-              >
-                {draggedSale.sale_name || 'Sale'} -{draggedSale.discount_percentage}%
-              </div>
-            )}
-          </DragOverlay>
-        </DndContext>
-      </div>
-    </div>
-  )
-}
