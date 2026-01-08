@@ -1,6 +1,6 @@
 'use client'
 
-// DEBUG VERSION v3 - Add visual marker at position 308px to verify CSS positioning
+// DEBUG VERSION v4 - Add markers at different positions to test alignment
 
 import { useState, useMemo, useRef, useCallback, useEffect } from 'react'
 import { DndContext, DragEndEvent, DragStartEvent, useSensor, useSensors, PointerSensor, DragOverlay } from '@dnd-kit/core'
@@ -205,20 +205,25 @@ export default function GanttChart(props: GanttChartProps) {
       const daysDiff = differenceInDays(normalizedDate, days[0])
       const position = daysDiff * DAY_WIDTH
       
+      // Check what day header index 11 would show
+      const dayAtIndex11 = days[11]
+      
       const info = `
 SALE: ${firstSale.sale_name}
 start_date from DB: "${firstSale.start_date}"
 normalizeToLocalDate result: ${normalizedDate.toISOString()}
 days[0]: ${days[0].toISOString()}
+days[11]: ${dayAtIndex11?.toISOString()} (getDate: ${dayAtIndex11?.getDate()})
 differenceInDays: ${daysDiff}
 Position: ${position}px (should appear at column ${daysDiff + 1})
-Expected for Jan 12: differenceInDays=11, position=308px
+timelineStart prop: ${timelineStart.toISOString()}
+Total days in array: ${days.length}
       `.trim()
       
       setDebugInfo(info)
       console.log('=== FULL DEBUG INFO ===\n' + info)
     }
-  }, [sales, days])
+  }, [sales, days, timelineStart])
   
   const getEventsForPlatform = useCallback((platformId: string) => {
     const events = eventsByPlatform.get(platformId) || []
@@ -862,6 +867,7 @@ Expected for Jan 12: differenceInDays=11, position=308px
           onDragEnd={handleDragEnd}
         >
           <div className={styles.timeline} style={{ width: totalWidth }}>
+            {/* DEBUG: Add marker in day headers at position 11 (should be Jan 12) */}
             <div className={styles.monthHeaders}>
               {months.map(({ date, days: daysInMonth }, idx) => (
                 <div 
@@ -874,7 +880,21 @@ Expected for Jan 12: differenceInDays=11, position=308px
               ))}
             </div>
             
-            <div className={styles.dayHeaders}>
+            <div className={styles.dayHeaders} style={{ position: 'relative' }}>
+              {/* DEBUG: Blue marker in headers at index 11 (should align with "12") */}
+              <div
+                style={{
+                  position: 'absolute',
+                  left: 11 * DAY_WIDTH,
+                  top: 0,
+                  width: 3,
+                  height: '100%',
+                  background: 'blue',
+                  zIndex: 100,
+                  pointerEvents: 'none'
+                }}
+                title="DEBUG: Blue line at header index 11 (should be under '12')"
+              />
               {days.map((day, idx) => {
                 const isWeekend = day.getDay() === 0 || day.getDay() === 6
                 const isFirstOfMonth = day.getDate() === 1
@@ -1005,7 +1025,7 @@ Expected for Jan 12: differenceInDays=11, position=308px
                                   )
                                 })}
                                 
-                                {/* DEBUG: Visual marker at position 308px (where Jan 12 should be) */}
+                                {/* DEBUG: Red marker at position 308px (where Jan 12 should be based on calculation) */}
                                 <div
                                   style={{
                                     position: 'absolute',
@@ -1017,7 +1037,22 @@ Expected for Jan 12: differenceInDays=11, position=308px
                                     zIndex: 100,
                                     pointerEvents: 'none'
                                   }}
-                                  title="DEBUG: This red line marks position 308px (Jan 12)"
+                                  title="DEBUG: Red line at 308px (calculated position for Jan 12)"
+                                />
+                                
+                                {/* DEBUG: Green marker at position 0 (first column) */}
+                                <div
+                                  style={{
+                                    position: 'absolute',
+                                    left: 0,
+                                    top: 0,
+                                    width: 3,
+                                    height: '100%',
+                                    background: 'lime',
+                                    zIndex: 100,
+                                    pointerEvents: 'none'
+                                  }}
+                                  title="DEBUG: Green line at position 0 (should be Jan 1)"
                                 />
                                 
                                 {launchPosition && (
