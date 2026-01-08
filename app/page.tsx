@@ -1,6 +1,6 @@
 'use client'
 
-// Cache invalidation: 2026-01-08T20:50:00Z - Force redeploy
+// Cache invalidation: 2026-01-08T21:45:00Z - Fix stat icons
 
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { createClient } from '@supabase/supabase-js'
@@ -907,7 +907,7 @@ export default function GameDriveDashboard() {
       {/* Header Stats */}
       <div className={styles.statsGrid}>
         <div className={styles.statCard}>
-          <div className={styles.statIcon} style={{backgroundColor: '#10b981'}}>Stats</div>
+          <div className={styles.statIcon} style={{backgroundColor: '#10b981'}}>📊</div>
           <div className={styles.statContent}>
             <h3>TOTAL SALES</h3>
             <p className={styles.statValue}>{filteredSales.length}</p>
@@ -916,7 +916,7 @@ export default function GameDriveDashboard() {
         </div>
 
         <div className={styles.statCard}>
-          <div className={styles.statIcon} style={{backgroundColor: '#3b82f6'}}>Games</div>
+          <div className={styles.statIcon} style={{backgroundColor: '#3b82f6'}}>🎮</div>
           <div className={styles.statContent}>
             <h3>PRODUCTS</h3>
             <p className={styles.statValue}>{filteredProducts.length}</p>
@@ -925,7 +925,7 @@ export default function GameDriveDashboard() {
         </div>
 
         <div className={styles.statCard}>
-          <div className={styles.statIcon} style={{backgroundColor: '#8b5cf6'}}>Cal</div>
+          <div className={styles.statIcon} style={{backgroundColor: '#8b5cf6'}}>📅</div>
           <div className={styles.statContent}>
             <h3>PLATFORM EVENTS</h3>
             <p className={styles.statValue}>{upcomingEvents}</p>
@@ -935,7 +935,7 @@ export default function GameDriveDashboard() {
 
         <div className={styles.statCard}>
           <div className={styles.statIcon} style={{backgroundColor: conflicts > 0 ? '#ef4444' : '#22c55e'}}>
-            {conflicts > 0 ? '!' : 'OK'}
+            {conflicts > 0 ? '⚠️' : '✅'}
           </div>
           <div className={styles.statContent}>
             <h3>CONFLICTS</h3>
