@@ -87,8 +87,50 @@
   background: linear-gradient(to bottom, #e2e8f0, #cbd5e1);
 }
 
-.scrollGrabTrack {
+/* Container for Today button and scroll track */
+.scrollBarControls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
   width: 100%;
+}
+
+/* Today Button */
+.todayButton {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  box-shadow: 0 2px 4px rgba(239, 68, 68, 0.3);
+  transition: all 0.15s;
+}
+
+.todayButton:hover:not(:disabled) {
+  background: linear-gradient(135deg, #dc2626, #b91c1c);
+  box-shadow: 0 3px 8px rgba(239, 68, 68, 0.4);
+  transform: translateY(-1px);
+}
+
+.todayButton:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.todayButton:disabled {
+  background: #cbd5e1;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.scrollGrabTrack {
+  flex: 1;
   height: 20px;
   background: #e2e8f0;
   border-radius: 12px;
@@ -193,6 +235,42 @@
 
 .dayHeader.monthStart {
   border-left: 2px solid #cbd5e1;
+}
+
+/* Today's date header highlight */
+.dayHeader.todayHeader {
+  background: #fef2f2;
+  color: #dc2626;
+  font-weight: 700;
+  border-bottom: 2px solid #ef4444;
+}
+
+/* Today indicator line - runs through entire timeline */
+.todayIndicator {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: #ef4444;
+  z-index: 15;
+  pointer-events: none;
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.4);
+}
+
+.todayIndicatorLabel {
+  position: absolute;
+  top: 66px; /* Below the month and day headers */
+  left: 50%;
+  transform: translateX(-50%);
+  background: #ef4444;
+  color: white;
+  font-size: 0.5625rem;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 3px;
+  white-space: nowrap;
+  letter-spacing: 0.5px;
+  box-shadow: 0 2px 4px rgba(239, 68, 68, 0.3);
 }
 
 .productRows {
