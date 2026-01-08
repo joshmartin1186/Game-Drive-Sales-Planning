@@ -142,16 +142,12 @@
   min-width: max-content;
 }
 
-/* CRITICAL FIX: Add left padding to headers to align with timeline rows */
-/* The productLabel/platformLabel columns are 220px wide and sticky */
-/* Headers need the same offset to align with the timeline content */
 .monthHeaders {
   display: flex;
   position: sticky;
   top: 0;
   z-index: 20;
   background: white;
-  padding-left: 220px; /* Match the label column width */
 }
 
 .monthHeader {
@@ -165,14 +161,12 @@
   border-right: 1px solid #e2e8f0;
 }
 
-/* CRITICAL FIX: Add left padding to day headers to align with timeline rows */
 .dayHeaders {
   display: flex;
   position: sticky;
   top: 33px;
   z-index: 20;
   background: white;
-  padding-left: 220px; /* Match the label column width */
 }
 
 .dayHeader {
@@ -427,7 +421,7 @@
   position: relative;
   height: 100%;
   flex: 1;
-  overflow: hidden;
+  overflow: visible; /* Changed from hidden to visible to check if clipping is an issue */
 }
 
 /* Clickable timeline for creating sales */
