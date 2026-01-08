@@ -34,7 +34,7 @@
 
 ---
 
-## Current Status: January 1, 2026
+## Current Status: January 8, 2025
 
 ### Completion Summary
 | Phase | Status | Completion |
@@ -56,7 +56,61 @@
 
 ---
 
+## Client Feedback Issues (Jan 6, 2025)
+
+GitHub Issues created from Alisa's feedback email and weekly call:
+
+### ✅ Completed
+| Issue | Title | Status |
+|-------|-------|--------|
+| #2 | Timeline vs Sale Modal Date Mismatch | ✅ Fixed Jan 8 |
+
+### 🔴 Critical Priority
+| Issue | Title | Description |
+|-------|-------|-------------|
+| #1 | PowerPoint Export Bug | Returns empty presentation with only title cards |
+| #3 | "Today" Date Visibility | Cannot scroll to see current date on calendar |
+
+### 🟠 High Priority
+| Issue | Title | Description |
+|-------|-------|-------------|
+| #4 | Duration Input Flexibility | Remove 14-day limit, allow hard Start/End dates |
+| #5 | Resize Sales on Timeline | Drag edges to change duration directly |
+| #6 | Auto-Generate Platform Selection | Choose platforms, exclude 0-day cooldown |
+| #7 | Platform Color Editing | Add color picker, some colors too similar |
+
+### 🟡 Medium Priority
+| Issue | Title | Description |
+|-------|-------|-------------|
+| #8 | Sales Gap Indicator | Show "X days without sale in Q1" per platform |
+| #9 | Historical Sales Import | Bulk import from Excel master sheet |
+| #10 | Version/Draft System | Save multiple calendar versions, compare |
+
+---
+
 ## Recent Session Log
+
+### January 8, 2025 - Issue #2 Resolution
+
+#### Issue #2: Timeline vs Sale Modal Date Mismatch
+**Problem:** Sales created via modal showed on wrong dates on timeline (off by one day)
+
+**Root Causes Found & Fixed:**
+1. **Midnight normalization** - Date parsing was shifting dates due to timezone
+2. **Header alignment** - 220px header padding wasn't applied to day headers, causing misalignment
+3. **Emoji rendering** - Unicode escapes (`\u{1F680}`) not rendering as actual emojis
+
+**Commits:**
+| Commit | Description |
+|--------|-------------|
+| `2de34bc8` | Fix header alignment (220px padding) + emoji rendering |
+
+**Cooldown Calculation Verified:** ✅
+- Alisa's rule: "end date + 30 days = first valid start date"
+- Code correctly implements: `addDays(existingEnd, cooldownDays)` with `isBefore()` check
+- Day 30 is allowed, days 1-29 are blocked - matches exact formula
+
+---
 
 ### January 1, 2026 - Timeline CSS Breakage Fix & Legend Cleanup
 
@@ -209,7 +263,7 @@ Removed duplicate "Platform Cooldown Periods" legend section from bottom of page
 - [x] Clear filters button
 - [x] Stats update based on filters
 
-### UI/UX Polish (Dec 29, Jan 1)
+### UI/UX Polish (Dec 29, Jan 1, Jan 8)
 - [x] Clean typography with Inter font
 - [x] Bold, readable text (font-weight 600-700)
 - [x] Vibrant color palette
@@ -220,6 +274,8 @@ Removed duplicate "Platform Cooldown Periods" legend section from bottom of page
 - [x] Error handling with user feedback
 - [x] Wider columns (220px) for better readability
 - [x] Larger buttons (26px) for easier interaction
+- [x] Fixed header alignment for month/day columns
+- [x] Proper emoji rendering (🚀 🗓️ 🗑️)
 
 ---
 
@@ -237,27 +293,40 @@ Removed duplicate "Platform Cooldown Periods" legend section from bottom of page
 
 ## Next Development Priorities
 
-1. **Automatically create sale calendar feature** - Per project requirements
-2. **Excel export** - Must match existing column structure for Alisa's formulas:
-   ```
-   Start date | End date | Days | Platform | Cooldown | Sale Name | Product | 
-   Campaign? | Goal | Discount % | Submitted? | Confirmed? | Comment | 
-   Cooldown Until | Prev. Sale Stops Date
-   ```
-3. **Steam API integration** - Performance data correlation
-4. **Multi-client architecture** - Data isolation with conflict detection
-5. **Authentication** - User login, client-specific access
+### Immediate (From Client Feedback)
+1. **Issue #1: PowerPoint Export** - Demo-blocking bug
+2. **Issue #3: Today Date Visibility** - Basic navigation broken
+
+### Short-term
+3. **Issue #4-7:** Duration flexibility, resize, auto-generate, colors
+4. **Auto sale calendar feature** - Per project requirements
+
+### Medium-term
+5. **Excel export** - Must match existing column structure for Alisa's formulas
+6. **Steam API integration** - Performance data correlation
+7. **Multi-client architecture** - Data isolation with conflict detection
 
 ---
 
 ## Known Issues & Technical Debt
 
+### Active Issues (GitHub)
+- [ ] #1 PowerPoint Export Bug - returns empty presentation
+- [ ] #3 "Today" Date Visibility - can't scroll to current date
+- [ ] #4 Duration Input Flexibility - remove 14-day limit
+- [ ] #5 Resize Sales on Timeline - drag edges
+- [ ] #6 Auto-Generate Platform Selection - choose platforms
+- [ ] #7 Platform Color Editing - add color picker
+- [ ] #8 Sales Gap Indicator - show gaps per platform
+- [ ] #9 Historical Sales Import - bulk Excel import
+- [ ] #10 Version/Draft System - save multiple versions
+
 ### To Address
 - [ ] Conflicts card shows 0 - needs actual calculation
 - [ ] No authentication yet - all data visible to all users
-- [ ] No Excel export yet
 
 ### Resolved Issues
+- [x] #2 Timeline vs Sale Modal Date Mismatch → Fixed header alignment + emoji rendering
 - [x] Tailwind compilation failures → Switched to CSS Modules
 - [x] TypeScript errors on planning page → Added missing props
 - [x] Delete button styling inconsistent → Unified CSS classes
@@ -291,6 +360,7 @@ src/
 └── lib/
     ├── supabase.ts                # Supabase client
     ├── types.ts                   # TypeScript interfaces
+    ├── dateUtils.ts               # Date normalization helpers
     └── validation.ts              # Sale validation logic
 docs/
 ├── PROJECT_PROGRESS.md            # This file
@@ -308,4 +378,4 @@ docs/
 
 ---
 
-*Last Updated: January 1, 2026*
+*Last Updated: January 8, 2025*
