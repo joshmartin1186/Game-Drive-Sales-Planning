@@ -863,7 +863,7 @@ export default function GameDriveDashboard() {
   const conflicts = 0
   const upcomingEvents = platformEvents.filter(e => new Date(e.start_date) > new Date()).length
 
-  // FIX: Create timelineStart at midnight to match eachDayOfInterval() dates
+  // FIX: Create timelineStart at midnight to match eachDayOfInterval behavior
   const now = new Date()
   const timelineStart = new Date(now.getFullYear(), now.getMonth(), 1)
   const monthCount = 12
@@ -897,15 +897,15 @@ export default function GameDriveDashboard() {
 
       {error && (
         <div className={styles.errorBanner}>
-          <span>\u26A0\uFE0F {error}</span>
-          <button onClick={() => setError(null)}>\u00D7</button>
+          <span>Warning: {error}</span>
+          <button onClick={() => setError(null)}>x</button>
         </div>
       )}
 
       {/* Header Stats */}
       <div className={styles.statsGrid}>
         <div className={styles.statCard}>
-          <div className={styles.statIcon} style={{backgroundColor: '#10b981'}}>\uD83D\uDCCA</div>
+          <div className={styles.statIcon} style={{backgroundColor: '#10b981'}}>Stats</div>
           <div className={styles.statContent}>
             <h3>TOTAL SALES</h3>
             <p className={styles.statValue}>{filteredSales.length}</p>
@@ -914,7 +914,7 @@ export default function GameDriveDashboard() {
         </div>
 
         <div className={styles.statCard}>
-          <div className={styles.statIcon} style={{backgroundColor: '#3b82f6'}}>\uD83C\uDFAE</div>
+          <div className={styles.statIcon} style={{backgroundColor: '#3b82f6'}}>Games</div>
           <div className={styles.statContent}>
             <h3>PRODUCTS</h3>
             <p className={styles.statValue}>{filteredProducts.length}</p>
@@ -923,7 +923,7 @@ export default function GameDriveDashboard() {
         </div>
 
         <div className={styles.statCard}>
-          <div className={styles.statIcon} style={{backgroundColor: '#8b5cf6'}}>\uD83D\uDCC5</div>
+          <div className={styles.statIcon} style={{backgroundColor: '#8b5cf6'}}>Cal</div>
           <div className={styles.statContent}>
             <h3>PLATFORM EVENTS</h3>
             <p className={styles.statValue}>{upcomingEvents}</p>
@@ -933,7 +933,7 @@ export default function GameDriveDashboard() {
 
         <div className={styles.statCard}>
           <div className={styles.statIcon} style={{backgroundColor: conflicts > 0 ? '#ef4444' : '#22c55e'}}>
-            {conflicts > 0 ? '\u26A0\uFE0F' : '\u2713'}
+            {conflicts > 0 ? '!' : 'OK'}
           </div>
           <div className={styles.statContent}>
             <h3>CONFLICTS</h3>
@@ -999,13 +999,13 @@ export default function GameDriveDashboard() {
             className={`${styles.toggleBtn} ${viewMode === 'gantt' ? styles.active : ''}`}
             onClick={() => setViewMode('gantt')}
           >
-            \uD83D\uDCC5 Timeline
+            Timeline
           </button>
           <button 
             className={`${styles.toggleBtn} ${viewMode === 'table' ? styles.active : ''}`}
             onClick={() => setViewMode('table')}
           >
-            \uD83D\uDCCB Table
+            Table
           </button>
         </div>
         
@@ -1014,19 +1014,19 @@ export default function GameDriveDashboard() {
             + Add Sale
           </button>
           <button className={styles.secondaryBtn} onClick={() => setShowProductManager(true)}>
-            \u2699\uFE0F Manage Products
+            Manage Products
           </button>
           <button className={styles.secondaryBtn} onClick={() => setShowPlatformSettings(true)}>
-            \uD83D\uDCC5 Platform Settings
+            Platform Settings
           </button>
           <button 
             className={styles.secondaryBtn} 
             onClick={() => setShowExportModal(true)}
           >
-            \uD83D\uDCCA Export
+            Export
           </button>
           <button className={styles.secondaryBtn} onClick={fetchData}>
-            \uD83D\uDD04 Refresh
+            Refresh
           </button>
         </div>
       </div>
