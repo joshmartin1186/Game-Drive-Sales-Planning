@@ -1,6 +1,6 @@
 'use client'
 
-// DEBUG VERSION - Added console logging to trace calculation error
+// DEBUG VERSION v2 - Combined logging to avoid minification issues
 
 import { useState, useMemo, useRef, useCallback, useEffect } from 'react'
 import { DndContext, DragEndEvent, DragStartEvent, useSensor, useSensors, PointerSensor, DragOverlay } from '@dnd-kit/core'
@@ -73,11 +73,6 @@ export default function GanttChart(props: GanttChartProps) {
     showEvents = true
   } = props
   
-  // DEBUG: Log timelineStart
-  console.log('=== GANTT DEBUG ===')
-  console.log('timelineStart:', timelineStart)
-  console.log('timelineStart.toISOString():', timelineStart.toISOString())
-  
   const [draggedSale, setDraggedSale] = useState<SaleWithDetails | null>(null)
   const [validationError, setValidationError] = useState<string | null>(null)
   const [optimisticUpdates, setOptimisticUpdates] = useState<Record<string, { startDate: string; endDate: string }>>({})
@@ -88,6 +83,9 @@ export default function GanttChart(props: GanttChartProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const scrollTrackRef = useRef<HTMLDivElement>(null)
+  
+  // DEBUG: Store calculation results for display
+  const [debugInfo, setDebugInfo] = useState<string>('')
   
   const selectionRef = useRef<{
     data: SelectionState
@@ -129,13 +127,6 @@ export default function GanttChart(props: GanttChartProps) {
       monthsArr.push({ date: monthDate, days: monthDays.length })
       daysArr.push(...monthDays)
     }
-    
-    // DEBUG: Log days array info
-    console.log('days[0]:', daysArr[0])
-    console.log('days[0].toISOString():', daysArr[0]?.toISOString())
-    console.log('days[11] (Jan 12):', daysArr[11])
-    console.log('days[11].toISOString():', daysArr[11]?.toISOString())
-    console.log('Total days:', daysArr.length)
     
     return { months: monthsArr, days: daysArr, totalDays: daysArr.length }
   }, [timelineStart, monthCount])
@@ -191,19 +182,6 @@ export default function GanttChart(props: GanttChartProps) {
   const getPositionForDate = useCallback((date: Date | string): number => {
     const d = typeof date === 'string' ? normalizeToLocalDate(date) : date
     const daysDiff = differenceInDays(d, days[0])
-    
-    // DEBUG: Log position calculation for sales
-    if (typeof date === 'string' && date.includes('2026-01-12')) {
-      console.log('=== POSITION CALC for 2026-01-12 ===')
-      console.log('Input date string:', date)
-      console.log('Normalized date:', d)
-      console.log('Normalized date ISO:', d.toISOString())
-      console.log('days[0]:', days[0])
-      console.log('days[0] ISO:', days[0].toISOString())
-      console.log('differenceInDays:', daysDiff)
-      console.log('Position (px):', daysDiff * DAY_WIDTH)
-    }
-    
     return daysDiff * DAY_WIDTH
   }, [days])
   
@@ -218,6 +196,29 @@ export default function GanttChart(props: GanttChartProps) {
     const d = typeof date === 'string' ? normalizeToLocalDate(date) : date
     return differenceInDays(d, days[0])
   }, [days])
+  
+  // DEBUG: Calculate and store debug info when sales change
+  useEffect(() => {
+    if (sales.length > 0 && days.length > 0) {
+      const firstSale = sales.find(s => s.start_date.includes('2026-01-12')) || sales[0]
+      const normalizedDate = normalizeToLocalDate(firstSale.start_date)
+      const daysDiff = differenceInDays(normalizedDate, days[0])
+      const position = daysDiff * DAY_WIDTH
+      
+      const info = `
+SALE: ${firstSale.sale_name}
+start_date from DB: "${firstSale.start_date}"
+normalizeToLocalDate result: ${normalizedDate.toISOString()}
+days[0]: ${days[0].toISOString()}
+differenceInDays: ${daysDiff}
+Position: ${position}px (should appear at column ${daysDiff + 1})
+Expected for Jan 12: differenceInDays=11, position=308px
+      `.trim()
+      
+      setDebugInfo(info)
+      console.log('=== FULL DEBUG INFO ===\n' + info)
+    }
+  }, [sales, days])
   
   const getEventsForPlatform = useCallback((platformId: string) => {
     const events = eventsByPlatform.get(platformId) || []
@@ -799,20 +800,6 @@ export default function GanttChart(props: GanttChartProps) {
     return sales.filter(s => s.product_id === productId).length
   }, [sales])
   
-  // DEBUG: Log first sale if exists
-  useEffect(() => {
-    if (sales.length > 0) {
-      const firstSale = sales[0]
-      console.log('=== FIRST SALE DEBUG ===')
-      console.log('Sale:', firstSale.sale_name)
-      console.log('start_date:', firstSale.start_date)
-      console.log('end_date:', firstSale.end_date)
-      const normalized = normalizeToLocalDate(firstSale.start_date)
-      console.log('normalizeToLocalDate result:', normalized)
-      console.log('normalizeToLocalDate ISO:', normalized.toISOString())
-    }
-  }, [sales])
-  
   const totalWidth = totalDays * DAY_WIDTH
   
   return (
@@ -821,13 +808,10 @@ export default function GanttChart(props: GanttChartProps) {
       onMouseLeave={handleMouseLeave}
       ref={containerRef}
     >
-      {/* DEBUG INFO BOX */}
-      <div style={{ background: '#ffe0e0', padding: '10px', margin: '10px 0', fontSize: '12px', fontFamily: 'monospace' }}>
-        <strong>DEBUG INFO (check browser console for more)</strong><br />
-        timelineStart: {timelineStart?.toISOString()}<br />
-        days[0]: {days[0]?.toISOString()}<br />
-        days[11] (should be Jan 12): {days[11]?.toISOString()}<br />
-        First sale: {sales[0]?.sale_name} - {sales[0]?.start_date}
+      {/* DEBUG INFO BOX - Shows calculated values */}
+      <div style={{ background: '#ffe0e0', padding: '10px', margin: '10px 0', fontSize: '11px', fontFamily: 'monospace', whiteSpace: 'pre-wrap', border: '2px solid red' }}>
+        <strong>🔴 DEBUG - POSITION CALCULATION</strong><br />
+        {debugInfo || 'Loading...'}
       </div>
       
       {validationError && (
@@ -1068,9 +1052,6 @@ export default function GanttChart(props: GanttChartProps) {
                                   const left = getPositionForDate(sale.start_date)
                                   const width = getWidthForRange(sale.start_date, sale.end_date)
                                   const cooldown = getCooldownForSale(sale)
-                                  
-                                  // DEBUG: Log each sale position
-                                  console.log(`Sale ${sale.sale_name}: start=${sale.start_date}, left=${left}px, dayIndex=${left/DAY_WIDTH}`)
                                   
                                   return (
                                     <div key={sale.id} data-sale-block>
