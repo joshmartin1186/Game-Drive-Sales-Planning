@@ -1,10 +1,10 @@
 'use client'
 
-// Cache invalidation: 2026-01-09T21:30:00Z - Launch Sale Resize Handler
+// Cache invalidation: 2026-01-09T21:45:00Z - Bulk Edit Sales Feature
 
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { createClient } from '@supabase/supabase-js'
-import { parseISO, format } from 'date-fns'
+import { parseISO, format, addDays } from 'date-fns'
 import GanttChart from './components/GanttChart'
 import SalesTable from './components/SalesTable'
 import AddSaleModal from './components/AddSaleModal'
@@ -19,6 +19,7 @@ import GapAnalysis from './components/GapAnalysis'
 import ImportSalesModal from './components/ImportSalesModal'
 import VersionManager from './components/VersionManager'
 import DuplicateSaleModal from './components/DuplicateSaleModal'
+import BulkEditSalesModal from './components/BulkEditSalesModal'
 import { GeneratedSale, CalendarVariation, generatedSaleToCreateFormat } from '@/lib/sale-calendar-generator'
 import { useUndo } from '@/lib/undo-context'
 import styles from './page.module.css'
@@ -88,6 +89,9 @@ export default function GameDriveDashboard() {
   const [viewMode, setViewMode] = useState<'gantt' | 'table'>('gantt')
   const [showEvents, setShowEvents] = useState(true)
   const [salePrefill, setSalePrefill] = useState<SalePrefill | null>(null)
+  
+  // Bulk edit state
+  const [bulkEditSales, setBulkEditSales] = useState<SaleWithDetails[]>([])
   
   // Calendar generation state
   const [calendarGeneration, setCalendarGeneration] = useState<CalendarGenerationState | null>(null)
@@ -413,6 +417,118 @@ export default function GameDriveDashboard() {
       setError(errorMessage)
     }
   }
+
+  // Bulk edit handler - opens modal with selected sales
+  const handleBulkEdit = useCallback((selectedSales: SaleWithDetails[]) => {
+    setBulkEditSales(selectedSales)
+  }, [])
+
+  // Bulk update handler
+  const handleBulkUpdate = useCallback(async (saleIds: string[], updates: Partial<{
+    discount_percentage: number | null
+    platform_id: string
+    sale_name: string
+    status: string
+    dateShiftDays: number
+  }>) => {
+    // Handle date shift separately
+    if (updates.dateShiftDays !== undefined) {
+      const daysDiff = updates.dateShiftDays
+      
+      // Optimistically update local state
+      setSales(prev => prev.map(sale => {
+        if (!saleIds.includes(sale.id)) return sale
+        const newStartDate = addDays(parseISO(sale.start_date), daysDiff)
+        const newEndDate = addDays(parseISO(sale.end_date), daysDiff)
+        return {
+          ...sale,
+          start_date: format(newStartDate, 'yyyy-MM-dd'),
+          end_date: format(newEndDate, 'yyyy-MM-dd')
+        }
+      }))
+      
+      try {
+        // Update each sale in database
+        for (const saleId of saleIds) {
+          const sale = sales.find(s => s.id === saleId)
+          if (!sale) continue
+          
+          const newStartDate = format(addDays(parseISO(sale.start_date), daysDiff), 'yyyy-MM-dd')
+          const newEndDate = format(addDays(parseISO(sale.end_date), daysDiff), 'yyyy-MM-dd')
+          
+          const { error } = await supabase
+            .from('sales')
+            .update({ start_date: newStartDate, end_date: newEndDate })
+            .eq('id', saleId)
+          
+          if (error) throw error
+        }
+      } catch (err: unknown) {
+        const errorMessage = err instanceof Error ? err.message : 'Failed to update sales'
+        console.error('Error bulk updating sales:', err)
+        setError(errorMessage)
+        await fetchSales()
+      }
+      return
+    }
+    
+    // Handle other updates
+    const dbUpdates: Partial<Sale> = {}
+    if (updates.discount_percentage !== undefined) dbUpdates.discount_percentage = updates.discount_percentage
+    if (updates.platform_id !== undefined) dbUpdates.platform_id = updates.platform_id
+    if (updates.sale_name !== undefined) dbUpdates.sale_name = updates.sale_name || null
+    if (updates.status !== undefined) dbUpdates.status = updates.status
+    
+    // Optimistically update local state
+    setSales(prev => prev.map(sale => {
+      if (!saleIds.includes(sale.id)) return sale
+      return { ...sale, ...dbUpdates } as SaleWithDetails
+    }))
+    
+    try {
+      // Update each sale in database
+      for (const saleId of saleIds) {
+        const { error } = await supabase
+          .from('sales')
+          .update(dbUpdates)
+          .eq('id', saleId)
+        
+        if (error) throw error
+      }
+      
+      // Refresh to get platform relations if platform changed
+      if (updates.platform_id) {
+        await fetchSales()
+      }
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to update sales'
+      console.error('Error bulk updating sales:', err)
+      setError(errorMessage)
+      await fetchSales()
+    }
+  }, [sales])
+
+  // Bulk delete handler
+  const handleBulkDelete = useCallback(async (saleIds: string[]) => {
+    // Optimistically remove from local state
+    setSales(prev => prev.filter(sale => !saleIds.includes(sale.id)))
+    
+    try {
+      for (const saleId of saleIds) {
+        const { error } = await supabase
+          .from('sales')
+          .delete()
+          .eq('id', saleId)
+        
+        if (error) throw error
+      }
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to delete sales'
+      console.error('Error bulk deleting sales:', err)
+      setError(errorMessage)
+      await fetchSales()
+    }
+  }, [])
 
   // Bulk import handler
   const handleBulkImport = useCallback(async (salesToCreate: Omit<Sale, 'id' | 'created_at'>[]) => {
@@ -1108,6 +1224,14 @@ export default function GameDriveDashboard() {
     return result
   }, [sales, filterClientId, filterGameId])
 
+  // Games with client name for bulk edit modal
+  const gamesWithClient = useMemo(() => {
+    return games.map(g => ({
+      ...g,
+      client: { name: g.client?.name || '' }
+    }))
+  }, [games])
+
   const conflicts = 0
   const upcomingEvents = platformEvents.filter(e => new Date(e.start_date) > new Date()).length
 
@@ -1321,9 +1445,11 @@ export default function GameDriveDashboard() {
           <SalesTable
             sales={filteredSales}
             platforms={platforms}
+            games={gamesWithClient}
             onDelete={handleSaleDelete}
             onEdit={handleSaleEdit}
             onDuplicate={handleSaleDuplicate}
+            onBulkEdit={handleBulkEdit}
           />
         )}
       </div>
@@ -1368,6 +1494,17 @@ export default function GameDriveDashboard() {
           onClose={() => setDuplicatingSale(null)}
         />
       )}
+
+      {/* Bulk Edit Sales Modal */}
+      <BulkEditSalesModal
+        isOpen={bulkEditSales.length > 0}
+        onClose={() => setBulkEditSales([])}
+        selectedSales={bulkEditSales}
+        platforms={platforms}
+        games={gamesWithClient}
+        onBulkUpdate={handleBulkUpdate}
+        onBulkDelete={handleBulkDelete}
+      />
 
       {/* Import Sales Modal */}
       <ImportSalesModal
