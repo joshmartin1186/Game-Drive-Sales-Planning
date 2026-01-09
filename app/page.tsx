@@ -1,6 +1,6 @@
 'use client'
 
-// Cache invalidation: 2026-01-09T05:40:00Z - Launch Sale Duration Prop Fix
+// Cache invalidation: 2026-01-09T21:30:00Z - Launch Sale Resize Handler
 
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { createClient } from '@supabase/supabase-js'
@@ -775,6 +775,32 @@ export default function GameDriveDashboard() {
     setEditLaunchDateState({ productId, productName, currentLaunchDate, currentLaunchSaleDuration })
   }, [])
 
+  // Launch sale duration change handler - resize on timeline
+  const handleLaunchSaleDurationChange = useCallback(async (productId: string, newDuration: number) => {
+    const product = products.find(p => p.id === productId)
+    if (!product) return
+    
+    // Optimistically update local state
+    setProducts(prev => prev.map(p => 
+      p.id === productId ? { ...p, launch_sale_duration: newDuration } : p
+    ))
+    
+    try {
+      const { error } = await supabase
+        .from('products')
+        .update({ launch_sale_duration: newDuration })
+        .eq('id', productId)
+      
+      if (error) throw error
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to update launch sale duration'
+      console.error('Error updating launch sale duration:', err)
+      setError(errorMessage)
+      // Rollback on error
+      await fetchData()
+    }
+  }, [products])
+
   // Save launch date from modal (with optional sales shift and duration)
   const handleSaveLaunchDate = useCallback(async (productId: string, newLaunchDate: string, launchSaleDuration: number, shiftSales: boolean) => {
     const product = products.find(p => p.id === productId)
@@ -1287,6 +1313,7 @@ export default function GameDriveDashboard() {
             onClearSales={handleClearSales}
             onLaunchDateChange={handleLaunchDateChange}
             onEditLaunchDate={handleEditLaunchDate}
+            onLaunchSaleDurationChange={handleLaunchSaleDurationChange}
             allSales={sales}
             showEvents={showEvents}
           />
