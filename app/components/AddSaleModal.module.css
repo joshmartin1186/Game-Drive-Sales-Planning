@@ -1,4 +1,4 @@
-/* Modal Styles - Clean & Bold */
+/* Modal Styles - Clean &amp; Bold */
 
 .overlay {
   position: fixed;
@@ -278,6 +278,28 @@
 .deleteBtn:hover {
   background: #dc2626;
   border-color: #dc2626;
+  color: white;
+}
+
+.duplicateBtn {
+  padding: 10px 16px;
+  background: white;
+  border: 1px solid #93c5fd;
+  border-radius: 6px;
+  color: #2563eb;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 150ms;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: inherit;
+}
+
+.duplicateBtn:hover {
+  background: #3b82f6;
+  border-color: #3b82f6;
   color: white;
 }
 
