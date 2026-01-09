@@ -2,21 +2,20 @@
 
 import { useState, useMemo } from 'react'
 import { format, parseISO, differenceInDays, addDays } from 'date-fns'
-import { SaleWithDetails, Platform, Game } from '@/lib/types'
+import { SaleWithDetails, Platform } from '@/lib/types'
 import styles from './SalesTable.module.css'
 import * as XLSX from 'xlsx'
 
 interface SalesTableProps {
   sales: SaleWithDetails[]
   platforms: Platform[]
-  games: (Game & { client: { name: string } })[]
   onDelete: (saleId: string) => Promise<void>
   onEdit: (sale: SaleWithDetails) => void
   onDuplicate?: (sale: SaleWithDetails) => void
   onBulkEdit?: (selectedSales: SaleWithDetails[]) => void
 }
 
-export default function SalesTable({ sales, platforms, games, onDelete, onEdit, onDuplicate, onBulkEdit }: SalesTableProps) {
+export default function SalesTable({ sales, platforms, onDelete, onEdit, onDuplicate, onBulkEdit }: SalesTableProps) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [selectMode, setSelectMode] = useState(false)
   
