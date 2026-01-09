@@ -175,6 +175,7 @@
   max-height: calc(100vh - 350px);
   margin: 0;
   padding: 0;
+  background: #f8fafc; /* Grey background to match UI */
 }
 
 .timeline {
@@ -192,7 +193,7 @@
   position: sticky;
   top: 0;
   z-index: 20;
-  background: white;
+  background: #f8fafc; /* Grey background to match UI */
   padding-left: 220px; /* Match the label column width */
   margin: 0;
 }
@@ -215,7 +216,7 @@
   position: sticky;
   top: 33px;
   z-index: 20;
-  background: white;
+  background: #f8fafc; /* Grey background to match UI */
   padding-left: 220px; /* Match the label column width */
   margin: 0;
 }
@@ -227,13 +228,13 @@
   font-size: 0.625rem;
   font-weight: 500;
   color: #64748b;
-  background: white;
+  background: #f8fafc; /* Grey background to match UI */
   border-bottom: 1px solid #e2e8f0;
   border-right: 1px solid #f1f5f9;
 }
 
 .dayHeader.weekend {
-  background: #f8fafc;
+  background: #f1f5f9;
   color: #94a3b8;
 }
 
