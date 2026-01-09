@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { format, startOfQuarter, endOfQuarter, eachQuarterOfInterval, differenceInDays, isWithinInterval, addDays } from 'date-fns'
+import { format, startOfQuarter, endOfQuarter, eachQuarterOfInterval, differenceInDays, addDays } from 'date-fns'
 import { SaleWithDetails, Product, Game, Client, Platform } from '@/lib/types'
 import { normalizeToLocalDate } from '@/lib/dateUtils'
 import styles from './GapAnalysis.module.css'
@@ -25,13 +25,22 @@ interface GapInfo {
   quarterStart: Date
   quarterEnd: Date
   totalDaysInQuarter: number
+  availableDays: number // Days not blocked by sale or cooldown
   daysWithSale: number
-  daysWithoutSale: number
+  daysInCooldown: number
+  daysAvailableUnused: number // This is the actionable gap
   longestGap: number
   longestGapStart?: Date
   longestGapEnd?: Date
-  gapPercentage: number
+  gapPercentage: number // Percentage of AVAILABLE days unused
 }
+
+// Day status enum for tracking
+const DAY_STATUS = {
+  AVAILABLE: 0,    // Can run a sale
+  IN_SALE: 1,      // Currently in a sale
+  IN_COOLDOWN: 2   // In cooldown period
+} as const
 
 export default function GapAnalysis({ sales, products, platforms, timelineStart, monthCount }: GapAnalysisProps) {
   const [isExpanded, setIsExpanded] = useState(false)
@@ -69,7 +78,7 @@ export default function GapAnalysis({ sales, products, platforms, timelineStart,
       }
     }
 
-    // Also include products without any sales yet
+    // Also include products without any sales yet on specific platforms
     for (const product of products) {
       for (const platform of platforms) {
         const key = `${product.id}-${platform.id}`
@@ -85,11 +94,15 @@ export default function GapAnalysis({ sales, products, platforms, timelineStart,
 
     // Analyze each product-platform combination for each quarter
     productPlatformPairs.forEach(({ product, platform }) => {
+      // Get cooldown days for this platform
+      const cooldownDays = platform.cooldown_days || 28
+      
       const productSales = sales
         .filter(s => s.product_id === product.id && s.platform_id === platform.id)
         .map(s => ({
           start: normalizeToLocalDate(s.start_date),
-          end: normalizeToLocalDate(s.end_date)
+          end: normalizeToLocalDate(s.end_date),
+          saleType: s.sale_type
         }))
         .sort((a, b) => a.start.getTime() - b.start.getTime())
 
@@ -97,12 +110,12 @@ export default function GapAnalysis({ sales, products, platforms, timelineStart,
         const quarterEnd = endOfQuarter(quarterStart)
         const quarterLabel = `Q${Math.floor(quarterStart.getMonth() / 3) + 1} ${quarterStart.getFullYear()}`
         
-        // Calculate days covered by sales in this quarter
         const daysInQuarter = differenceInDays(quarterEnd, quarterStart) + 1
-        const dayCoverage = new Array(daysInQuarter).fill(false)
+        // Track status for each day: 0=available, 1=in sale, 2=in cooldown
+        const dayStatus = new Array(daysInQuarter).fill(DAY_STATUS.AVAILABLE)
         
+        // First pass: mark sale days
         for (const sale of productSales) {
-          // Check if sale overlaps with this quarter
           if (sale.end >= quarterStart && sale.start <= quarterEnd) {
             const overlapStart = sale.start < quarterStart ? quarterStart : sale.start
             const overlapEnd = sale.end > quarterEnd ? quarterEnd : sale.end
@@ -111,23 +124,50 @@ export default function GapAnalysis({ sales, products, platforms, timelineStart,
             const endIdx = differenceInDays(overlapEnd, quarterStart)
             
             for (let i = startIdx; i <= endIdx && i < daysInQuarter; i++) {
-              if (i >= 0) dayCoverage[i] = true
+              if (i >= 0) dayStatus[i] = DAY_STATUS.IN_SALE
+            }
+          }
+        }
+        
+        // Second pass: mark cooldown days (only for regular sales, not special sales)
+        for (const sale of productSales) {
+          // Skip cooldown for special sales
+          if (sale.saleType === 'special') continue
+          
+          // Cooldown starts the day after sale ends
+          const cooldownStart = addDays(sale.end, 1)
+          const cooldownEnd = addDays(sale.end, cooldownDays)
+          
+          if (cooldownEnd >= quarterStart && cooldownStart <= quarterEnd) {
+            const overlapStart = cooldownStart < quarterStart ? quarterStart : cooldownStart
+            const overlapEnd = cooldownEnd > quarterEnd ? quarterEnd : cooldownEnd
+            
+            const startIdx = differenceInDays(overlapStart, quarterStart)
+            const endIdx = differenceInDays(overlapEnd, quarterStart)
+            
+            for (let i = startIdx; i <= endIdx && i < daysInQuarter; i++) {
+              // Only mark as cooldown if not already in a sale
+              if (i >= 0 && dayStatus[i] !== DAY_STATUS.IN_SALE) {
+                dayStatus[i] = DAY_STATUS.IN_COOLDOWN
+              }
             }
           }
         }
 
-        // Count days with and without sales
-        const daysWithSale = dayCoverage.filter(Boolean).length
-        const daysWithoutSale = daysInQuarter - daysWithSale
+        // Count days by status
+        const daysWithSale = dayStatus.filter(s => s === DAY_STATUS.IN_SALE).length
+        const daysInCooldown = dayStatus.filter(s => s === DAY_STATUS.IN_COOLDOWN).length
+        const availableDays = dayStatus.filter(s => s === DAY_STATUS.AVAILABLE).length
+        const daysAvailableUnused = availableDays // All available days are "unused" opportunities
 
-        // Find longest gap
+        // Find longest gap of AVAILABLE days (not in sale or cooldown)
         let longestGap = 0
         let currentGap = 0
         let longestGapStartIdx = -1
         let currentGapStartIdx = -1
 
         for (let i = 0; i < daysInQuarter; i++) {
-          if (!dayCoverage[i]) {
+          if (dayStatus[i] === DAY_STATUS.AVAILABLE) {
             if (currentGap === 0) {
               currentGapStartIdx = i
             }
@@ -146,7 +186,10 @@ export default function GapAnalysis({ sales, products, platforms, timelineStart,
           longestGapStartIdx = currentGapStartIdx
         }
 
-        const gapPercentage = Math.round((daysWithoutSale / daysInQuarter) * 100)
+        // Gap percentage is now based on available days, not total days
+        const gapPercentage = availableDays > 0 
+          ? Math.round((daysAvailableUnused / (daysAvailableUnused + daysWithSale)) * 100)
+          : 0
 
         gaps.push({
           productId: product.id,
@@ -159,8 +202,10 @@ export default function GapAnalysis({ sales, products, platforms, timelineStart,
           quarterStart,
           quarterEnd,
           totalDaysInQuarter: daysInQuarter,
+          availableDays,
           daysWithSale,
-          daysWithoutSale,
+          daysInCooldown,
+          daysAvailableUnused,
           longestGap,
           longestGapStart: longestGapStartIdx >= 0 ? addDays(quarterStart, longestGapStartIdx) : undefined,
           longestGapEnd: longestGapStartIdx >= 0 ? addDays(quarterStart, longestGapStartIdx + longestGap - 1) : undefined,
@@ -228,13 +273,18 @@ export default function GapAnalysis({ sales, products, platforms, timelineStart,
             {summaryStats.criticalGaps > 0 && (
               <span className={styles.criticalBadge}>{summaryStats.criticalGaps} critical</span>
             )}
-            <span>{summaryStats.totalGaps} gaps found</span>
+            <span>{summaryStats.totalGaps} opportunities found</span>
           </span>
         )}
       </button>
 
       {isExpanded && (
         <div className={styles.content}>
+          <p className={styles.description}>
+            Shows periods where you <strong>could</strong> run a sale but aren&apos;t. 
+            Excludes cooldown periods where sales aren&apos;t possible.
+          </p>
+          
           <div className={styles.filters}>
             <div className={styles.filterGroup}>
               <label>Platform:</label>
@@ -274,7 +324,7 @@ export default function GapAnalysis({ sales, products, platforms, timelineStart,
                 className={styles.filterSelect}
               >
                 <option value="gap">Longest Gap</option>
-                <option value="percentage">Gap %</option>
+                <option value="percentage">Opportunity %</option>
                 <option value="quarter">Quarter</option>
               </select>
             </div>
@@ -284,7 +334,7 @@ export default function GapAnalysis({ sales, products, platforms, timelineStart,
             <div className={styles.summaryStats}>
               <div className={styles.statCard}>
                 <span className={styles.statValue}>{summaryStats.totalGaps}</span>
-                <span className={styles.statLabel}>Total Gaps</span>
+                <span className={styles.statLabel}>Opportunities</span>
               </div>
               <div className={styles.statCard}>
                 <span className={styles.statValue}>{summaryStats.avgGap}d</span>
@@ -307,7 +357,7 @@ export default function GapAnalysis({ sales, products, platforms, timelineStart,
             </div>
           ) : (
             <div className={styles.gapList}>
-              {filteredGaps.map((gap, idx) => (
+              {filteredGaps.map((gap) => (
                 <div 
                   key={`${gap.productId}-${gap.platformId}-${gap.quarter}`}
                   className={`${styles.gapItem} ${gap.longestGap >= 30 ? styles.criticalGap : ''}`}
@@ -332,7 +382,7 @@ export default function GapAnalysis({ sales, products, platforms, timelineStart,
                   <div className={styles.gapDetails}>
                     <div className={styles.gapMetric}>
                       <span className={styles.gapValue}>{gap.longestGap}</span>
-                      <span className={styles.gapLabel}>days longest gap</span>
+                      <span className={styles.gapLabel}>days available</span>
                     </div>
                     
                     {gap.longestGapStart && gap.longestGapEnd && (
@@ -341,16 +391,15 @@ export default function GapAnalysis({ sales, products, platforms, timelineStart,
                       </div>
                     )}
 
-                    <div className={styles.gapBar}>
-                      <div 
-                        className={styles.gapBarFill}
-                        style={{ 
-                          width: `${100 - gap.gapPercentage}%`,
-                          backgroundColor: gap.platformColor 
-                        }}
-                      />
-                      <span className={styles.gapBarLabel}>
-                        {gap.daysWithSale}d covered / {gap.totalDaysInQuarter}d ({100 - gap.gapPercentage}%)
+                    <div className={styles.gapBreakdown}>
+                      <span className={styles.breakdownItem} title="Days with active sales">
+                        🟢 {gap.daysWithSale}d sale
+                      </span>
+                      <span className={styles.breakdownItem} title="Days in mandatory cooldown">
+                        🔴 {gap.daysInCooldown}d cooldown
+                      </span>
+                      <span className={styles.breakdownItem} title="Days available for new sales">
+                        ⚪ {gap.availableDays}d open
                       </span>
                     </div>
                   </div>
