@@ -42,6 +42,7 @@ export interface Product {
   base_price_usd?: number
   steam_product_id?: string
   launch_date?: string | null
+  launch_sale_duration?: number | null  // Duration in days for launch sale (7-14 typical)
   created_at: string
   game?: Game
 }
@@ -116,4 +117,14 @@ export interface DayCell {
   isWeekend: boolean
   month: number
   year: number
+}
+
+// Launch sale conflict information
+export interface LaunchConflict {
+  eventName: string
+  eventStart: Date
+  eventEnd: Date
+  overlapStart: Date
+  overlapEnd: Date
+  overlapDays: number
 }
