@@ -70,9 +70,8 @@
 /* Scroll Grab Bar */
 .scrollGrabBar {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 4px;
+  gap: 8px;
   padding: 8px 16px;
   background: linear-gradient(to bottom, #f8fafc, #f1f5f9);
   border-bottom: 1px solid #e2e8f0;
@@ -87,46 +86,27 @@
   background: linear-gradient(to bottom, #e2e8f0, #cbd5e1);
 }
 
-/* Container for Today button and scroll track */
-.scrollBarControls {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-}
-
 /* Today Button */
 .todayButton {
-  display: flex;
-  align-items: center;
-  gap: 4px;
   padding: 6px 12px;
-  background: linear-gradient(135deg, #ef4444, #dc2626);
+  background: #ef4444;
   color: white;
   border: none;
-  border-radius: 6px;
-  font-size: 0.75rem;
+  border-radius: 4px;
+  font-size: 12px;
   font-weight: 600;
   cursor: pointer;
-  white-space: nowrap;
-  box-shadow: 0 2px 4px rgba(239, 68, 68, 0.3);
-  transition: all 0.15s;
+  transition: background 0.2s;
+  flex-shrink: 0;
 }
 
 .todayButton:hover:not(:disabled) {
-  background: linear-gradient(135deg, #dc2626, #b91c1c);
-  box-shadow: 0 3px 8px rgba(239, 68, 68, 0.4);
-  transform: translateY(-1px);
-}
-
-.todayButton:active:not(:disabled) {
-  transform: translateY(0);
+  background: #dc2626;
 }
 
 .todayButton:disabled {
-  background: #cbd5e1;
+  background: #9ca3af;
   cursor: not-allowed;
-  box-shadow: none;
 }
 
 .scrollGrabTrack {
@@ -171,6 +151,7 @@
 .scrollGrabHint {
   font-size: 0.6875rem;
   color: #94a3b8;
+  flex-shrink: 0;
 }
 
 .scrollContainer {
@@ -237,40 +218,37 @@
   border-left: 2px solid #cbd5e1;
 }
 
-/* Today's date header highlight */
+/* Today Header Highlight */
 .dayHeader.todayHeader {
-  background: #fef2f2;
-  color: #dc2626;
-  font-weight: 700;
-  border-bottom: 2px solid #ef4444;
+  background: #fef2f2 !important;
+  color: #ef4444 !important;
+  font-weight: 700 !important;
 }
 
-/* Today indicator line - runs through entire timeline */
+/* Today Indicator Line */
 .todayIndicator {
   position: absolute;
-  top: 0;
+  top: 66px;
   bottom: 0;
   width: 2px;
   background: #ef4444;
   z-index: 15;
   pointer-events: none;
-  box-shadow: 0 0 8px rgba(239, 68, 68, 0.4);
 }
 
-.todayIndicatorLabel {
+.todayIndicator::before {
+  content: 'TODAY';
   position: absolute;
-  top: 66px; /* Below the month and day headers */
+  top: -18px;
   left: 50%;
   transform: translateX(-50%);
   background: #ef4444;
   color: white;
-  font-size: 0.5625rem;
-  font-weight: 700;
   padding: 2px 6px;
   border-radius: 3px;
+  font-size: 9px;
+  font-weight: 700;
   white-space: nowrap;
-  letter-spacing: 0.5px;
-  box-shadow: 0 2px 4px rgba(239, 68, 68, 0.3);
 }
 
 .productRows {
