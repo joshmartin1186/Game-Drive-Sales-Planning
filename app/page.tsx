@@ -1,6 +1,6 @@
 'use client'
 
-// Cache invalidation: 2026-01-09T22:00:00Z - Fix Bulk Edit Status Type
+// Cache invalidation: 2026-01-09T22:25:00Z - Interactive Stats Cards
 
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { createClient } from '@supabase/supabase-js'
@@ -20,8 +20,10 @@ import ImportSalesModal from './components/ImportSalesModal'
 import VersionManager from './components/VersionManager'
 import DuplicateSaleModal from './components/DuplicateSaleModal'
 import BulkEditSalesModal from './components/BulkEditSalesModal'
+import StatCard from './components/StatCard'
 import { GeneratedSale, CalendarVariation, generatedSaleToCreateFormat } from '@/lib/sale-calendar-generator'
 import { useUndo } from '@/lib/undo-context'
+import { normalizeToLocalDate } from '@/lib/dateUtils'
 import styles from './page.module.css'
 import { Sale, Platform, Product, Game, Client, SaleWithDetails, PlatformEvent } from '@/lib/types'
 
@@ -72,54 +74,61 @@ interface SaleSnapshot {
 // Type for valid sale status values
 type SaleStatus = 'planned' | 'submitted' | 'confirmed' | 'live' | 'ended'
 
+// Type for conflict info
+interface ConflictInfo {
+  productName: string
+  eventName: string
+  overlapDays: number
+}
+
 export default function GameDriveDashboard() {
-  const [sales, setSales] = useState<SaleWithDetails[]>([])
-  const [clients, setClients] = useState<Client[]>([])
-  const [games, setGames] = useState<(Game & { client: Client })[]>([])
-  const [products, setProducts] = useState<(Product & { game: Game & { client: Client } })[]>([])
-  const [platforms, setPlatforms] = useState<Platform[]>([])
-  const [platformEvents, setPlatformEvents] = useState<PlatformEvent[]>([])
+  const [sales, setSales] = useState&lt;SaleWithDetails[]&gt;([])
+  const [clients, setClients] = useState&lt;Client[]&gt;([])
+  const [games, setGames] = useState&lt;(Game &amp; { client: Client })[]&gt;([])
+  const [products, setProducts] = useState&lt;(Product &amp; { game: Game &amp; { client: Client } })[]&gt;([])
+  const [platforms, setPlatforms] = useState&lt;Platform[]&gt;([])
+  const [platformEvents, setPlatformEvents] = useState&lt;PlatformEvent[]&gt;([])
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState&lt;string | null&gt;(null)
   const [showAddModal, setShowAddModal] = useState(false)
   const [showProductManager, setShowProductManager] = useState(false)
   const [showPlatformSettings, setShowPlatformSettings] = useState(false)
   const [showExportModal, setShowExportModal] = useState(false)
   const [showImportModal, setShowImportModal] = useState(false)
   const [showVersionManager, setShowVersionManager] = useState(false)
-  const [editingSale, setEditingSale] = useState<SaleWithDetails | null>(null)
-  const [duplicatingSale, setDuplicatingSale] = useState<SaleWithDetails | null>(null)
-  const [viewMode, setViewMode] = useState<'gantt' | 'table'>('gantt')
+  const [editingSale, setEditingSale] = useState&lt;SaleWithDetails | null&gt;(null)
+  const [duplicatingSale, setDuplicatingSale] = useState&lt;SaleWithDetails | null&gt;(null)
+  const [viewMode, setViewMode] = useState&lt;'gantt' | 'table'&gt;('gantt')
   const [showEvents, setShowEvents] = useState(true)
-  const [salePrefill, setSalePrefill] = useState<SalePrefill | null>(null)
+  const [salePrefill, setSalePrefill] = useState&lt;SalePrefill | null&gt;(null)
   
   // Bulk edit state
-  const [bulkEditSales, setBulkEditSales] = useState<SaleWithDetails[]>([])
+  const [bulkEditSales, setBulkEditSales] = useState&lt;SaleWithDetails[]&gt;([])
   
   // Calendar generation state
-  const [calendarGeneration, setCalendarGeneration] = useState<CalendarGenerationState | null>(null)
+  const [calendarGeneration, setCalendarGeneration] = useState&lt;CalendarGenerationState | null&gt;(null)
   const [isApplyingCalendar, setIsApplyingCalendar] = useState(false)
   
   // Store last generated calendar variations for export
-  const [lastGeneratedVariations, setLastGeneratedVariations] = useState<CalendarVariation[]>([])
+  const [lastGeneratedVariations, setLastGeneratedVariations] = useState&lt;CalendarVariation[]&gt;([])
   
   // Clear sales state
-  const [clearSalesState, setClearSalesState] = useState<ClearSalesState | null>(null)
+  const [clearSalesState, setClearSalesState] = useState&lt;ClearSalesState | null&gt;(null)
   
   // Edit launch date state
-  const [editLaunchDateState, setEditLaunchDateState] = useState<EditLaunchDateState | null>(null)
+  const [editLaunchDateState, setEditLaunchDateState] = useState&lt;EditLaunchDateState | null&gt;(null)
   
   // Filter state
-  const [filterClientId, setFilterClientId] = useState<string>('')
-  const [filterGameId, setFilterGameId] = useState<string>('')
+  const [filterClientId, setFilterClientId] = useState&lt;string&gt;('')
+  const [filterGameId, setFilterGameId] = useState&lt;string&gt;('')
   
   // Undo/Redo (functionality kept, UI removed)
   const { pushAction, setHandlers } = useUndo()
 
   // Set up undo/redo handlers
-  useEffect(() => {
+  useEffect(() =&gt; {
     setHandlers({
-      onCreateSale: async (data) => {
+      onCreateSale: async (data) =&gt; {
         const { data: newSale, error } = await supabase
           .from('sales')
           .insert([data])
@@ -129,7 +138,7 @@ export default function GameDriveDashboard() {
         if (error) throw error
         return newSale.id
       },
-      onUpdateSale: async (id, data) => {
+      onUpdateSale: async (id, data) =&gt; {
         const { error } = await supabase
           .from('sales')
           .update(data)
@@ -137,7 +146,7 @@ export default function GameDriveDashboard() {
         
         if (error) throw error
       },
-      onDeleteSale: async (id) => {
+      onDeleteSale: async (id) =&gt; {
         const { error } = await supabase
           .from('sales')
           .delete()
@@ -145,14 +154,14 @@ export default function GameDriveDashboard() {
         
         if (error) throw error
       },
-      onRefresh: async () => {
+      onRefresh: async () =&gt; {
         await fetchSales()
       }
     })
   }, [setHandlers])
 
   // Fetch all data on mount
-  useEffect(() => {
+  useEffect(() =&gt; {
     fetchData()
   }, [])
 
@@ -268,13 +277,13 @@ export default function GameDriveDashboard() {
   }
 
   // Optimistic update for sales - updates local state immediately
-  async function handleSaleUpdate(saleId: string, updates: Partial<Sale>) {
+  async function handleSaleUpdate(saleId: string, updates: Partial&lt;Sale&gt;) {
     // Get current sale data for undo
-    const currentSale = sales.find(s => s.id === saleId)
+    const currentSale = sales.find(s =&gt; s.id === saleId)
     if (!currentSale) return
     
-    const previousData: Record<string, unknown> = {}
-    const newData: Record<string, unknown> = {}
+    const previousData: Record&lt;string, unknown&gt; = {}
+    const newData: Record&lt;string, unknown&gt; = {}
     
     for (const key of Object.keys(updates)) {
       previousData[key] = currentSale[key as keyof SaleWithDetails]
@@ -282,7 +291,7 @@ export default function GameDriveDashboard() {
     }
     
     // Optimistically update local state first
-    setSales(prev => prev.map(sale => 
+    setSales(prev =&gt; prev.map(sale =&gt; 
       sale.id === saleId 
         ? { ...sale, ...updates } as SaleWithDetails
         : sale
@@ -322,7 +331,7 @@ export default function GameDriveDashboard() {
         .single()
       
       if (updatedSale) {
-        setSales(prev => prev.map(sale => 
+        setSales(prev =&gt; prev.map(sale =&gt; 
           sale.id === saleId ? updatedSale : sale
         ))
       }
@@ -338,10 +347,10 @@ export default function GameDriveDashboard() {
     if (!confirm('Are you sure you want to delete this sale?')) return
     
     // Get sale data for undo
-    const saleToDelete = sales.find(s => s.id === saleId)
+    const saleToDelete = sales.find(s =&gt; s.id === saleId)
     if (!saleToDelete) return
     
-    const saleData: Record<string, unknown> = {
+    const saleData: Record&lt;string, unknown&gt; = {
       product_id: saleToDelete.product_id,
       platform_id: saleToDelete.platform_id,
       start_date: saleToDelete.start_date,
@@ -355,7 +364,7 @@ export default function GameDriveDashboard() {
     
     // Optimistically remove from local state
     const previousSales = sales
-    setSales(prev => prev.filter(sale => sale.id !== saleId))
+    setSales(prev =&gt; prev.filter(sale =&gt; sale.id !== saleId))
     
     try {
       const { error } = await supabase
@@ -379,7 +388,7 @@ export default function GameDriveDashboard() {
     }
   }
 
-  async function handleSaleCreate(sale: Omit<Sale, 'id' | 'created_at'>) {
+  async function handleSaleCreate(sale: Omit&lt;Sale, 'id' | 'created_at'&gt;) {
     try {
       const { data, error } = await supabase
         .from('sales')
@@ -400,7 +409,7 @@ export default function GameDriveDashboard() {
       if (error) throw error
       
       if (data) {
-        setSales(prev => [...prev, data].sort((a, b) => 
+        setSales(prev =&gt; [...prev, data].sort((a, b) =&gt; 
           new Date(a.start_date).getTime() - new Date(b.start_date).getTime()
         ))
         
@@ -408,7 +417,7 @@ export default function GameDriveDashboard() {
         pushAction({
           type: 'CREATE_SALE',
           saleId: data.id,
-          saleData: sale as Record<string, unknown>
+          saleData: sale as Record&lt;string, unknown&gt;
         })
       }
       
@@ -422,24 +431,24 @@ export default function GameDriveDashboard() {
   }
 
   // Bulk edit handler - opens modal with selected sales
-  const handleBulkEdit = useCallback((selectedSales: SaleWithDetails[]) => {
+  const handleBulkEdit = useCallback((selectedSales: SaleWithDetails[]) =&gt; {
     setBulkEditSales(selectedSales)
   }, [])
 
   // Bulk update handler
-  const handleBulkUpdate = useCallback(async (saleIds: string[], updates: Partial<{
+  const handleBulkUpdate = useCallback(async (saleIds: string[], updates: Partial&lt;{
     discount_percentage: number | null
     platform_id: string
     sale_name: string | undefined
     status: string
     dateShiftDays: number
-  }>) => {
+  }&gt;) =&gt; {
     // Handle date shift separately
     if (updates.dateShiftDays !== undefined) {
       const daysDiff = updates.dateShiftDays
       
       // Optimistically update local state
-      setSales(prev => prev.map(sale => {
+      setSales(prev =&gt; prev.map(sale =&gt; {
         if (!saleIds.includes(sale.id)) return sale
         const newStartDate = addDays(parseISO(sale.start_date), daysDiff)
         const newEndDate = addDays(parseISO(sale.end_date), daysDiff)
@@ -453,7 +462,7 @@ export default function GameDriveDashboard() {
       try {
         // Update each sale in database
         for (const saleId of saleIds) {
-          const sale = sales.find(s => s.id === saleId)
+          const sale = sales.find(s =&gt; s.id === saleId)
           if (!sale) continue
           
           const newStartDate = format(addDays(parseISO(sale.start_date), daysDiff), 'yyyy-MM-dd')
@@ -476,7 +485,7 @@ export default function GameDriveDashboard() {
     }
     
     // Handle other updates - convert types for Sale compatibility
-    const dbUpdates: Partial<Sale> = {}
+    const dbUpdates: Partial&lt;Sale&gt; = {}
     if (updates.discount_percentage !== undefined) {
       dbUpdates.discount_percentage = updates.discount_percentage === null ? undefined : updates.discount_percentage
     }
@@ -485,7 +494,7 @@ export default function GameDriveDashboard() {
     if (updates.status !== undefined) dbUpdates.status = updates.status as SaleStatus
     
     // Optimistically update local state
-    setSales(prev => prev.map(sale => {
+    setSales(prev =&gt; prev.map(sale =&gt; {
       if (!saleIds.includes(sale.id)) return sale
       return { ...sale, ...dbUpdates } as SaleWithDetails
     }))
@@ -514,9 +523,9 @@ export default function GameDriveDashboard() {
   }, [sales])
 
   // Bulk delete handler
-  const handleBulkDelete = useCallback(async (saleIds: string[]) => {
+  const handleBulkDelete = useCallback(async (saleIds: string[]) =&gt; {
     // Optimistically remove from local state
-    setSales(prev => prev.filter(sale => !saleIds.includes(sale.id)))
+    setSales(prev =&gt; prev.filter(sale =&gt; !saleIds.includes(sale.id)))
     
     try {
       for (const saleId of saleIds) {
@@ -536,7 +545,7 @@ export default function GameDriveDashboard() {
   }, [])
 
   // Bulk import handler
-  const handleBulkImport = useCallback(async (salesToCreate: Omit<Sale, 'id' | 'created_at'>[]) => {
+  const handleBulkImport = useCallback(async (salesToCreate: Omit&lt;Sale, 'id' | 'created_at'&gt;[]) =&gt; {
     try {
       const { data, error } = await supabase
         .from('sales')
@@ -555,21 +564,21 @@ export default function GameDriveDashboard() {
       
       if (error) throw error
       
-      if (data && data.length > 0) {
-        setSales(prev => [...prev, ...data].sort((a, b) => 
+      if (data &amp;&amp; data.length &gt; 0) {
+        setSales(prev =&gt; [...prev, ...data].sort((a, b) =&gt; 
           new Date(a.start_date).getTime() - new Date(b.start_date).getTime()
         ))
         
         // Push batch action to undo stack
         pushAction({
           type: 'BATCH_CREATE_SALES',
-          sales: data.map(s => ({
+          sales: data.map(s =&gt; ({
             id: s.id,
-            data: salesToCreate.find(sc => 
-              sc.product_id === s.product_id && 
-              sc.start_date === s.start_date &&
+            data: salesToCreate.find(sc =&gt; 
+              sc.product_id === s.product_id &amp;&amp; 
+              sc.start_date === s.start_date &amp;&amp;
               sc.platform_id === s.platform_id
-            ) as Record<string, unknown>
+            ) as Record&lt;string, unknown&gt;
           }))
         })
       }
@@ -581,7 +590,7 @@ export default function GameDriveDashboard() {
   }, [pushAction])
 
   // Duplicate sales handler
-  const handleDuplicateSales = useCallback(async (salesToCreate: Omit<Sale, 'id' | 'created_at'>[]) => {
+  const handleDuplicateSales = useCallback(async (salesToCreate: Omit&lt;Sale, 'id' | 'created_at'&gt;[]) =&gt; {
     try {
       const { data, error } = await supabase
         .from('sales')
@@ -600,21 +609,21 @@ export default function GameDriveDashboard() {
       
       if (error) throw error
       
-      if (data && data.length > 0) {
-        setSales(prev => [...prev, ...data].sort((a, b) => 
+      if (data &amp;&amp; data.length &gt; 0) {
+        setSales(prev =&gt; [...prev, ...data].sort((a, b) =&gt; 
           new Date(a.start_date).getTime() - new Date(b.start_date).getTime()
         ))
         
         // Push batch action to undo stack
         pushAction({
           type: 'BATCH_CREATE_SALES',
-          sales: data.map(s => ({
+          sales: data.map(s =&gt; ({
             id: s.id,
-            data: salesToCreate.find(sc => 
-              sc.product_id === s.product_id && 
-              sc.start_date === s.start_date &&
+            data: salesToCreate.find(sc =&gt; 
+              sc.product_id === s.product_id &amp;&amp; 
+              sc.start_date === s.start_date &amp;&amp;
               sc.platform_id === s.platform_id
-            ) as Record<string, unknown>
+            ) as Record&lt;string, unknown&gt;
           }))
         })
       }
@@ -626,9 +635,9 @@ export default function GameDriveDashboard() {
   }, [pushAction])
 
   // Restore version handler
-  const handleRestoreVersion = useCallback(async (salesSnapshot: SaleSnapshot[]) => {
+  const handleRestoreVersion = useCallback(async (salesSnapshot: SaleSnapshot[]) =&gt; {
     // Delete all current sales first
-    const currentSaleIds = sales.map(s => s.id)
+    const currentSaleIds = sales.map(s =&gt; s.id)
     
     try {
       // Delete existing sales
@@ -642,8 +651,8 @@ export default function GameDriveDashboard() {
       }
       
       // Create sales from snapshot
-      if (salesSnapshot.length > 0) {
-        const salesToCreate = salesSnapshot.map(s => ({
+      if (salesSnapshot.length &gt; 0) {
+        const salesToCreate = salesSnapshot.map(s =&gt; ({
           product_id: s.product_id,
           platform_id: s.platform_id,
           start_date: s.start_date,
@@ -675,25 +684,25 @@ export default function GameDriveDashboard() {
     }
   }, [sales])
 
-  const handleSaleEdit = useCallback((sale: SaleWithDetails) => {
+  const handleSaleEdit = useCallback((sale: SaleWithDetails) =&gt; {
     setEditingSale(sale)
   }, [])
 
-  const handleSaleDuplicate = useCallback((sale: SaleWithDetails) => {
+  const handleSaleDuplicate = useCallback((sale: SaleWithDetails) =&gt; {
     setDuplicatingSale(sale)
   }, [])
 
-  const handleTimelineCreate = useCallback((prefill: SalePrefill) => {
+  const handleTimelineCreate = useCallback((prefill: SalePrefill) =&gt; {
     setSalePrefill(prefill)
     setShowAddModal(true)
   }, [])
 
-  const handleCloseAddModal = useCallback(() => {
+  const handleCloseAddModal = useCallback(() =&gt; {
     setShowAddModal(false)
     setSalePrefill(null)
   }, [])
 
-  const handleGenerateCalendar = useCallback((productId: string, productName: string, launchDate?: string) => {
+  const handleGenerateCalendar = useCallback((productId: string, productName: string, launchDate?: string) =&gt; {
     // Use provided launch date or today's date
     const effectiveLaunchDate = launchDate || format(new Date(), 'yyyy-MM-dd')
     
@@ -705,12 +714,12 @@ export default function GameDriveDashboard() {
     })
   }, [])
 
-  const handleApplyCalendar = useCallback(async (generatedSales: GeneratedSale[]) => {
+  const handleApplyCalendar = useCallback(async (generatedSales: GeneratedSale[]) =&gt; {
     setIsApplyingCalendar(true)
     setError(null)
     
     try {
-      const salesToCreate = generatedSales.map(sale => generatedSaleToCreateFormat(sale))
+      const salesToCreate = generatedSales.map(sale =&gt; generatedSaleToCreateFormat(sale))
       
       const { data, error } = await supabase
         .from('sales')
@@ -729,20 +738,20 @@ export default function GameDriveDashboard() {
       
       if (error) throw error
       
-      if (data && data.length > 0) {
-        setSales(prev => [...prev, ...data].sort((a, b) => 
+      if (data &amp;&amp; data.length &gt; 0) {
+        setSales(prev =&gt; [...prev, ...data].sort((a, b) =&gt; 
           new Date(a.start_date).getTime() - new Date(b.start_date).getTime()
         ))
         
         // Push batch action to undo stack
         pushAction({
           type: 'BATCH_CREATE_SALES',
-          sales: data.map(s => ({
+          sales: data.map(s =&gt; ({
             id: s.id,
-            data: salesToCreate.find(sc => 
-              sc.product_id === s.product_id && 
+            data: salesToCreate.find(sc =&gt; 
+              sc.product_id === s.product_id &amp;&amp; 
               sc.start_date === s.start_date
-            ) as Record<string, unknown>
+            ) as Record&lt;string, unknown&gt;
           }))
         })
       }
@@ -759,13 +768,13 @@ export default function GameDriveDashboard() {
   }, [pushAction])
 
   // Clear sales handler
-  const handleClearSales = useCallback((productId: string, productName: string) => {
+  const handleClearSales = useCallback((productId: string, productName: string) =&gt; {
     setClearSalesState({ productId, productName })
   }, [])
 
-  const handleConfirmClearSales = useCallback(async (productId: string, platformId: string | null) => {
-    const salesToDelete = sales.filter(s => 
-      s.product_id === productId && 
+  const handleConfirmClearSales = useCallback(async (productId: string, platformId: string | null) =&gt; {
+    const salesToDelete = sales.filter(s =&gt; 
+      s.product_id === productId &amp;&amp; 
       (platformId === null || s.platform_id === platformId)
     )
     
@@ -775,7 +784,7 @@ export default function GameDriveDashboard() {
     }
     
     // Store sale data for undo
-    const saleDataList = salesToDelete.map(s => ({
+    const saleDataList = salesToDelete.map(s =&gt; ({
       id: s.id,
       data: {
         product_id: s.product_id,
@@ -787,12 +796,12 @@ export default function GameDriveDashboard() {
         sale_type: s.sale_type,
         status: s.status,
         notes: s.notes
-      } as Record<string, unknown>
+      } as Record&lt;string, unknown&gt;
     }))
     
     // Optimistically remove
-    setSales(prev => prev.filter(s => 
-      !(s.product_id === productId && (platformId === null || s.platform_id === platformId))
+    setSales(prev =&gt; prev.filter(s =&gt; 
+      !(s.product_id === productId &amp;&amp; (platformId === null || s.platform_id === platformId))
     ))
     
     try {
@@ -822,8 +831,8 @@ export default function GameDriveDashboard() {
   }, [sales, pushAction])
 
   // Launch date change handler - shifts all sales for a product (drag)
-  const handleLaunchDateChange = useCallback(async (productId: string, newLaunchDate: string) => {
-    const product = products.find(p => p.id === productId)
+  const handleLaunchDateChange = useCallback(async (productId: string, newLaunchDate: string) =&gt; {
+    const product = products.find(p =&gt; p.id === productId)
     if (!product) return
     
     const oldLaunchDate = product.launch_date
@@ -837,15 +846,15 @@ export default function GameDriveDashboard() {
     if (daysDiff === 0) return
     
     // Get all sales for this product
-    const productSales = sales.filter(s => s.product_id === productId)
+    const productSales = sales.filter(s =&gt; s.product_id === productId)
     
     // Optimistically update product launch date
-    setProducts(prev => prev.map(p => 
+    setProducts(prev =&gt; prev.map(p =&gt; 
       p.id === productId ? { ...p, launch_date: newLaunchDate } : p
     ))
     
     // Optimistically update all sales dates
-    const updatedSales = productSales.map(sale => {
+    const updatedSales = productSales.map(sale =&gt; {
       const newStartDate = new Date(parseISO(sale.start_date).getTime() + daysDiff * 24 * 60 * 60 * 1000)
       const newEndDate = new Date(parseISO(sale.end_date).getTime() + daysDiff * 24 * 60 * 60 * 1000)
       return {
@@ -855,8 +864,8 @@ export default function GameDriveDashboard() {
       }
     })
     
-    setSales(prev => prev.map(sale => {
-      const updated = updatedSales.find(u => u.id === sale.id)
+    setSales(prev =&gt; prev.map(sale =&gt; {
+      const updated = updatedSales.find(u =&gt; u.id === sale.id)
       return updated || sale
     }))
     
@@ -892,17 +901,17 @@ export default function GameDriveDashboard() {
   }, [products, sales])
 
   // Edit launch date handler - opens modal (click)
-  const handleEditLaunchDate = useCallback((productId: string, productName: string, currentLaunchDate: string, currentLaunchSaleDuration?: number) => {
+  const handleEditLaunchDate = useCallback((productId: string, productName: string, currentLaunchDate: string, currentLaunchSaleDuration?: number) =&gt; {
     setEditLaunchDateState({ productId, productName, currentLaunchDate, currentLaunchSaleDuration })
   }, [])
 
   // Launch sale duration change handler - resize on timeline
-  const handleLaunchSaleDurationChange = useCallback(async (productId: string, newDuration: number) => {
-    const product = products.find(p => p.id === productId)
+  const handleLaunchSaleDurationChange = useCallback(async (productId: string, newDuration: number) =&gt; {
+    const product = products.find(p =&gt; p.id === productId)
     if (!product) return
     
     // Optimistically update local state
-    setProducts(prev => prev.map(p => 
+    setProducts(prev =&gt; prev.map(p =&gt; 
       p.id === productId ? { ...p, launch_sale_duration: newDuration } : p
     ))
     
@@ -923,8 +932,8 @@ export default function GameDriveDashboard() {
   }, [products])
 
   // Save launch date from modal (with optional sales shift and duration)
-  const handleSaveLaunchDate = useCallback(async (productId: string, newLaunchDate: string, launchSaleDuration: number, shiftSales: boolean) => {
-    const product = products.find(p => p.id === productId)
+  const handleSaveLaunchDate = useCallback(async (productId: string, newLaunchDate: string, launchSaleDuration: number, shiftSales: boolean) =&gt; {
+    const product = products.find(p =&gt; p.id === productId)
     if (!product) return
     
     // Build update object
@@ -940,20 +949,20 @@ export default function GameDriveDashboard() {
     if (shiftSales) {
       // Calculate shift and update sales
       const oldLaunchDate = product.launch_date
-      if (oldLaunchDate && oldLaunchDate !== newLaunchDate) {
+      if (oldLaunchDate &amp;&amp; oldLaunchDate !== newLaunchDate) {
         const oldDate = parseISO(oldLaunchDate)
         const newDate = parseISO(newLaunchDate)
         const daysDiff = Math.round((newDate.getTime() - oldDate.getTime()) / (1000 * 60 * 60 * 24))
         
         if (daysDiff !== 0) {
-          const productSales = sales.filter(s => s.product_id === productId)
+          const productSales = sales.filter(s =&gt; s.product_id === productId)
           
           // Optimistically update
-          setProducts(prev => prev.map(p => 
+          setProducts(prev =&gt; prev.map(p =&gt; 
             p.id === productId ? { ...p, ...productUpdate } : p
           ))
           
-          const updatedSales = productSales.map(sale => {
+          const updatedSales = productSales.map(sale =&gt; {
             const newStartDate = new Date(parseISO(sale.start_date).getTime() + daysDiff * 24 * 60 * 60 * 1000)
             const newEndDate = new Date(parseISO(sale.end_date).getTime() + daysDiff * 24 * 60 * 60 * 1000)
             return {
@@ -963,8 +972,8 @@ export default function GameDriveDashboard() {
             }
           })
           
-          setSales(prev => prev.map(sale => {
-            const updated = updatedSales.find(u => u.id === sale.id)
+          setSales(prev =&gt; prev.map(sale =&gt; {
+            const updated = updatedSales.find(u =&gt; u.id === sale.id)
             return updated || sale
           }))
           
@@ -999,7 +1008,7 @@ export default function GameDriveDashboard() {
       }
     } else {
       // Just update the launch date and duration without shifting sales
-      setProducts(prev => prev.map(p => 
+      setProducts(prev =&gt; prev.map(p =&gt; 
         p.id === productId ? { ...p, ...productUpdate } : p
       ))
       
@@ -1021,7 +1030,7 @@ export default function GameDriveDashboard() {
     setEditLaunchDateState(null)
   }, [products, sales])
 
-  async function handleClientCreate(client: Omit<Client, 'id' | 'created_at'>) {
+  async function handleClientCreate(client: Omit&lt;Client, 'id' | 'created_at'&gt;) {
     try {
       const { data, error } = await supabase
         .from('clients')
@@ -1030,14 +1039,14 @@ export default function GameDriveDashboard() {
         .single()
       
       if (error) throw error
-      if (data) setClients(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)))
+      if (data) setClients(prev =&gt; [...prev, data].sort((a, b) =&gt; a.name.localeCompare(b.name)))
     } catch (err: unknown) {
       console.error('Error creating client:', err)
       throw err
     }
   }
 
-  async function handleGameCreate(game: Omit<Game, 'id' | 'created_at'>) {
+  async function handleGameCreate(game: Omit&lt;Game, 'id' | 'created_at'&gt;) {
     try {
       const { data, error } = await supabase
         .from('games')
@@ -1046,14 +1055,14 @@ export default function GameDriveDashboard() {
         .single()
       
       if (error) throw error
-      if (data) setGames(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)))
+      if (data) setGames(prev =&gt; [...prev, data].sort((a, b) =&gt; a.name.localeCompare(b.name)))
     } catch (err: unknown) {
       console.error('Error creating game:', err)
       throw err
     }
   }
 
-  async function handleProductCreate(product: Omit<Product, 'id' | 'created_at'>): Promise<Product | undefined> {
+  async function handleProductCreate(product: Omit&lt;Product, 'id' | 'created_at'&gt;): Promise&lt;Product | undefined&gt; {
     try {
       const { data, error } = await supabase
         .from('products')
@@ -1063,7 +1072,7 @@ export default function GameDriveDashboard() {
       
       if (error) throw error
       if (data) {
-        setProducts(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)))
+        setProducts(prev =&gt; [...prev, data].sort((a, b) =&gt; a.name.localeCompare(b.name)))
         return data
       }
     } catch (err: unknown) {
@@ -1073,7 +1082,7 @@ export default function GameDriveDashboard() {
   }
 
   // Update handlers for clients, games, products
-  async function handleClientUpdate(clientId: string, updates: Partial<Client>) {
+  async function handleClientUpdate(clientId: string, updates: Partial&lt;Client&gt;) {
     try {
       const { error } = await supabase
         .from('clients')
@@ -1081,16 +1090,16 @@ export default function GameDriveDashboard() {
         .eq('id', clientId)
       
       if (error) throw error
-      setClients(prev => prev.map(c => 
+      setClients(prev =&gt; prev.map(c =&gt; 
         c.id === clientId ? { ...c, ...updates } : c
-      ).sort((a, b) => a.name.localeCompare(b.name)))
+      ).sort((a, b) =&gt; a.name.localeCompare(b.name)))
       
       // Update games that reference this client
       if (updates.name) {
-        setGames(prev => prev.map(g => 
+        setGames(prev =&gt; prev.map(g =&gt; 
           g.client_id === clientId ? { ...g, client: { ...g.client, ...updates } } : g
         ))
-        setProducts(prev => prev.map(p => 
+        setProducts(prev =&gt; prev.map(p =&gt; 
           p.game?.client_id === clientId 
             ? { ...p, game: { ...p.game, client: { ...p.game.client, ...updates } } } 
             : p
@@ -1102,7 +1111,7 @@ export default function GameDriveDashboard() {
     }
   }
 
-  async function handleGameUpdate(gameId: string, updates: Partial<Game>) {
+  async function handleGameUpdate(gameId: string, updates: Partial&lt;Game&gt;) {
     try {
       const { data, error } = await supabase
         .from('games')
@@ -1113,12 +1122,12 @@ export default function GameDriveDashboard() {
       
       if (error) throw error
       if (data) {
-        setGames(prev => prev.map(g => 
+        setGames(prev =&gt; prev.map(g =&gt; 
           g.id === gameId ? data : g
-        ).sort((a, b) => a.name.localeCompare(b.name)))
+        ).sort((a, b) =&gt; a.name.localeCompare(b.name)))
         
         // Update products that reference this game
-        setProducts(prev => prev.map(p => 
+        setProducts(prev =&gt; prev.map(p =&gt; 
           p.game_id === gameId ? { ...p, game: data } : p
         ))
       }
@@ -1128,7 +1137,7 @@ export default function GameDriveDashboard() {
     }
   }
 
-  async function handleProductUpdate(productId: string, updates: Partial<Product>) {
+  async function handleProductUpdate(productId: string, updates: Partial&lt;Product&gt;) {
     try {
       const { data, error } = await supabase
         .from('products')
@@ -1139,9 +1148,9 @@ export default function GameDriveDashboard() {
       
       if (error) throw error
       if (data) {
-        setProducts(prev => prev.map(p => 
+        setProducts(prev =&gt; prev.map(p =&gt; 
           p.id === productId ? data : p
-        ).sort((a, b) => a.name.localeCompare(b.name)))
+        ).sort((a, b) =&gt; a.name.localeCompare(b.name)))
       }
     } catch (err: unknown) {
       console.error('Error updating product:', err)
@@ -1158,11 +1167,11 @@ export default function GameDriveDashboard() {
       
       if (error) throw error
       if (filterClientId === clientId) setFilterClientId('')
-      setClients(prev => prev.filter(c => c.id !== clientId))
-      const deletedGameIds = games.filter(g => g.client_id === clientId).map(g => g.id)
-      setGames(prev => prev.filter(g => g.client_id !== clientId))
-      setProducts(prev => prev.filter(p => !deletedGameIds.includes(p.game_id)))
-      setSales(prev => prev.filter(s => !deletedGameIds.includes(s.product?.game_id || '')))
+      setClients(prev =&gt; prev.filter(c =&gt; c.id !== clientId))
+      const deletedGameIds = games.filter(g =&gt; g.client_id === clientId).map(g =&gt; g.id)
+      setGames(prev =&gt; prev.filter(g =&gt; g.client_id !== clientId))
+      setProducts(prev =&gt; prev.filter(p =&gt; !deletedGameIds.includes(p.game_id)))
+      setSales(prev =&gt; prev.filter(s =&gt; !deletedGameIds.includes(s.product?.game_id || '')))
     } catch (err: unknown) {
       console.error('Error deleting client:', err)
       throw err
@@ -1178,10 +1187,10 @@ export default function GameDriveDashboard() {
       
       if (error) throw error
       if (filterGameId === gameId) setFilterGameId('')
-      setGames(prev => prev.filter(g => g.id !== gameId))
-      const deletedProductIds = products.filter(p => p.game_id === gameId).map(p => p.id)
-      setProducts(prev => prev.filter(p => p.game_id !== gameId))
-      setSales(prev => prev.filter(s => !deletedProductIds.includes(s.product_id)))
+      setGames(prev =&gt; prev.filter(g =&gt; g.id !== gameId))
+      const deletedProductIds = products.filter(p =&gt; p.game_id === gameId).map(p =&gt; p.id)
+      setProducts(prev =&gt; prev.filter(p =&gt; p.game_id !== gameId))
+      setSales(prev =&gt; prev.filter(s =&gt; !deletedProductIds.includes(s.product_id)))
     } catch (err: unknown) {
       console.error('Error deleting game:', err)
       throw err
@@ -1196,51 +1205,116 @@ export default function GameDriveDashboard() {
         .eq('id', productId)
       
       if (error) throw error
-      setProducts(prev => prev.filter(p => p.id !== productId))
-      setSales(prev => prev.filter(s => s.product_id !== productId))
+      setProducts(prev =&gt; prev.filter(p =&gt; p.id !== productId))
+      setSales(prev =&gt; prev.filter(s =&gt; s.product_id !== productId))
     } catch (err: unknown) {
       console.error('Error deleting product:', err)
       throw err
     }
   }
 
-  const filteredGames = useMemo(() => {
+  const filteredGames = useMemo(() =&gt; {
     if (!filterClientId) return games
-    return games.filter(g => g.client_id === filterClientId)
+    return games.filter(g =&gt; g.client_id === filterClientId)
   }, [games, filterClientId])
 
-  const filteredProducts = useMemo(() => {
+  const filteredProducts = useMemo(() =&gt; {
     let result = products
     if (filterGameId) {
-      result = result.filter(p => p.game_id === filterGameId)
+      result = result.filter(p =&gt; p.game_id === filterGameId)
     } else if (filterClientId) {
-      result = result.filter(p => p.game?.client_id === filterClientId)
+      result = result.filter(p =&gt; p.game?.client_id === filterClientId)
     }
     return result
   }, [products, filterClientId, filterGameId])
 
-  const filteredSales = useMemo(() => {
+  const filteredSales = useMemo(() =&gt; {
     let result = sales
     if (filterGameId) {
-      result = result.filter(s => s.product?.game_id === filterGameId)
+      result = result.filter(s =&gt; s.product?.game_id === filterGameId)
     } else if (filterClientId) {
-      result = result.filter(s => s.product?.game?.client_id === filterClientId)
+      result = result.filter(s =&gt; s.product?.game?.client_id === filterClientId)
     }
     return result
   }, [sales, filterClientId, filterGameId])
 
-  const conflicts = 0
-  const upcomingEvents = platformEvents.filter(e => new Date(e.start_date) > new Date()).length
+  // Calculate real conflicts - launch sales that overlap with Steam seasonal events
+  const { conflicts, conflictDetails } = useMemo(() =&gt; {
+    const conflictList: ConflictInfo[] = []
+    
+    // Get Steam platform IDs
+    const steamPlatformIds = platforms
+      .filter(p =&gt; p.name.toLowerCase().includes('steam'))
+      .map(p =&gt; p.id)
+    
+    if (steamPlatformIds.length === 0) {
+      return { conflicts: 0, conflictDetails: [] }
+    }
+    
+    // Get Steam seasonal events
+    const steamSeasonalEvents = platformEvents.filter(e =&gt; 
+      steamPlatformIds.includes(e.platform_id) &amp;&amp; 
+      e.event_type === 'seasonal'
+    )
+    
+    // Check each product with a launch date
+    for (const product of filteredProducts) {
+      if (!product.launch_date) continue
+      
+      const duration = product.launch_sale_duration || 7
+      const launchStart = normalizeToLocalDate(product.launch_date)
+      const launchEnd = addDays(launchStart, duration - 1)
+      
+      for (const event of steamSeasonalEvents) {
+        const eventStart = normalizeToLocalDate(event.start_date)
+        const eventEnd = normalizeToLocalDate(event.end_date)
+        
+        // Check for overlap
+        if (launchStart &lt;= eventEnd &amp;&amp; launchEnd &gt;= eventStart) {
+          const overlapStart = launchStart &gt; eventStart ? launchStart : eventStart
+          const overlapEnd = launchEnd &lt; eventEnd ? launchEnd : eventEnd
+          const overlapDays = Math.round((overlapEnd.getTime() - overlapStart.getTime()) / (1000 * 60 * 60 * 24)) + 1
+          
+          conflictList.push({
+            productName: product.name,
+            eventName: event.name,
+            overlapDays
+          })
+        }
+      }
+    }
+    
+    return { conflicts: conflictList.length, conflictDetails: conflictList }
+  }, [filteredProducts, platforms, platformEvents])
+
+  // Calculate upcoming events with details
+  const { upcomingEventsCount, upcomingEventDetails } = useMemo(() =&gt; {
+    const now = new Date()
+    const upcoming = platformEvents.filter(e =&gt; new Date(e.start_date) &gt; now)
+    
+    const details = upcoming
+      .sort((a, b) =&gt; new Date(a.start_date).getTime() - new Date(b.start_date).getTime())
+      .map(e =&gt; {
+        const platform = platforms.find(p =&gt; p.id === e.platform_id)
+        return {
+          label: e.name,
+          sublabel: format(normalizeToLocalDate(e.start_date), 'MMM d, yyyy'),
+          color: platform?.color_hex || '#8b5cf6'
+        }
+      })
+    
+    return { upcomingEventsCount: upcoming.length, upcomingEventDetails: details }
+  }, [platformEvents, platforms])
 
   // FIX: Create timelineStart at midnight to match eachDayOfInterval behavior
   const now = new Date()
   const timelineStart = new Date(now.getFullYear(), now.getMonth(), 1)
   const monthCount = 12
 
-  useEffect(() => {
-    if (filterClientId && filterGameId) {
-      const game = games.find(g => g.id === filterGameId)
-      if (game && game.client_id !== filterClientId) {
+  useEffect(() =&gt; {
+    if (filterClientId &amp;&amp; filterGameId) {
+      const game = games.find(g =&gt; g.id === filterGameId)
+      if (game &amp;&amp; game.client_id !== filterClientId) {
         setFilterGameId('')
       }
     }
@@ -1248,177 +1322,182 @@ export default function GameDriveDashboard() {
 
   if (loading) {
     return (
-      <div className={styles.container}>
-        <div className={styles.loading}>
-          <div className={styles.spinner}></div>
-          <p>Loading sales data...</p>
-        </div>
-      </div>
+      &lt;div className={styles.container}&gt;
+        &lt;div className={styles.loading}&gt;
+          &lt;div className={styles.spinner}&gt;&lt;/div&gt;
+          &lt;p&gt;Loading sales data...&lt;/p&gt;
+        &lt;/div&gt;
+      &lt;/div&gt;
     )
   }
 
   return (
-    <div className={styles.container}>
-      <header className={styles.header}>
-        <h1>GameDrive Sales Planning</h1>
-        <p>Interactive sales timeline with drag-and-drop scheduling</p>
-      </header>
+    &lt;div className={styles.container}&gt;
+      &lt;header className={styles.header}&gt;
+        &lt;h1&gt;GameDrive Sales Planning&lt;/h1&gt;
+        &lt;p&gt;Interactive sales timeline with drag-and-drop scheduling&lt;/p&gt;
+      &lt;/header&gt;
 
-      {error && (
-        <div className={styles.errorBanner}>
-          <span>Warning: {error}</span>
-          <button onClick={() => setError(null)}>×</button>
-        </div>
+      {error &amp;&amp; (
+        &lt;div className={styles.errorBanner}&gt;
+          &lt;span&gt;Warning: {error}&lt;/span&gt;
+          &lt;button onClick={() =&gt; setError(null)}&gt;×&lt;/button&gt;
+        &lt;/div&gt;
       )}
 
-      {/* Header Stats */}
-      <div className={styles.statsGrid}>
-        <div className={styles.statCard}>
-          <div className={styles.statIcon} style={{backgroundColor: '#10b981'}}>📊</div>
-          <div className={styles.statContent}>
-            <h3>TOTAL SALES</h3>
-            <p className={styles.statValue}>{filteredSales.length}</p>
-            <span className={styles.statChange}>Across all platforms</span>
-          </div>
-        </div>
+      {/* Header Stats - Now using StatCard component */}
+      &lt;div className={styles.statsGrid}&gt;
+        &lt;StatCard
+          icon="📊"
+          iconColor="#10b981"
+          title="TOTAL SALES"
+          value={filteredSales.length}
+          subtitle="Across all platforms"
+        /&gt;
 
-        <div className={styles.statCard}>
-          <div className={styles.statIcon} style={{backgroundColor: '#3b82f6'}}>🎮</div>
-          <div className={styles.statContent}>
-            <h3>PRODUCTS</h3>
-            <p className={styles.statValue}>{filteredProducts.length}</p>
-            <span className={styles.statChange}>Games and DLCs</span>
-          </div>
-        </div>
+        &lt;StatCard
+          icon="🎮"
+          iconColor="#3b82f6"
+          title="PRODUCTS"
+          value={filteredProducts.length}
+          subtitle="Games and DLCs"
+        /&gt;
 
-        <div className={styles.statCard}>
-          <div className={styles.statIcon} style={{backgroundColor: '#8b5cf6'}}>📅</div>
-          <div className={styles.statContent}>
-            <h3>PLATFORM EVENTS</h3>
-            <p className={styles.statValue}>{upcomingEvents}</p>
-            <span className={styles.statChange}>Upcoming sales events</span>
-          </div>
-        </div>
+        &lt;StatCard
+          icon="📅"
+          iconColor="#8b5cf6"
+          title="PLATFORM EVENTS"
+          value={upcomingEventsCount}
+          subtitle="Upcoming sales events"
+          tooltipTitle="Upcoming Platform Events"
+          tooltipItems={upcomingEventDetails}
+          tooltipEmptyMessage="No upcoming platform events"
+        /&gt;
 
-        <div className={styles.statCard}>
-          <div className={styles.statIcon} style={{backgroundColor: conflicts > 0 ? '#ef4444' : '#22c55e'}}>
-            {conflicts > 0 ? '⚠️' : '✅'}
-          </div>
-          <div className={styles.statContent}>
-            <h3>CONFLICTS</h3>
-            <p className={styles.statValue}>{conflicts}</p>
-            <span className={styles.statChange}>{conflicts === 0 ? 'All platforms clear' : 'Needs attention'}</span>
-          </div>
-        </div>
-      </div>
+        &lt;StatCard
+          icon={conflicts &gt; 0 ? '⚠️' : '✅'}
+          iconColor={conflicts &gt; 0 ? '#ef4444' : '#22c55e'}
+          title="CONFLICTS"
+          value={conflicts}
+          subtitle={conflicts === 0 ? 'All platforms clear' : 'Needs attention'}
+          warning={conflicts &gt; 0}
+          tooltipTitle="Launch Sale Conflicts"
+          tooltipItems={conflictDetails.map(c =&gt; ({
+            label: c.productName,
+            sublabel: `${c.eventName} (${c.overlapDays}d overlap)`,
+            warning: true
+          }))}
+          tooltipEmptyMessage="No conflicts detected"
+        /&gt;
+      &lt;/div&gt;
 
       {/* Gap Analysis Panel */}
-      <GapAnalysis
+      &lt;GapAnalysis
         sales={filteredSales}
         products={filteredProducts}
         platforms={platforms}
         timelineStart={timelineStart}
         monthCount={monthCount}
-      />
+      /&gt;
 
       {/* Filters */}
-      <div className={styles.filters}>
-        <div className={styles.filterGroup}>
-          <label>Client:</label>
-          <select 
+      &lt;div className={styles.filters}&gt;
+        &lt;div className={styles.filterGroup}&gt;
+          &lt;label&gt;Client:&lt;/label&gt;
+          &lt;select 
             value={filterClientId} 
-            onChange={(e) => setFilterClientId(e.target.value)}
-          >
-            <option value="">All Clients</option>
-            {clients.map(client => (
-              <option key={client.id} value={client.id}>{client.name}</option>
+            onChange={(e) =&gt; setFilterClientId(e.target.value)}
+          &gt;
+            &lt;option value=""&gt;All Clients&lt;/option&gt;
+            {clients.map(client =&gt; (
+              &lt;option key={client.id} value={client.id}&gt;{client.name}&lt;/option&gt;
             ))}
-          </select>
-        </div>
+          &lt;/select&gt;
+        &lt;/div&gt;
         
-        <div className={styles.filterGroup}>
-          <label>Game:</label>
-          <select 
+        &lt;div className={styles.filterGroup}&gt;
+          &lt;label&gt;Game:&lt;/label&gt;
+          &lt;select 
             value={filterGameId} 
-            onChange={(e) => setFilterGameId(e.target.value)}
-          >
-            <option value="">All Games</option>
-            {filteredGames.map(game => (
-              <option key={game.id} value={game.id}>{game.name}</option>
+            onChange={(e) =&gt; setFilterGameId(e.target.value)}
+          &gt;
+            &lt;option value=""&gt;All Games&lt;/option&gt;
+            {filteredGames.map(game =&gt; (
+              &lt;option key={game.id} value={game.id}&gt;{game.name}&lt;/option&gt;
             ))}
-          </select>
-        </div>
+          &lt;/select&gt;
+        &lt;/div&gt;
 
-        <div className={styles.filterGroup}>
-          <label className={styles.checkboxLabel}>
-            <input 
+        &lt;div className={styles.filterGroup}&gt;
+          &lt;label className={styles.checkboxLabel}&gt;
+            &lt;input 
               type="checkbox" 
               checked={showEvents} 
-              onChange={(e) => setShowEvents(e.target.checked)}
-            />
+              onChange={(e) =&gt; setShowEvents(e.target.checked)}
+            /&gt;
             Show Platform Events
-          </label>
-        </div>
+          &lt;/label&gt;
+        &lt;/div&gt;
 
-        {(filterClientId || filterGameId) && (
-          <button 
+        {(filterClientId || filterGameId) &amp;&amp; (
+          &lt;button 
             className={styles.clearFilters}
-            onClick={() => { setFilterClientId(''); setFilterGameId(''); }}
-          >
+            onClick={() =&gt; { setFilterClientId(''); setFilterGameId(''); }}
+          &gt;
             Clear Filters
-          </button>
+          &lt;/button&gt;
         )}
-      </div>
+      &lt;/div&gt;
 
       {/* View Toggle and Actions */}
-      <div className={styles.toolbar}>
-        <div className={styles.viewToggle}>
-          <button 
+      &lt;div className={styles.toolbar}&gt;
+        &lt;div className={styles.viewToggle}&gt;
+          &lt;button 
             className={`${styles.toggleBtn} ${viewMode === 'gantt' ? styles.active : ''}`}
-            onClick={() => setViewMode('gantt')}
-          >
+            onClick={() =&gt; setViewMode('gantt')}
+          &gt;
             Timeline
-          </button>
-          <button 
+          &lt;/button&gt;
+          &lt;button 
             className={`${styles.toggleBtn} ${viewMode === 'table' ? styles.active : ''}`}
-            onClick={() => setViewMode('table')}
-          >
+            onClick={() =&gt; setViewMode('table')}
+          &gt;
             Table
-          </button>
-        </div>
+          &lt;/button&gt;
+        &lt;/div&gt;
         
-        <div className={styles.actions}>
-          <button className={styles.primaryBtn} onClick={() => setShowAddModal(true)}>
+        &lt;div className={styles.actions}&gt;
+          &lt;button className={styles.primaryBtn} onClick={() =&gt; setShowAddModal(true)}&gt;
             + Add Sale
-          </button>
-          <button className={styles.secondaryBtn} onClick={() => setShowImportModal(true)}>
+          &lt;/button&gt;
+          &lt;button className={styles.secondaryBtn} onClick={() =&gt; setShowImportModal(true)}&gt;
             Import CSV
-          </button>
-          <button className={styles.secondaryBtn} onClick={() => setShowVersionManager(true)}>
+          &lt;/button&gt;
+          &lt;button className={styles.secondaryBtn} onClick={() =&gt; setShowVersionManager(true)}&gt;
             📚 Versions
-          </button>
-          <button className={styles.secondaryBtn} onClick={() => setShowProductManager(true)}>
+          &lt;/button&gt;
+          &lt;button className={styles.secondaryBtn} onClick={() =&gt; setShowProductManager(true)}&gt;
             Manage Products
-          </button>
-          <button className={styles.secondaryBtn} onClick={() => setShowPlatformSettings(true)}>
+          &lt;/button&gt;
+          &lt;button className={styles.secondaryBtn} onClick={() =&gt; setShowPlatformSettings(true)}&gt;
             Platform Settings
-          </button>
-          <button 
+          &lt;/button&gt;
+          &lt;button 
             className={styles.secondaryBtn} 
-            onClick={() => setShowExportModal(true)}
-          >
+            onClick={() =&gt; setShowExportModal(true)}
+          &gt;
             Export
-          </button>
-          <button className={styles.secondaryBtn} onClick={fetchData}>
+          &lt;/button&gt;
+          &lt;button className={styles.secondaryBtn} onClick={fetchData}&gt;
             Refresh
-          </button>
-        </div>
-      </div>
+          &lt;/button&gt;
+        &lt;/div&gt;
+      &lt;/div&gt;
 
       {/* Main Content */}
-      <div className={styles.mainContent}>
+      &lt;div className={styles.mainContent}&gt;
         {viewMode === 'gantt' ? (
-          <GanttChart
+          &lt;GanttChart
             sales={filteredSales}
             products={filteredProducts}
             platforms={platforms}
@@ -1437,22 +1516,22 @@ export default function GameDriveDashboard() {
             onLaunchSaleDurationChange={handleLaunchSaleDurationChange}
             allSales={sales}
             showEvents={showEvents}
-          />
+          /&gt;
         ) : (
-          <SalesTable
+          &lt;SalesTable
             sales={filteredSales}
             platforms={platforms}
             onDelete={handleSaleDelete}
             onEdit={handleSaleEdit}
             onDuplicate={handleSaleDuplicate}
             onBulkEdit={handleBulkEdit}
-          />
+          /&gt;
         )}
-      </div>
+      &lt;/div&gt;
 
       {/* Add Sale Modal */}
-      {showAddModal && (
-        <AddSaleModal
+      {showAddModal &amp;&amp; (
+        &lt;AddSaleModal
           products={products}
           platforms={platforms}
           existingSales={sales}
@@ -1462,12 +1541,12 @@ export default function GameDriveDashboard() {
           initialEndDate={salePrefill ? parseISO(salePrefill.endDate) : undefined}
           initialProductId={salePrefill?.productId}
           initialPlatformId={salePrefill?.platformId}
-        />
+        /&gt;
       )}
 
       {/* Edit Sale Modal */}
-      {editingSale && (
-        <EditSaleModal
+      {editingSale &amp;&amp; (
+        &lt;EditSaleModal
           sale={editingSale}
           products={products}
           platforms={platforms}
@@ -1475,54 +1554,54 @@ export default function GameDriveDashboard() {
           onSave={handleSaleUpdate}
           onDelete={handleSaleDelete}
           onDuplicate={handleSaleDuplicate}
-          onClose={() => setEditingSale(null)}
-        />
+          onClose={() =&gt; setEditingSale(null)}
+        /&gt;
       )}
 
       {/* Duplicate Sale Modal */}
-      {duplicatingSale && (
-        <DuplicateSaleModal
+      {duplicatingSale &amp;&amp; (
+        &lt;DuplicateSaleModal
           sale={duplicatingSale}
           products={products}
           platforms={platforms}
           existingSales={sales}
           onDuplicate={handleDuplicateSales}
-          onClose={() => setDuplicatingSale(null)}
-        />
+          onClose={() =&gt; setDuplicatingSale(null)}
+        /&gt;
       )}
 
       {/* Bulk Edit Sales Modal */}
-      <BulkEditSalesModal
-        isOpen={bulkEditSales.length > 0}
-        onClose={() => setBulkEditSales([])}
+      &lt;BulkEditSalesModal
+        isOpen={bulkEditSales.length &gt; 0}
+        onClose={() =&gt; setBulkEditSales([])}
         selectedSales={bulkEditSales}
         platforms={platforms}
         onBulkUpdate={handleBulkUpdate}
         onBulkDelete={handleBulkDelete}
-      />
+      /&gt;
 
       {/* Import Sales Modal */}
-      <ImportSalesModal
+      &lt;ImportSalesModal
         isOpen={showImportModal}
-        onClose={() => setShowImportModal(false)}
+        onClose={() =&gt; setShowImportModal(false)}
         products={products}
         platforms={platforms}
         existingSales={sales}
         onImport={handleBulkImport}
-      />
+      /&gt;
 
       {/* Version Manager Modal */}
-      <VersionManager
+      &lt;VersionManager
         isOpen={showVersionManager}
-        onClose={() => setShowVersionManager(false)}
+        onClose={() =&gt; setShowVersionManager(false)}
         currentSales={sales}
         platforms={platforms}
         onRestoreVersion={handleRestoreVersion}
-      />
+      /&gt;
 
       {/* Product Manager Modal */}
-      {showProductManager && (
-        <ProductManager
+      {showProductManager &amp;&amp; (
+        &lt;ProductManager
           clients={clients}
           games={games}
           products={products}
@@ -1536,25 +1615,25 @@ export default function GameDriveDashboard() {
           onGameUpdate={handleGameUpdate}
           onProductUpdate={handleProductUpdate}
           onGenerateCalendar={handleGenerateCalendar}
-          onClose={() => setShowProductManager(false)}
-        />
+          onClose={() =&gt; setShowProductManager(false)}
+        /&gt;
       )}
 
       {/* Platform Settings Modal */}
-      <PlatformSettings
+      &lt;PlatformSettings
         isOpen={showPlatformSettings}
-        onClose={() => setShowPlatformSettings(false)}
-        onEventsChange={() => {
+        onClose={() =&gt; setShowPlatformSettings(false)}
+        onEventsChange={() =&gt; {
           fetchPlatformEvents()
           fetchData()
         }}
-      />
+      /&gt;
 
       {/* Sale Calendar Preview Modal */}
-      {calendarGeneration && (
-        <SaleCalendarPreviewModal
+      {calendarGeneration &amp;&amp; (
+        &lt;SaleCalendarPreviewModal
           isOpen={true}
-          onClose={() => setCalendarGeneration(null)}
+          onClose={() =&gt; setCalendarGeneration(null)}
           productId={calendarGeneration.productId}
           productName={calendarGeneration.productName}
           launchDate={calendarGeneration.launchDate}
@@ -1563,49 +1642,49 @@ export default function GameDriveDashboard() {
           existingSales={sales}
           onApply={handleApplyCalendar}
           isApplying={isApplyingCalendar}
-        />
+        /&gt;
       )}
 
       {/* Clear Sales Modal */}
-      {clearSalesState && (
-        <ClearSalesModal
+      {clearSalesState &amp;&amp; (
+        &lt;ClearSalesModal
           isOpen={true}
-          onClose={() => setClearSalesState(null)}
+          onClose={() =&gt; setClearSalesState(null)}
           productId={clearSalesState.productId}
           productName={clearSalesState.productName}
           platforms={platforms}
           sales={sales}
           onConfirm={handleConfirmClearSales}
-        />
+        /&gt;
       )}
 
       {/* Edit Launch Date Modal */}
-      {editLaunchDateState && (
-        <EditLaunchDateModal
+      {editLaunchDateState &amp;&amp; (
+        &lt;EditLaunchDateModal
           isOpen={true}
-          onClose={() => setEditLaunchDateState(null)}
+          onClose={() =&gt; setEditLaunchDateState(null)}
           productId={editLaunchDateState.productId}
           productName={editLaunchDateState.productName}
           currentLaunchDate={editLaunchDateState.currentLaunchDate}
           currentLaunchSaleDuration={editLaunchDateState.currentLaunchSaleDuration || 7}
           onSave={handleSaveLaunchDate}
-          salesCount={sales.filter(s => s.product_id === editLaunchDateState.productId).length}
+          salesCount={sales.filter(s =&gt; s.product_id === editLaunchDateState.productId).length}
           platforms={platforms}
           platformEvents={platformEvents}
-        />
+        /&gt;
       )}
 
       {/* Timeline Export Modal */}
-      <TimelineExportModal
+      &lt;TimelineExportModal
         isOpen={showExportModal}
-        onClose={() => setShowExportModal(false)}
+        onClose={() =&gt; setShowExportModal(false)}
         sales={filteredSales}
         products={filteredProducts}
         platforms={platforms}
         timelineStart={timelineStart}
         monthCount={monthCount}
         calendarVariations={lastGeneratedVariations}
-      />
-    </div>
+      /&gt;
+    &lt;/div&gt;
   )
 }
