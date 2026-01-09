@@ -1,6 +1,6 @@
 'use client'
 
-// Cache invalidation: 2026-01-09T05:20:00Z - Duplicate Sale
+// Cache invalidation: 2026-01-09T05:35:00Z - Launch Sale Duration Fix
 
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { createClient } from '@supabase/supabase-js'
@@ -51,6 +51,7 @@ interface EditLaunchDateState {
   productId: string
   productName: string
   currentLaunchDate: string
+  currentDuration?: number
 }
 
 interface SaleSnapshot {
@@ -770,28 +771,95 @@ export default function GameDriveDashboard() {
   }, [products, sales])
 
   // Edit launch date handler - opens modal (click)
-  const handleEditLaunchDate = useCallback((productId: string, productName: string, currentLaunchDate: string) => {
-    setEditLaunchDateState({ productId, productName, currentLaunchDate })
+  const handleEditLaunchDate = useCallback((productId: string, productName: string, currentLaunchDate: string, currentDuration?: number) => {
+    setEditLaunchDateState({ productId, productName, currentLaunchDate, currentDuration })
   }, [])
 
-  // Save launch date from modal (without shifting sales)
-  const handleSaveLaunchDate = useCallback(async (productId: string, newLaunchDate: string, shiftSales: boolean) => {
+  // Save launch date from modal (with optional sales shift and duration)
+  const handleSaveLaunchDate = useCallback(async (productId: string, newLaunchDate: string, launchSaleDuration: number, shiftSales: boolean) => {
     const product = products.find(p => p.id === productId)
     if (!product) return
     
+    // Build update object
+    const productUpdate: { launch_date: string; launch_sale_duration?: number } = {
+      launch_date: newLaunchDate
+    }
+    
+    // Only include duration if it's different from default or current
+    if (launchSaleDuration !== (product.launch_sale_duration || 7)) {
+      productUpdate.launch_sale_duration = launchSaleDuration
+    }
+    
     if (shiftSales) {
-      // Use the existing handler that shifts sales
-      await handleLaunchDateChange(productId, newLaunchDate)
+      // Calculate shift and update sales
+      const oldLaunchDate = product.launch_date
+      if (oldLaunchDate && oldLaunchDate !== newLaunchDate) {
+        const oldDate = parseISO(oldLaunchDate)
+        const newDate = parseISO(newLaunchDate)
+        const daysDiff = Math.round((newDate.getTime() - oldDate.getTime()) / (1000 * 60 * 60 * 24))
+        
+        if (daysDiff !== 0) {
+          const productSales = sales.filter(s => s.product_id === productId)
+          
+          // Optimistically update
+          setProducts(prev => prev.map(p => 
+            p.id === productId ? { ...p, ...productUpdate } : p
+          ))
+          
+          const updatedSales = productSales.map(sale => {
+            const newStartDate = new Date(parseISO(sale.start_date).getTime() + daysDiff * 24 * 60 * 60 * 1000)
+            const newEndDate = new Date(parseISO(sale.end_date).getTime() + daysDiff * 24 * 60 * 60 * 1000)
+            return {
+              ...sale,
+              start_date: format(newStartDate, 'yyyy-MM-dd'),
+              end_date: format(newEndDate, 'yyyy-MM-dd')
+            }
+          })
+          
+          setSales(prev => prev.map(sale => {
+            const updated = updatedSales.find(u => u.id === sale.id)
+            return updated || sale
+          }))
+          
+          try {
+            // Update product
+            const { error: productError } = await supabase
+              .from('products')
+              .update(productUpdate)
+              .eq('id', productId)
+            
+            if (productError) throw productError
+            
+            // Update all sales dates
+            for (const sale of updatedSales) {
+              const { error: saleError } = await supabase
+                .from('sales')
+                .update({
+                  start_date: sale.start_date,
+                  end_date: sale.end_date
+                })
+                .eq('id', sale.id)
+              
+              if (saleError) throw saleError
+            }
+          } catch (err: unknown) {
+            const errorMessage = err instanceof Error ? err.message : 'Failed to update launch date'
+            console.error('Error updating launch date:', err)
+            setError(errorMessage)
+            await fetchData()
+          }
+        }
+      }
     } else {
-      // Just update the launch date without shifting sales
+      // Just update the launch date and duration without shifting sales
       setProducts(prev => prev.map(p => 
-        p.id === productId ? { ...p, launch_date: newLaunchDate } : p
+        p.id === productId ? { ...p, ...productUpdate } : p
       ))
       
       try {
         const { error } = await supabase
           .from('products')
-          .update({ launch_date: newLaunchDate })
+          .update(productUpdate)
           .eq('id', productId)
         
         if (error) throw error
@@ -804,7 +872,7 @@ export default function GameDriveDashboard() {
     }
     
     setEditLaunchDateState(null)
-  }, [products, handleLaunchDateChange])
+  }, [products, sales])
 
   async function handleClientCreate(client: Omit<Client, 'id' | 'created_at'>) {
     try {
@@ -1360,8 +1428,11 @@ export default function GameDriveDashboard() {
           productId={editLaunchDateState.productId}
           productName={editLaunchDateState.productName}
           currentLaunchDate={editLaunchDateState.currentLaunchDate}
+          currentDuration={editLaunchDateState.currentDuration}
           onSave={handleSaveLaunchDate}
           salesCount={sales.filter(s => s.product_id === editLaunchDateState.productId).length}
+          platforms={platforms}
+          platformEvents={platformEvents}
         />
       )}
 
