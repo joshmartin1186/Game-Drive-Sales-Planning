@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { format, addDays, parseISO, differenceInDays } from 'date-fns'
+import { format, addDays, differenceInDays } from 'date-fns'
 import { PlatformEvent, Platform, LaunchConflict } from '@/lib/types'
 import { normalizeToLocalDate } from '@/lib/dateUtils'
 import styles from './EditLaunchDateModal.module.css'
@@ -35,21 +35,23 @@ export default function EditLaunchDateModal({
   const [launchSaleDuration, setLaunchSaleDuration] = useState(currentLaunchSaleDuration || 7)
   const [shiftSales, setShiftSales] = useState(true)
 
-  // Find Steam platform
-  const steamPlatform = useMemo(() => {
-    return platforms.find(p => p.name.toLowerCase() === 'steam')
+  // Find all Steam platforms (Steam Custom, Steam Seasonal, etc.)
+  const steamPlatformIds = useMemo(() => {
+    return platforms
+      .filter(p => p.name.toLowerCase().includes('steam'))
+      .map(p => p.id)
   }, [platforms])
 
   // Check for conflicts with Steam seasonal sales
   const conflicts = useMemo((): LaunchConflict[] => {
-    if (!newDate || !steamPlatform) return []
+    if (!newDate || steamPlatformIds.length === 0) return []
 
     const launchStart = normalizeToLocalDate(newDate)
     const launchEnd = addDays(launchStart, launchSaleDuration - 1)
 
-    // Get Steam seasonal events
+    // Get Steam seasonal events from ANY Steam platform
     const steamSeasonalEvents = platformEvents.filter(e => 
-      e.platform_id === steamPlatform.id && 
+      steamPlatformIds.includes(e.platform_id) && 
       e.event_type === 'seasonal'
     )
 
@@ -77,7 +79,7 @@ export default function EditLaunchDateModal({
     }
 
     return foundConflicts
-  }, [newDate, launchSaleDuration, platformEvents, steamPlatform])
+  }, [newDate, launchSaleDuration, platformEvents, steamPlatformIds])
 
   if (!isOpen) return null
 
@@ -176,7 +178,7 @@ export default function EditLaunchDateModal({
           )}
 
           {/* No conflicts - show green confirmation */}
-          {conflicts.length === 0 && newDate && steamPlatform && (
+          {conflicts.length === 0 && newDate && steamPlatformIds.length > 0 && (
             <div className={styles.noConflict}>
               <span className={styles.noConflictIcon}>✓</span>
               <span>No conflicts with Steam Seasonal Sales</span>
