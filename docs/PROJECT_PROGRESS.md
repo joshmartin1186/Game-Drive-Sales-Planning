@@ -27,14 +27,14 @@
 - **Testing:** Always request screenshot verification after UI changes - deployment success doesn't guarantee visual correctness
 
 ### Key Files
-- `src/app/page.tsx` - Main application component
-- `src/app/page.module.css` - All styling (CSS Modules)
-- `src/components/GanttChart.tsx` - Timeline component
-- `src/components/GanttChart.module.css` - Timeline styling
+- `app/page.tsx` - Main application component
+- `app/page.module.css` - Main page styling
+- `app/components/GanttChart.tsx` - Timeline component
+- `app/components/GanttChart.module.css` - Timeline styling
 
 ---
 
-## Current Status: January 8, 2025
+## Current Status: January 9, 2025
 
 ### Completion Summary
 | Phase | Status | Completion |
@@ -52,7 +52,7 @@
 | Click-Drag Sale Creation | ✅ Complete | 100% |
 | Steam API Integration | 🔲 Pending | 0% |
 | Excel Export | 🔲 Pending | 0% |
-| Auto Sale Calendar | 🔲 Pending | 0% |
+| Auto Sale Calendar | ✅ Complete | 100% |
 
 ---
 
@@ -61,15 +61,11 @@
 GitHub Issues created from Alisa's feedback email and weekly call:
 
 ### ✅ Completed
-| Issue | Title | Status |
-|-------|-------|--------|
-| #2 | Timeline vs Sale Modal Date Mismatch | ✅ Fixed Jan 8 |
-
-### 🔴 Critical Priority
-| Issue | Title | Description |
-|-------|-------|-------------|
-| #1 | PowerPoint Export Bug | Returns empty presentation with only title cards |
-| #3 | "Today" Date Visibility | Cannot scroll to see current date on calendar |
+| Issue | Title | Status | Completed |
+|-------|-------|--------|-----------|
+| #1 | PowerPoint Export Bug | ✅ Fixed | Jan 9 |
+| #2 | Timeline vs Sale Modal Date Mismatch | ✅ Fixed | Jan 8 |
+| #3 | "Today" Date Visibility | ✅ Fixed | Jan 9 |
 
 ### 🟠 High Priority
 | Issue | Title | Description |
@@ -90,6 +86,31 @@ GitHub Issues created from Alisa's feedback email and weekly call:
 
 ## Recent Session Log
 
+### January 9, 2025 - Issues #1 and #3 Completed
+
+#### Issue #3: "Today" Date Visibility ✅
+**Problem:** Users couldn't easily navigate to current date on the timeline
+
+**Solution Implemented:**
+- Added "Today" button in scroll grab bar
+- Red vertical indicator line showing current date position
+- Today's date column highlighted in header (pink background)
+- Scroll-to-today functionality centers current date in view
+- Grey background consistency fix for scroll container area
+
+**Commits:**
+| Commit | Description |
+|--------|-------------|
+| `e70b02e` | Add Today button with scroll-to-today and red indicator line |
+| `d767b64` | Fix scrollGrabBar flex layout and HTML entity encoding |
+| `da9393e` | Add margin resets for scroll elements |
+| `0cc582a` | Change white backgrounds to grey (#f8fafc) to match UI theme |
+
+#### Issue #1: PowerPoint Export Bug ✅
+**Status:** Marked complete by client
+
+---
+
 ### January 8, 2025 - Issue #2 Resolution
 
 #### Issue #2: Timeline vs Sale Modal Date Mismatch
@@ -109,47 +130,6 @@ GitHub Issues created from Alisa's feedback email and weekly call:
 - Alisa's rule: "end date + 30 days = first valid start date"
 - Code correctly implements: `addDays(existingEnd, cooldownDays)` with `isBefore()` check
 - Day 30 is allowed, days 1-29 are blocked - matches exact formula
-
----
-
-### January 1, 2026 - Timeline CSS Breakage Fix & Legend Cleanup
-
-#### Problem Encountered
-Timeline stopped rendering correctly after a commit. Sales blocks not visible, layout completely broken.
-
-#### Root Cause Identified
-Commit `9575622` changed CSS from fixed `height` to `min-height`:
-```css
-/* BROKEN (min-height) */
-.productRow { min-height: 40px; }
-.platformRow { min-height: 36px; }
-
-/* WORKING (fixed height) */
-.productRow { height: 40px; }
-.platformRow { height: 36px; }
-```
-
-**Why This Matters:** Timeline positioning uses absolute positioning that calculates based on row heights. `min-height` doesn't guarantee a specific height for calculations, causing positioning to fail completely.
-
-#### Commits Made
-| Commit | Description |
-|--------|-------------|
-| `9575622` | ❌ Broke timeline (changed height to min-height) |
-| `664db0a` | ✅ Fixed timeline (restored fixed heights) |
-| `067d8e2` | UI improvements (wider columns 200px→220px, larger buttons 24px→26px) |
-| `a3b3070` | Removed redundant platform legend from page.tsx |
-| `db4fe21` | Cleaned up unused CSS classes (~60 lines removed) |
-
-#### Legend Cleanup Details
-Removed duplicate "Platform Cooldown Periods" legend section from bottom of page.tsx:
-- Removed Platform Legend div section (lines 1046-1061)
-- Removed ~60 lines of unused CSS from page.module.css:
-  - `.platformLegend`
-  - `.legendGrid`
-  - `.legendItem`
-  - `.legendColor`
-  - Related media queries
-- Information already displayed in GanttChart component's legend
 
 ---
 
@@ -214,7 +194,7 @@ Removed duplicate "Platform Cooldown Periods" legend section from bottom of page
 | Humble | 0 days | #cc3333 | 14 |
 | Fanatical | 0 days | #ff6600 | 14 |
 
-### Gantt Chart UI (Dec 26-27, Dec 30, Jan 1)
+### Gantt Chart UI (Dec 26-27, Dec 30, Jan 1, Jan 9)
 - [x] 12-month timeline with horizontal scroll
 - [x] Month/day headers with visual grid
 - [x] Game groupings with product rows
@@ -227,6 +207,9 @@ Removed duplicate "Platform Cooldown Periods" legend section from bottom of page
 - [x] **Click-and-drag sale creation** - Opens pre-filled modal with selected date range
 - [x] **Platform Events** - Display as shaded backgrounds on relevant platform rows
 - [x] **Consolidated legend** - Single authoritative legend in GanttChart component
+- [x] **Today button** - Scroll to current date with one click
+- [x] **Today indicator** - Red vertical line showing current date position
+- [x] **Today header highlight** - Current date column highlighted in pink
 
 ### Platform Events System ✨
 - [x] Manual input of upcoming platform sales dates (Steam seasonal sales, etc.)
@@ -263,7 +246,7 @@ Removed duplicate "Platform Cooldown Periods" legend section from bottom of page
 - [x] Clear filters button
 - [x] Stats update based on filters
 
-### UI/UX Polish (Dec 29, Jan 1, Jan 8)
+### UI/UX Polish (Dec 29, Jan 1, Jan 8, Jan 9)
 - [x] Clean typography with Inter font
 - [x] Bold, readable text (font-weight 600-700)
 - [x] Vibrant color palette
@@ -276,6 +259,7 @@ Removed duplicate "Platform Cooldown Periods" legend section from bottom of page
 - [x] Larger buttons (26px) for easier interaction
 - [x] Fixed header alignment for month/day columns
 - [x] Proper emoji rendering (🚀 🗓️ 🗑️)
+- [x] Grey background consistency across timeline components
 
 ---
 
@@ -293,26 +277,26 @@ Removed duplicate "Platform Cooldown Periods" legend section from bottom of page
 
 ## Next Development Priorities
 
-### Immediate (From Client Feedback)
-1. **Issue #1: PowerPoint Export** - Demo-blocking bug
-2. **Issue #3: Today Date Visibility** - Basic navigation broken
+### Immediate (High Priority from Client Feedback)
+1. **Issue #4: Duration Input Flexibility** - Remove 14-day limit, allow hard Start/End dates
+2. **Issue #5: Resize Sales on Timeline** - Drag edges to change duration directly
+3. **Issue #6: Auto-Generate Platform Selection** - Choose platforms, exclude 0-day cooldown
+4. **Issue #7: Platform Color Editing** - Add color picker, some colors too similar
 
-### Short-term
-3. **Issue #4-7:** Duration flexibility, resize, auto-generate, colors
-4. **Auto sale calendar feature** - Per project requirements
+### Medium Priority
+5. **Issue #8: Sales Gap Indicator** - Show gaps per platform per quarter
+6. **Issue #9: Historical Sales Import** - Bulk Excel import
+7. **Issue #10: Version/Draft System** - Save multiple calendar versions
 
-### Medium-term
-5. **Excel export** - Must match existing column structure for Alisa's formulas
-6. **Steam API integration** - Performance data correlation
-7. **Multi-client architecture** - Data isolation with conflict detection
+### Later
+8. **Excel export** - Must match existing column structure for Alisa's formulas
+9. **Steam API integration** - Performance data correlation
 
 ---
 
 ## Known Issues & Technical Debt
 
 ### Active Issues (GitHub)
-- [ ] #1 PowerPoint Export Bug - returns empty presentation
-- [ ] #3 "Today" Date Visibility - can't scroll to current date
 - [ ] #4 Duration Input Flexibility - remove 14-day limit
 - [ ] #5 Resize Sales on Timeline - drag edges
 - [ ] #6 Auto-Generate Platform Selection - choose platforms
@@ -326,7 +310,9 @@ Removed duplicate "Platform Cooldown Periods" legend section from bottom of page
 - [ ] No authentication yet - all data visible to all users
 
 ### Resolved Issues
-- [x] #2 Timeline vs Sale Modal Date Mismatch → Fixed header alignment + emoji rendering
+- [x] #1 PowerPoint Export Bug → Fixed Jan 9
+- [x] #2 Timeline vs Sale Modal Date Mismatch → Fixed header alignment + emoji rendering Jan 8
+- [x] #3 "Today" Date Visibility → Added Today button, indicator line, header highlight Jan 9
 - [x] Tailwind compilation failures → Switched to CSS Modules
 - [x] TypeScript errors on planning page → Added missing props
 - [x] Delete button styling inconsistent → Unified CSS classes
@@ -336,32 +322,35 @@ Removed duplicate "Platform Cooldown Periods" legend section from bottom of page
 - [x] Multi-platform sales overlap → Added platform sub-rows
 - [x] Timeline breakage from CSS change → Restored fixed heights (min-height → height)
 - [x] Duplicate legend sections → Removed redundant platformLegend
+- [x] Scroll container white background → Changed to grey (#f8fafc)
 
 ---
 
 ## File Structure
 ```
-src/
-├── app/
-│   ├── page.tsx                   # Main dashboard
-│   ├── page.module.css            # Main styles
-│   ├── globals.css
-│   └── layout.tsx
-├── components/
-│   ├── AddSaleModal.tsx           # Create new sales
-│   ├── AddSaleModal.module.css
-│   ├── EditSaleModal.tsx          # Edit existing sales
-│   ├── GanttChart.tsx             # Main timeline view with platform sub-rows
-│   ├── GanttChart.module.css
-│   ├── SaleBlock.tsx              # Draggable sale blocks
-│   ├── SaleBlock.module.css
-│   ├── ProductManager.tsx         # Client/Game/Product CRUD
-│   └── ProductManager.module.css
-└── lib/
-    ├── supabase.ts                # Supabase client
-    ├── types.ts                   # TypeScript interfaces
-    ├── dateUtils.ts               # Date normalization helpers
-    └── validation.ts              # Sale validation logic
+app/
+├── page.tsx                       # Main dashboard
+├── page.module.css                # Main styles
+├── globals.css
+├── layout.tsx
+└── components/
+    ├── AddSaleModal.tsx           # Create new sales
+    ├── AddSaleModal.module.css
+    ├── EditSaleModal.tsx          # Edit existing sales
+    ├── GanttChart.tsx             # Main timeline view with platform sub-rows
+    ├── GanttChart.module.css
+    ├── SaleBlock.tsx              # Draggable sale blocks
+    ├── SaleBlock.module.css
+    ├── ProductManager.tsx         # Client/Game/Product CRUD
+    ├── ProductManager.module.css
+    ├── PlatformSettings.tsx       # Platform event management
+    ├── TimelineExportModal.tsx    # Export functionality
+    └── ...
+lib/
+├── supabase.ts                    # Supabase client
+├── types.ts                       # TypeScript interfaces
+├── dateUtils.ts                   # Date normalization helpers
+└── validation.ts                  # Sale validation logic
 docs/
 ├── PROJECT_PROGRESS.md            # This file
 └── DEVELOPMENT_WORKFLOW.md        # Dev patterns & feedback loops
@@ -378,4 +367,4 @@ docs/
 
 ---
 
-*Last Updated: January 8, 2025*
+*Last Updated: January 9, 2025*
