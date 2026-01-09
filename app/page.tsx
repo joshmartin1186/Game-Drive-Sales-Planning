@@ -1,6 +1,6 @@
 'use client'
 
-// Cache invalidation: 2026-01-09T05:00:00Z - Import Sales Modal
+// Cache invalidation: 2026-01-09T05:10:00Z - Version Manager
 
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { createClient } from '@supabase/supabase-js'
@@ -17,6 +17,7 @@ import TimelineExportModal from './components/TimelineExportModal'
 import EditLaunchDateModal from './components/EditLaunchDateModal'
 import GapAnalysis from './components/GapAnalysis'
 import ImportSalesModal from './components/ImportSalesModal'
+import VersionManager from './components/VersionManager'
 import { generateSaleCalendar, GeneratedSale, CalendarVariation, generatedSaleToCreateFormat } from '@/lib/sale-calendar-generator'
 import { useUndo } from '@/lib/undo-context'
 import styles from './page.module.css'
@@ -51,6 +52,20 @@ interface EditLaunchDateState {
   currentLaunchDate: string
 }
 
+interface SaleSnapshot {
+  product_id: string
+  platform_id: string
+  start_date: string
+  end_date: string
+  discount_percentage: number | null
+  sale_name: string | null
+  sale_type: string
+  status: string
+  notes: string | null
+  product_name?: string
+  platform_name?: string
+}
+
 export default function GameDriveDashboard() {
   const [sales, setSales] = useState<SaleWithDetails[]>([])
   const [clients, setClients] = useState<Client[]>([])
@@ -65,6 +80,7 @@ export default function GameDriveDashboard() {
   const [showPlatformSettings, setShowPlatformSettings] = useState(false)
   const [showExportModal, setShowExportModal] = useState(false)
   const [showImportModal, setShowImportModal] = useState(false)
+  const [showVersionManager, setShowVersionManager] = useState(false)
   const [editingSale, setEditingSale] = useState<SaleWithDetails | null>(null)
   const [viewMode, setViewMode] = useState<'gantt' | 'table'>('gantt')
   const [showEvents, setShowEvents] = useState(true)
@@ -439,6 +455,56 @@ export default function GameDriveDashboard() {
       throw new Error(errorMessage)
     }
   }, [pushAction])
+
+  // Restore version handler
+  const handleRestoreVersion = useCallback(async (salesSnapshot: SaleSnapshot[]) => {
+    // Delete all current sales first
+    const currentSaleIds = sales.map(s => s.id)
+    
+    try {
+      // Delete existing sales
+      for (const id of currentSaleIds) {
+        const { error } = await supabase
+          .from('sales')
+          .delete()
+          .eq('id', id)
+        
+        if (error) throw error
+      }
+      
+      // Create sales from snapshot
+      if (salesSnapshot.length > 0) {
+        const salesToCreate = salesSnapshot.map(s => ({
+          product_id: s.product_id,
+          platform_id: s.platform_id,
+          start_date: s.start_date,
+          end_date: s.end_date,
+          discount_percentage: s.discount_percentage,
+          sale_name: s.sale_name,
+          sale_type: s.sale_type,
+          status: s.status,
+          notes: s.notes
+        }))
+        
+        const { error } = await supabase
+          .from('sales')
+          .insert(salesToCreate)
+        
+        if (error) throw error
+      }
+      
+      // Refresh to get full sale data with relations
+      await fetchSales()
+      
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to restore version'
+      console.error('Error restoring version:', err)
+      setError(errorMessage)
+      // Refresh to recover
+      await fetchSales()
+      throw new Error(errorMessage)
+    }
+  }, [sales])
 
   const handleSaleEdit = useCallback((sale: SaleWithDetails) => {
     setEditingSale(sale)
@@ -1062,6 +1128,9 @@ export default function GameDriveDashboard() {
           <button className={styles.secondaryBtn} onClick={() => setShowImportModal(true)}>
             Import CSV
           </button>
+          <button className={styles.secondaryBtn} onClick={() => setShowVersionManager(true)}>
+            📚 Versions
+          </button>
           <button className={styles.secondaryBtn} onClick={() => setShowProductManager(true)}>
             Manage Products
           </button>
@@ -1147,6 +1216,15 @@ export default function GameDriveDashboard() {
         platforms={platforms}
         existingSales={sales}
         onImport={handleBulkImport}
+      />
+
+      {/* Version Manager Modal */}
+      <VersionManager
+        isOpen={showVersionManager}
+        onClose={() => setShowVersionManager(false)}
+        currentSales={sales}
+        platforms={platforms}
+        onRestoreVersion={handleRestoreVersion}
       />
 
       {/* Product Manager Modal */}
