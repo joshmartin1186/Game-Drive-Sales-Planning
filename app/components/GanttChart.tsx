@@ -114,6 +114,7 @@ export default function GanttChart(props: GanttChartProps) {
   const [monthCount, setMonthCount] = useState(initialMonthCount + 6)
   const [zoomIndex, setZoomIndex] = useState(DEFAULT_ZOOM_INDEX)
   const [containerWidth, setContainerWidth] = useState(1200)
+  const [hasInitialScrolled, setHasInitialScrolled] = useState(false)
   
   const dayWidth = useMemo(() => {
     const monthsVisible = ZOOM_LEVELS[zoomIndex].monthsVisible
@@ -1017,14 +1018,28 @@ export default function GanttChart(props: GanttChartProps) {
     }
   }, [handleScroll])
   
+  // Scroll to today on initial load - with proper dependencies
   useEffect(() => {
-    if (todayIndex !== -1 && scrollContainerRef.current) {
-      const todayPosition = todayIndex * dayWidth
-      const visibleWidth = containerWidth - SIDEBAR_WIDTH
-      const scrollTarget = todayPosition - (visibleWidth / 2) + (dayWidth / 2)
-      scrollContainerRef.current.scrollLeft = Math.max(0, scrollTarget)
-    }
-  }, [])
+    if (hasInitialScrolled) return
+    if (todayIndex === -1) return
+    if (!scrollContainerRef.current) return
+    if (containerWidth <= 0) return
+    if (dayWidth <= 0) return
+    
+    // Use double RAF to ensure DOM is fully ready
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (!scrollContainerRef.current) return
+        
+        const todayPosition = todayIndex * dayWidth
+        const visibleWidth = containerWidth - SIDEBAR_WIDTH
+        const scrollTarget = todayPosition - (visibleWidth / 2) + (dayWidth / 2)
+        
+        scrollContainerRef.current.scrollLeft = Math.max(0, scrollTarget)
+        setHasInitialScrolled(true)
+      })
+    })
+  }, [todayIndex, dayWidth, containerWidth, hasInitialScrolled])
   
   useEffect(() => {
     const handleWindowMouseMove = (e: MouseEvent) => {
