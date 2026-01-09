@@ -69,6 +69,113 @@
   font-size: 0.625rem;
 }
 
+/* Zoom Controls */
+.zoomControls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  margin: 0;
+  background: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+  user-select: none;
+}
+
+.zoomLabel {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.zoomButtons {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  background: #e2e8f0;
+  border-radius: 6px;
+  padding: 2px;
+}
+
+.zoomBtn {
+  width: 28px;
+  height: 26px;
+  border: none;
+  background: transparent;
+  color: #475569;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+
+.zoomBtn:hover:not(:disabled) {
+  background: #cbd5e1;
+  color: #1e293b;
+}
+
+.zoomBtn:active:not(:disabled) {
+  transform: scale(0.95);
+}
+
+.zoomBtn:disabled {
+  color: #94a3b8;
+  cursor: not-allowed;
+}
+
+.zoomPreset {
+  min-width: 28px;
+  height: 26px;
+  padding: 0 8px;
+  border: none;
+  background: transparent;
+  color: #64748b;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.15s;
+}
+
+.zoomPreset:hover {
+  background: #cbd5e1;
+  color: #1e293b;
+}
+
+.zoomPreset.zoomActive {
+  background: #3b82f6;
+  color: white;
+  box-shadow: 0 1px 3px rgba(59, 130, 246, 0.3);
+}
+
+.dateRange {
+  font-size: 0.6875rem;
+  color: #64748b;
+  margin-left: auto;
+  white-space: nowrap;
+  background: #f1f5f9;
+  padding: 4px 10px;
+  border-radius: 4px;
+  border: 1px solid #e2e8f0;
+}
+
+.loadingIndicator {
+  font-size: 0.625rem;
+  color: #3b82f6;
+  font-weight: 500;
+  animation: loadingPulse 1s ease-in-out infinite;
+}
+
+@keyframes loadingPulse {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+
 /* Scroll Grab Bar - single row layout, no extra spacing */
 .scrollGrabBar {
   display: flex;
@@ -231,6 +338,8 @@
   background: #f8fafc; /* Grey background to match UI */
   border-bottom: 1px solid #e2e8f0;
   border-right: 1px solid #f1f5f9;
+  /* Ensure day cells handle small widths gracefully */
+  overflow: hidden;
 }
 
 .dayHeader.weekend {
