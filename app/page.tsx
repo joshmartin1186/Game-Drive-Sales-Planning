@@ -1,6 +1,6 @@
 'use client'
 
-// Cache invalidation: 2026-01-09T21:45:00Z - Bulk Edit Sales Feature
+// Cache invalidation: 2026-01-09T21:55:00Z - Fix Bulk Edit Type Error
 
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { createClient } from '@supabase/supabase-js'
@@ -427,7 +427,7 @@ export default function GameDriveDashboard() {
   const handleBulkUpdate = useCallback(async (saleIds: string[], updates: Partial<{
     discount_percentage: number | null
     platform_id: string
-    sale_name: string
+    sale_name: string | undefined
     status: string
     dateShiftDays: number
   }>) => {
@@ -472,11 +472,13 @@ export default function GameDriveDashboard() {
       return
     }
     
-    // Handle other updates
+    // Handle other updates - convert null to undefined for Sale type compatibility
     const dbUpdates: Partial<Sale> = {}
-    if (updates.discount_percentage !== undefined) dbUpdates.discount_percentage = updates.discount_percentage
+    if (updates.discount_percentage !== undefined) {
+      dbUpdates.discount_percentage = updates.discount_percentage === null ? undefined : updates.discount_percentage
+    }
     if (updates.platform_id !== undefined) dbUpdates.platform_id = updates.platform_id
-    if (updates.sale_name !== undefined) dbUpdates.sale_name = updates.sale_name || null
+    if (updates.sale_name !== undefined) dbUpdates.sale_name = updates.sale_name || undefined
     if (updates.status !== undefined) dbUpdates.status = updates.status
     
     // Optimistically update local state
