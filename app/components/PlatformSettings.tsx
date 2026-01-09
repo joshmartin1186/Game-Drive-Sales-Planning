@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Platform, PlatformEvent } from '@/lib/types'
 import { format, parseISO } from 'date-fns'
 import styles from './PlatformSettings.module.css'
@@ -20,6 +20,44 @@ const EVENT_TYPES = [
   { value: 'festival', label: 'Festival' },
   { value: 'custom', label: 'Custom' }
 ]
+
+// Preset colors for quick selection
+const PRESET_COLORS = [
+  { hex: '#1b2838', name: 'Steam Dark' },
+  { hex: '#66c0f4', name: 'Steam Blue' },
+  { hex: '#003791', name: 'PlayStation Blue' },
+  { hex: '#107c10', name: 'Xbox Green' },
+  { hex: '#e60012', name: 'Nintendo Red' },
+  { hex: '#2f2f2f', name: 'Epic Dark' },
+  { hex: '#6441a5', name: 'GOG Purple' },
+  { hex: '#cc3333', name: 'Humble Red' },
+  { hex: '#ff6600', name: 'Fanatical Orange' },
+  { hex: '#00adef', name: 'Cyan' },
+  { hex: '#f59e0b', name: 'Amber' },
+  { hex: '#8b5cf6', name: 'Violet' },
+  { hex: '#ec4899', name: 'Pink' },
+  { hex: '#14b8a6', name: 'Teal' },
+  { hex: '#84cc16', name: 'Lime' },
+  { hex: '#f97316', name: 'Orange' },
+]
+
+// Check if two colors are too similar (simple luminance comparison)
+function getColorLuminance(hex: string): number {
+  const r = parseInt(hex.slice(1, 3), 16) / 255
+  const g = parseInt(hex.slice(3, 5), 16) / 255
+  const b = parseInt(hex.slice(5, 7), 16) / 255
+  return 0.299 * r + 0.587 * g + 0.114 * b
+}
+
+function colorDistance(hex1: string, hex2: string): number {
+  const r1 = parseInt(hex1.slice(1, 3), 16)
+  const g1 = parseInt(hex1.slice(3, 5), 16)
+  const b1 = parseInt(hex1.slice(5, 7), 16)
+  const r2 = parseInt(hex2.slice(1, 3), 16)
+  const g2 = parseInt(hex2.slice(3, 5), 16)
+  const b2 = parseInt(hex2.slice(5, 7), 16)
+  return Math.sqrt(Math.pow(r1 - r2, 2) + Math.pow(g1 - g2, 2) + Math.pow(b1 - b2, 2))
+}
 
 export default function PlatformSettings({ isOpen, onClose, onEventsChange }: PlatformSettingsProps) {
   const [activeTab, setActiveTab] = useState<Tab>('events')
@@ -46,12 +84,30 @@ export default function PlatformSettings({ isOpen, onClose, onEventsChange }: Pl
   
   // Platform editing state
   const [editingPlatform, setEditingPlatform] = useState<Platform | null>(null)
+  const [hexInput, setHexInput] = useState('')
   
   useEffect(() => {
     if (isOpen) {
       fetchData()
     }
   }, [isOpen])
+  
+  // Sync hex input when editing platform changes
+  useEffect(() => {
+    if (editingPlatform) {
+      setHexInput(editingPlatform.color_hex.toUpperCase())
+    }
+  }, [editingPlatform?.id])
+  
+  // Check for similar colors
+  const similarColors = useMemo(() => {
+    if (!editingPlatform) return []
+    const otherPlatforms = platforms.filter(p => p.id !== editingPlatform.id)
+    return otherPlatforms.filter(p => {
+      const distance = colorDistance(editingPlatform.color_hex, p.color_hex)
+      return distance < 80 // Threshold for "similar" colors
+    })
+  }, [editingPlatform?.color_hex, platforms])
   
   const fetchData = async () => {
     setLoading(true)
@@ -161,6 +217,22 @@ export default function PlatformSettings({ isOpen, onClose, onEventsChange }: Pl
     })
   }
   
+  const handleColorChange = (newColor: string) => {
+    if (!editingPlatform) return
+    setEditingPlatform({ ...editingPlatform, color_hex: newColor })
+    setHexInput(newColor.toUpperCase())
+  }
+  
+  const handleHexInputChange = (value: string) => {
+    setHexInput(value.toUpperCase())
+    // Validate and apply if it's a valid hex color
+    if (/^#[0-9A-F]{6}$/i.test(value)) {
+      if (editingPlatform) {
+        setEditingPlatform({ ...editingPlatform, color_hex: value })
+      }
+    }
+  }
+  
   const handleSavePlatform = async () => {
     if (!editingPlatform) return
     
@@ -181,6 +253,7 @@ export default function PlatformSettings({ isOpen, onClose, onEventsChange }: Pl
       
       await fetchData()
       setEditingPlatform(null)
+      onEventsChange?.() // Refresh parent to update colors
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save platform')
     } finally {
@@ -384,7 +457,7 @@ export default function PlatformSettings({ isOpen, onClose, onEventsChange }: Pl
               <div className={styles.sectionHeader}>
                 <h3>Platform Rules Configuration</h3>
                 <p className={styles.subtitle}>
-                  Edit cooldown periods, max sale days, and other platform-specific rules. Changes affect validation for all clients.
+                  Edit cooldown periods, max sale days, colors, and other platform-specific rules. Changes affect validation for all clients.
                 </p>
               </div>
               
@@ -444,13 +517,85 @@ export default function PlatformSettings({ isOpen, onClose, onEventsChange }: Pl
                       />
                     </div>
                     
-                    <div className={styles.formGroup}>
-                      <label>Color</label>
-                      <input
-                        type="color"
-                        value={editingPlatform.color_hex}
-                        onChange={e => setEditingPlatform(prev => prev ? { ...prev, color_hex: e.target.value } : null)}
-                      />
+                    {/* Enhanced Color Picker */}
+                    <div className={styles.formGroup} style={{ gridColumn: '1 / -1' }}>
+                      <label>Platform Color</label>
+                      <div className={styles.colorPickerSection}>
+                        <div className={styles.colorPickerMain}>
+                          <div className={styles.colorInputGroup}>
+                            <input
+                              type="color"
+                              value={editingPlatform.color_hex}
+                              onChange={e => handleColorChange(e.target.value)}
+                              className={styles.colorInput}
+                            />
+                            <div 
+                              className={styles.colorPreview}
+                              style={{ backgroundColor: editingPlatform.color_hex }}
+                            >
+                              <span className={styles.colorPreviewText} style={{
+                                color: getColorLuminance(editingPlatform.color_hex) > 0.5 ? '#000' : '#fff'
+                              }}>
+                                {editingPlatform.name}
+                              </span>
+                            </div>
+                          </div>
+                          <div className={styles.hexInputGroup}>
+                            <label>Hex Code:</label>
+                            <input
+                              type="text"
+                              value={hexInput}
+                              onChange={e => handleHexInputChange(e.target.value)}
+                              placeholder="#000000"
+                              className={styles.hexTextInput}
+                              maxLength={7}
+                            />
+                          </div>
+                        </div>
+                        
+                        {/* Preset Colors */}
+                        <div className={styles.presetColors}>
+                          <label>Quick Select:</label>
+                          <div className={styles.presetGrid}>
+                            {PRESET_COLORS.map(color => (
+                              <button
+                                key={color.hex}
+                                className={`${styles.presetColor} ${editingPlatform.color_hex === color.hex ? styles.presetColorActive : ''}`}
+                                style={{ backgroundColor: color.hex }}
+                                onClick={() => handleColorChange(color.hex)}
+                                title={color.name}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                        
+                        {/* Similar Colors Warning */}
+                        {similarColors.length > 0 && (
+                          <div className={styles.colorWarning}>
+                            <span className={styles.warningIcon}>⚠️</span>
+                            <span>
+                              This color is similar to: {similarColors.map(p => p.name).join(', ')}. 
+                              Consider choosing a more distinct color for better visibility.
+                            </span>
+                          </div>
+                        )}
+                        
+                        {/* Color Comparison */}
+                        <div className={styles.colorComparison}>
+                          <label>Compare with other platforms:</label>
+                          <div className={styles.comparisonGrid}>
+                            {platforms.filter(p => p.id !== editingPlatform.id).map(p => (
+                              <div key={p.id} className={styles.comparisonItem}>
+                                <span 
+                                  className={styles.comparisonColor}
+                                  style={{ backgroundColor: p.color_hex }}
+                                />
+                                <span className={styles.comparisonName}>{p.name}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
                     </div>
                     
                     <div className={styles.formGroup}>
