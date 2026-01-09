@@ -23,6 +23,11 @@
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
 }
 
+/* Selected state - for copy/paste functionality */
+.saleBlock.selected {
+  z-index: 10 !important;
+}
+
 .saleBlock.dragging {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
   cursor: grabbing;
@@ -80,7 +85,8 @@
 }
 
 .deleteBtn,
-.duplicateBtn {
+.duplicateBtn,
+.copyBtn {
   width: 18px;
   height: 18px;
   border-radius: 50%;
@@ -96,6 +102,10 @@
   transition: background 0.2s;
 }
 
+.copyBtn:hover {
+  background: rgba(34, 197, 94, 0.8);
+}
+
 .duplicateBtn:hover {
   background: rgba(59, 130, 246, 0.8);
 }
@@ -106,6 +116,52 @@
 
 .deleteBtn:hover {
   background: rgba(239, 68, 68, 0.8);
+}
+
+/* Context Menu - right-click menu */
+.contextMenu {
+  position: fixed;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  padding: 4px;
+  z-index: 1000;
+  min-width: 160px;
+}
+
+.contextMenu button {
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  color: #334155;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  transition: background 0.15s;
+}
+
+.contextMenu button:hover {
+  background: #f1f5f9;
+}
+
+.contextMenu hr {
+  margin: 4px 0;
+  border: none;
+  border-top: 1px solid #e2e8f0;
+}
+
+.deleteMenuItem {
+  color: #dc2626 !important;
+}
+
+.deleteMenuItem:hover {
+  background: #fef2f2 !important;
 }
 
 /* Resize handles */
