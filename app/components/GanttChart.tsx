@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useRef, useCallback, useEffect } from 'react'
 import { DndContext, DragEndEvent, DragStartEvent, useSensor, useSensors, PointerSensor, DragOverlay } from '@dnd-kit/core'
-import { format, addDays, differenceInDays, parseISO, startOfMonth, endOfMonth, eachDayOfInterval, isToday, startOfQuarter, endOfQuarter, eachQuarterOfInterval } from 'date-fns'
+import { format, addDays, differenceInDays, parseISO, startOfMonth, endOfMonth, eachDayOfInterval, isToday, startOfQuarter, endOfQuarter, eachQuarterOfInterval, addMonths, subMonths } from 'date-fns'
 import { Sale, Platform, Product, Game, Client, SaleWithDetails, PlatformEvent } from '@/lib/types'
 import { validateSale } from '@/lib/validation'
 import { normalizeToLocalDate } from '@/lib/dateUtils'
@@ -54,9 +54,21 @@ interface PlatformGapInfo {
   longestGap: number
 }
 
-const DAY_WIDTH = 28
+// Zoom presets
+const ZOOM_LEVELS = [
+  { name: 'Year', dayWidth: 8, label: 'Y' },
+  { name: 'Quarter', dayWidth: 14, label: 'Q' },
+  { name: 'Month', dayWidth: 22, label: 'M' },
+  { name: 'Week', dayWidth: 28, label: 'W' },
+  { name: 'Day', dayWidth: 40, label: 'D' },
+]
+
+const DEFAULT_ZOOM_INDEX = 3 // Week view (28px)
+
 const ROW_HEIGHT = 40
 const HEADER_HEIGHT = 60
+const SCROLL_THRESHOLD = 300 // pixels from edge to trigger load
+const MONTHS_TO_LOAD = 3 // months to add when expanding
 
 const DAY_STATUS = {
   AVAILABLE: 0,
@@ -70,8 +82,8 @@ export default function GanttChart(props: GanttChartProps) {
     products,
     platforms,
     platformEvents,
-    timelineStart,
-    monthCount,
+    timelineStart: initialTimelineStart,
+    monthCount: initialMonthCount,
     onSaleUpdate,
     onSaleDelete,
     onSaleEdit,
@@ -85,6 +97,17 @@ export default function GanttChart(props: GanttChartProps) {
     showEvents = true
   } = props
   
+  // Timeline state - now controlled internally for infinite scroll
+  const [timelineStart, setTimelineStart] = useState(() => {
+    // Start 3 months before initial to allow past navigation
+    return subMonths(initialTimelineStart, 3)
+  })
+  const [monthCount, setMonthCount] = useState(initialMonthCount + 6) // Extra months for buffer
+  
+  // Zoom state
+  const [zoomIndex, setZoomIndex] = useState(DEFAULT_ZOOM_INDEX)
+  const dayWidth = ZOOM_LEVELS[zoomIndex].dayWidth
+  
   const [draggedSale, setDraggedSale] = useState<SaleWithDetails | null>(null)
   const [validationError, setValidationError] = useState<string | null>(null)
   const [optimisticUpdates, setOptimisticUpdates] = useState<Record<string, { startDate: string; endDate: string }>>({})
@@ -92,6 +115,7 @@ export default function GanttChart(props: GanttChartProps) {
   const [launchDateDrag, setLaunchDateDrag] = useState<LaunchDateDragState | null>(null)
   const [isGrabbing, setIsGrabbing] = useState(false)
   const [scrollProgress, setScrollProgress] = useState(0)
+  const [isLoadingMore, setIsLoadingMore] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const scrollTrackRef = useRef<HTMLDivElement>(null)
@@ -154,6 +178,23 @@ export default function GanttChart(props: GanttChartProps) {
       end: timelineEnd
     })
   }, [timelineStart, timelineEnd])
+
+  // Calculate visible date range for display
+  const visibleDateRange = useMemo(() => {
+    if (!scrollContainerRef.current) return null
+    const scrollLeft = scrollContainerRef.current.scrollLeft
+    const containerWidth = scrollContainerRef.current.clientWidth
+    const startDayIndex = Math.floor(scrollLeft / dayWidth)
+    const endDayIndex = Math.min(Math.floor((scrollLeft + containerWidth) / dayWidth), days.length - 1)
+    
+    if (startDayIndex >= 0 && startDayIndex < days.length && endDayIndex >= 0) {
+      return {
+        start: days[startDayIndex],
+        end: days[endDayIndex]
+      }
+    }
+    return null
+  }, [days, dayWidth, scrollProgress]) // scrollProgress triggers recalc
 
   const platformGaps = useMemo(() => {
     const gapMap = new Map<string, PlatformGapInfo[]>()
@@ -279,18 +320,137 @@ export default function GanttChart(props: GanttChartProps) {
     return null
   }, [platformGaps])
   
+  // Infinite scroll - expand timeline when near edges
+  const handleInfiniteScroll = useCallback(() => {
+    if (!scrollContainerRef.current || isLoadingMore) return
+    
+    const { scrollLeft, scrollWidth, clientWidth } = scrollContainerRef.current
+    const maxScroll = scrollWidth - clientWidth
+    
+    // Check if near start - prepend months
+    if (scrollLeft < SCROLL_THRESHOLD) {
+      setIsLoadingMore(true)
+      
+      // Calculate how many pixels we're adding
+      const daysToAdd = MONTHS_TO_LOAD * 30 // Approximate
+      const pixelsToAdd = daysToAdd * dayWidth
+      
+      setTimelineStart(prev => subMonths(prev, MONTHS_TO_LOAD))
+      setMonthCount(prev => prev + MONTHS_TO_LOAD)
+      
+      // After state update, adjust scroll to maintain position
+      requestAnimationFrame(() => {
+        if (scrollContainerRef.current) {
+          scrollContainerRef.current.scrollLeft = scrollLeft + pixelsToAdd
+        }
+        setIsLoadingMore(false)
+      })
+    }
+    
+    // Check if near end - append months
+    if (scrollLeft > maxScroll - SCROLL_THRESHOLD) {
+      setIsLoadingMore(true)
+      setMonthCount(prev => prev + MONTHS_TO_LOAD)
+      
+      requestAnimationFrame(() => {
+        setIsLoadingMore(false)
+      })
+    }
+  }, [isLoadingMore, dayWidth])
+  
   const scrollToToday = useCallback(() => {
     if (todayIndex === -1 || !scrollContainerRef.current) return
     
-    const todayPosition = todayIndex * DAY_WIDTH
+    const todayPosition = todayIndex * dayWidth
     const containerWidth = scrollContainerRef.current.clientWidth
-    const scrollTarget = todayPosition - (containerWidth / 2) + (DAY_WIDTH / 2)
+    const scrollTarget = todayPosition - (containerWidth / 2) + (dayWidth / 2)
     
     scrollContainerRef.current.scrollTo({
       left: Math.max(0, scrollTarget),
       behavior: 'smooth'
     })
-  }, [todayIndex])
+  }, [todayIndex, dayWidth])
+  
+  // Zoom handlers
+  const handleZoomIn = useCallback(() => {
+    if (zoomIndex < ZOOM_LEVELS.length - 1) {
+      const scrollContainer = scrollContainerRef.current
+      if (scrollContainer) {
+        // Calculate center point before zoom
+        const centerX = scrollContainer.scrollLeft + scrollContainer.clientWidth / 2
+        const centerDayIndex = centerX / dayWidth
+        
+        setZoomIndex(prev => prev + 1)
+        
+        // After zoom, scroll to maintain center
+        requestAnimationFrame(() => {
+          const newDayWidth = ZOOM_LEVELS[zoomIndex + 1].dayWidth
+          const newScrollLeft = centerDayIndex * newDayWidth - scrollContainer.clientWidth / 2
+          scrollContainer.scrollLeft = Math.max(0, newScrollLeft)
+        })
+      } else {
+        setZoomIndex(prev => prev + 1)
+      }
+    }
+  }, [zoomIndex, dayWidth])
+  
+  const handleZoomOut = useCallback(() => {
+    if (zoomIndex > 0) {
+      const scrollContainer = scrollContainerRef.current
+      if (scrollContainer) {
+        // Calculate center point before zoom
+        const centerX = scrollContainer.scrollLeft + scrollContainer.clientWidth / 2
+        const centerDayIndex = centerX / dayWidth
+        
+        setZoomIndex(prev => prev - 1)
+        
+        // After zoom, scroll to maintain center
+        requestAnimationFrame(() => {
+          const newDayWidth = ZOOM_LEVELS[zoomIndex - 1].dayWidth
+          const newScrollLeft = centerDayIndex * newDayWidth - scrollContainer.clientWidth / 2
+          scrollContainer.scrollLeft = Math.max(0, newScrollLeft)
+        })
+      } else {
+        setZoomIndex(prev => prev - 1)
+      }
+    }
+  }, [zoomIndex, dayWidth])
+  
+  const handleZoomPreset = useCallback((index: number) => {
+    if (index >= 0 && index < ZOOM_LEVELS.length && index !== zoomIndex) {
+      const scrollContainer = scrollContainerRef.current
+      if (scrollContainer) {
+        const centerX = scrollContainer.scrollLeft + scrollContainer.clientWidth / 2
+        const centerDayIndex = centerX / dayWidth
+        
+        setZoomIndex(index)
+        
+        requestAnimationFrame(() => {
+          const newDayWidth = ZOOM_LEVELS[index].dayWidth
+          const newScrollLeft = centerDayIndex * newDayWidth - scrollContainer.clientWidth / 2
+          scrollContainer.scrollLeft = Math.max(0, newScrollLeft)
+        })
+      } else {
+        setZoomIndex(index)
+      }
+    }
+  }, [zoomIndex, dayWidth])
+  
+  // Keyboard shortcuts for zoom
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && (e.key === '=' || e.key === '+')) {
+        e.preventDefault()
+        handleZoomIn()
+      } else if ((e.ctrlKey || e.metaKey) && e.key === '-') {
+        e.preventDefault()
+        handleZoomOut()
+      }
+    }
+    
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [handleZoomIn, handleZoomOut])
   
   const groupedProducts = useMemo(() => {
     const groups: { game: Game & { client: Client }; products: (Product & { game: Game & { client: Client } })[] }[] = []
@@ -343,15 +503,15 @@ export default function GanttChart(props: GanttChartProps) {
   const getPositionForDate = useCallback((date: Date | string): number => {
     const d = typeof date === 'string' ? normalizeToLocalDate(date) : date
     const daysDiff = differenceInDays(d, days[0])
-    return daysDiff * DAY_WIDTH
-  }, [days])
+    return daysDiff * dayWidth
+  }, [days, dayWidth])
   
   const getWidthForRange = useCallback((start: Date | string, end: Date | string): number => {
     const s = typeof start === 'string' ? normalizeToLocalDate(start) : start
     const e = typeof end === 'string' ? normalizeToLocalDate(end) : end
     const daysDiff = differenceInDays(e, s) + 1
-    return daysDiff * DAY_WIDTH
-  }, [])
+    return daysDiff * dayWidth
+  }, [dayWidth])
   
   const getDayIndexForDate = useCallback((date: Date | string): number => {
     const d = typeof date === 'string' ? normalizeToLocalDate(date) : date
@@ -602,12 +762,12 @@ export default function GanttChart(props: GanttChartProps) {
       launchDragRef.current.hasMoved = true
     }
     
-    const daysDelta = Math.round(deltaX / DAY_WIDTH)
+    const daysDelta = Math.round(deltaX / dayWidth)
     const originalDayIndex = getDayIndexForDate(launchDragRef.current.originalDate)
     const newDayIndex = Math.max(0, Math.min(originalDayIndex + daysDelta, days.length - 1))
     
     setLaunchDateDrag(prev => prev ? { ...prev, currentDayIndex: newDayIndex } : null)
-  }, [launchDateDrag, getDayIndexForDate, days.length])
+  }, [launchDateDrag, getDayIndexForDate, days.length, dayWidth])
   
   const handleLaunchDragEnd = useCallback(async () => {
     if (!launchDragRef.current || !launchDateDrag) {
@@ -706,7 +866,10 @@ export default function GanttChart(props: GanttChartProps) {
     const maxScroll = scrollWidth - clientWidth
     const progress = maxScroll > 0 ? scrollLeft / maxScroll : 0
     setScrollProgress(progress)
-  }, [])
+    
+    // Check for infinite scroll
+    handleInfiniteScroll()
+  }, [handleInfiniteScroll])
   
   useEffect(() => {
     const scrollContainer = scrollContainerRef.current
@@ -719,6 +882,16 @@ export default function GanttChart(props: GanttChartProps) {
       scrollContainer.removeEventListener('scroll', handleScroll)
     }
   }, [handleScroll])
+  
+  // Initial scroll to today on mount
+  useEffect(() => {
+    if (todayIndex !== -1 && scrollContainerRef.current) {
+      const todayPosition = todayIndex * dayWidth
+      const containerWidth = scrollContainerRef.current.clientWidth
+      const scrollTarget = todayPosition - (containerWidth / 2) + (dayWidth / 2)
+      scrollContainerRef.current.scrollLeft = Math.max(0, scrollTarget)
+    }
+  }, []) // Only on mount
   
   useEffect(() => {
     const handleWindowMouseMove = (e: MouseEvent) => {
@@ -764,8 +937,8 @@ export default function GanttChart(props: GanttChartProps) {
     
     const startIdx = Math.min(selection.startDayIndex, selection.endDayIndex)
     const endIdx = Math.max(selection.startDayIndex, selection.endDayIndex)
-    const left = startIdx * DAY_WIDTH
-    const width = (endIdx - startIdx + 1) * DAY_WIDTH
+    const left = startIdx * dayWidth
+    const width = (endIdx - startIdx + 1) * dayWidth
     
     const platform = platforms.find(p => p.id === platformId)
     
@@ -775,13 +948,13 @@ export default function GanttChart(props: GanttChartProps) {
       backgroundColor: platform ? `${platform.color_hex}40` : 'rgba(59, 130, 246, 0.25)',
       borderColor: platform?.color_hex || '#3b82f6'
     }
-  }, [selection, platforms])
+  }, [selection, platforms, dayWidth])
   
   const getLaunchDatePosition = useCallback((product: Product) => {
     if (!product.launch_date) return null
     
     if (launchDateDrag && launchDateDrag.productId === product.id) {
-      const left = launchDateDrag.currentDayIndex * DAY_WIDTH
+      const left = launchDateDrag.currentDayIndex * dayWidth
       const date = days[launchDateDrag.currentDayIndex]
       return { left, date, isDragging: true }
     }
@@ -789,12 +962,12 @@ export default function GanttChart(props: GanttChartProps) {
     const dayIndex = getDayIndexForDate(product.launch_date)
     if (dayIndex < 0 || dayIndex >= days.length) return null
     
-    const left = dayIndex * DAY_WIDTH
+    const left = dayIndex * dayWidth
     return { left, date: normalizeToLocalDate(product.launch_date), isDragging: false }
-  }, [launchDateDrag, getDayIndexForDate, days])
+  }, [launchDateDrag, getDayIndexForDate, days, dayWidth])
   
   const scrollThumbStyle = useMemo(() => {
-    const totalWidth = totalDays * DAY_WIDTH
+    const totalWidth = totalDays * dayWidth
     const containerWidth = scrollContainerRef.current?.clientWidth || 800
     const thumbWidthPercent = Math.max(10, Math.min(100, (containerWidth / totalWidth) * 100))
     const maxLeftPercent = 100 - thumbWidthPercent
@@ -804,7 +977,7 @@ export default function GanttChart(props: GanttChartProps) {
       width: `${thumbWidthPercent}%`,
       left: `${leftPercent}%`
     }
-  }, [totalDays, scrollProgress])
+  }, [totalDays, scrollProgress, dayWidth])
   
   const handleDragStart = (event: DragStartEvent) => {
     const saleId = event.active.id as string
@@ -822,7 +995,7 @@ export default function GanttChart(props: GanttChartProps) {
     }
     
     const { delta } = event
-    const daysMoved = Math.round(delta.x / DAY_WIDTH)
+    const daysMoved = Math.round(delta.x / dayWidth)
     
     if (daysMoved === 0) {
       setDraggedSale(null)
@@ -996,7 +1169,7 @@ export default function GanttChart(props: GanttChartProps) {
     return sales.filter(s => s.product_id === productId).length
   }, [sales])
   
-  const totalWidth = totalDays * DAY_WIDTH
+  const totalWidth = totalDays * dayWidth
   
   return (
     <div 
@@ -1024,6 +1197,47 @@ export default function GanttChart(props: GanttChartProps) {
         ))}
       </div>
       
+      {/* Zoom Controls */}
+      <div className={styles.zoomControls}>
+        <span className={styles.zoomLabel}>Zoom:</span>
+        <div className={styles.zoomButtons}>
+          <button 
+            className={styles.zoomBtn}
+            onClick={handleZoomOut}
+            disabled={zoomIndex === 0}
+            title="Zoom out (Ctrl+-)"
+          >
+            −
+          </button>
+          {ZOOM_LEVELS.map((level, idx) => (
+            <button
+              key={level.name}
+              className={`${styles.zoomPreset} ${idx === zoomIndex ? styles.zoomActive : ''}`}
+              onClick={() => handleZoomPreset(idx)}
+              title={`${level.name} view (${level.dayWidth}px/day)`}
+            >
+              {level.label}
+            </button>
+          ))}
+          <button 
+            className={styles.zoomBtn}
+            onClick={handleZoomIn}
+            disabled={zoomIndex === ZOOM_LEVELS.length - 1}
+            title="Zoom in (Ctrl++)"
+          >
+            +
+          </button>
+        </div>
+        {visibleDateRange && (
+          <span className={styles.dateRange}>
+            {format(visibleDateRange.start, 'MMM d')} - {format(visibleDateRange.end, 'MMM d, yyyy')}
+          </span>
+        )}
+        {isLoadingMore && (
+          <span className={styles.loadingIndicator}>Loading...</span>
+        )}
+      </div>
+      
       <div 
         className={`${styles.scrollGrabBar} ${isGrabbing ? styles.grabbing : ''}`}
       >
@@ -1049,7 +1263,7 @@ export default function GanttChart(props: GanttChartProps) {
           </div>
         </div>
         <span className={styles.scrollGrabHint}>
-          {isGrabbing ? 'Dragging...' : 'Click or drag to scroll timeline'}
+          {isGrabbing ? 'Dragging...' : 'Scroll to edges to load more months'}
         </span>
       </div>
       
@@ -1065,7 +1279,7 @@ export default function GanttChart(props: GanttChartProps) {
                 <div 
                   key={idx}
                   className={styles.monthHeader}
-                  style={{ width: daysInMonth * DAY_WIDTH }}
+                  style={{ width: daysInMonth * dayWidth }}
                 >
                   {format(date, 'MMMM yyyy')}
                 </div>
@@ -1077,13 +1291,15 @@ export default function GanttChart(props: GanttChartProps) {
                 const isWeekend = day.getDay() === 0 || day.getDay() === 6
                 const isFirstOfMonth = day.getDate() === 1
                 const isTodayDate = idx === todayIndex
+                // Only show day numbers at higher zoom levels
+                const showDayNumber = dayWidth >= 14
                 return (
                   <div 
                     key={idx}
                     className={`${styles.dayHeader} ${isWeekend ? styles.weekend : ''} ${isFirstOfMonth ? styles.monthStart : ''} ${isTodayDate ? styles.todayHeader : ''}`}
-                    style={{ width: DAY_WIDTH }}
+                    style={{ width: dayWidth }}
                   >
-                    {day.getDate()}
+                    {showDayNumber ? day.getDate() : ''}
                   </div>
                 )
               })}
@@ -1092,7 +1308,7 @@ export default function GanttChart(props: GanttChartProps) {
             {todayIndex !== -1 && (
               <div 
                 className={styles.todayIndicator}
-                style={{ left: todayIndex * DAY_WIDTH + DAY_WIDTH / 2 + 220 }}
+                style={{ left: todayIndex * dayWidth + dayWidth / 2 + 220 }}
               />
             )}
             
@@ -1157,7 +1373,7 @@ export default function GanttChart(props: GanttChartProps) {
                                 <div
                                   key={idx}
                                   className={`${styles.dayCell} ${isWeekend ? styles.weekendCell : ''}`}
-                                  style={{ left: idx * DAY_WIDTH, width: DAY_WIDTH }}
+                                  style={{ left: idx * dayWidth, width: dayWidth }}
                                 />
                               )
                             })}
@@ -1213,7 +1429,7 @@ export default function GanttChart(props: GanttChartProps) {
                                     <div
                                       key={idx}
                                       className={`${styles.dayCell} ${isWeekend ? styles.weekendCell : ''}`}
-                                      style={{ left: idx * DAY_WIDTH, width: DAY_WIDTH }}
+                                      style={{ left: idx * dayWidth, width: dayWidth }}
                                       onMouseDown={(e) => handleSelectionStart(product.id, platform.id, idx, e)}
                                       onMouseEnter={() => handleSelectionMove(idx)}
                                     />
@@ -1223,7 +1439,7 @@ export default function GanttChart(props: GanttChartProps) {
                                 {launchPosition && (
                                   <div
                                     className={styles.launchMarkerLineExtension}
-                                    style={{ left: launchPosition.left + DAY_WIDTH / 2 - 1 }}
+                                    style={{ left: launchPosition.left + dayWidth / 2 - 1 }}
                                   />
                                 )}
                                 
@@ -1287,7 +1503,7 @@ export default function GanttChart(props: GanttChartProps) {
                                         sale={sale}
                                         left={left}
                                         width={width}
-                                        dayWidth={DAY_WIDTH}
+                                        dayWidth={dayWidth}
                                         onEdit={onSaleEdit}
                                         onDelete={onSaleDelete}
                                         onDuplicate={onSaleDuplicate}
