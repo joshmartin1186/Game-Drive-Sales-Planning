@@ -30,15 +30,15 @@
 
 ### Key Files
 - `app/page.tsx` - Main application component
-- `app/page.module.css` - Main page styling
-- `app/components/GanttChart.tsx` - Timeline component
+- `app/page.module.css` - Main page styling (full-width container for Gantt)
+- `app/components/GanttChart.tsx` - Timeline component (responsive width)
 - `app/components/GanttChart.module.css` - Timeline styling
 
 ---
 
 ## Current Status: January 9, 2025
 
-### 🎉 ALL CLIENT FEEDBACK ISSUES COMPLETE!
+### 🎉 ALL CLIENT FEEDBACK ISSUES COMPLETE + RESPONSIVE TIMELINE!
 
 ### Completion Summary
 | Phase | Status | Completion |
@@ -56,8 +56,52 @@
 | Click-Drag Sale Creation | ✅ Complete | 100% |
 | Auto Sale Calendar | ✅ Complete | 100% |
 | Client Feedback Issues #1-11 | ✅ Complete | 100% |
+| **Responsive Timeline** | ✅ Complete | 100% |
 | Steam API Integration | 🔲 Pending | 0% |
 | Excel Export | 🔲 Pending | 0% |
+
+---
+
+## Latest Update: Responsive Timeline (Jan 9, 2025) ✅
+
+### Problem
+Timeline had fixed day width - didn't adapt when window resized. Users couldn't see more/less of the timeline based on screen size.
+
+### Solution Implemented
+**Full-width responsive Gantt chart that adapts to viewport:**
+
+**Dynamic Day Width Calculation:**
+- Day width calculated dynamically: `dayWidth = (containerWidth - SIDEBAR_WIDTH) / (monthsVisible * 30.44)`
+- Uses ResizeObserver to track container width changes in real-time
+- Minimum dayWidth of 4px enforced for usability at year view
+
+**Zoom Presets (months visible in viewport):**
+- Year (Y): 12 months visible
+- Half Year (H): 6 months visible (default)
+- Quarter (Q): 3 months visible
+- Month (M): 1.5 months visible
+- 2 Weeks (2W): 0.5 months visible
+
+**Features:**
+- Timeline fills available viewport width at all times
+- Zooming in/out changes months visible, recalculates day width
+- Zoom maintains center position (calculates center day before zoom, scrolls to maintain it after)
+- Scroll thumb size adjusts proportionally to visible portion
+- Day numbers only shown when dayWidth >= 14px (higher zoom levels)
+- Keyboard shortcuts: Ctrl+Plus (zoom in), Ctrl+Minus (zoom out)
+- Infinite scroll still works (prepends/appends months at edges)
+
+**CSS Changes:**
+- Removed `max-width: 1400px` from page container
+- Individual elements (header, stats, filters, toolbar) have their own max-width
+- `mainContent` div can now expand to full viewport width
+- Container: `width: 100%`, `min-width: 0` to allow shrinking
+- ScrollContainer: `width: 100%`
+
+**Files Modified:**
+- `app/components/GanttChart.tsx` - Dynamic dayWidth, ResizeObserver, zoom logic
+- `app/components/GanttChart.module.css` - Responsive container styles
+- `app/page.module.css` - Removed max-width constraint from container
 
 ---
 
@@ -219,6 +263,14 @@ GitHub Issues created from Alisa's feedback email and weekly call:
 1. **Always use fixed `height` for timeline rows** - `min-height` breaks absolute positioning
 2. **CSS Modules only** - Tailwind had silent compilation failures on Vercel
 3. **Test visually after every CSS change** - Build success ≠ visual correctness
+4. **Remove parent max-width constraints** for full-width responsive components
+
+### Responsive Timeline Pattern
+1. Use ResizeObserver to track container width changes
+2. Calculate day width dynamically based on visible months and container width
+3. Enforce minimum day width for usability
+4. Maintain scroll position when zooming (calculate center day, restore after zoom)
+5. Proportional scroll thumb based on visible vs total content
 
 ### GitHub API Pitfalls
 1. **HTML Entity Encoding:** When uploading TypeScript files via GitHub API, ensure content doesn't get HTML-encoded
@@ -246,7 +298,7 @@ GitHub Issues created from Alisa's feedback email and weekly call:
 | AddSaleModal | `.tsx` + `.module.css` | Create new sales |
 | EditSaleModal | `.tsx` | Edit existing sales |
 | DuplicateSaleModal | `.tsx` + `.module.css` | Duplicate sales to new dates/platforms |
-| GanttChart | `.tsx` + `.module.css` | Main timeline with drag-drop |
+| GanttChart | `.tsx` + `.module.css` | Main timeline with drag-drop (responsive) |
 | SaleBlock | `.tsx` + `.module.css` | Draggable/resizable sale blocks |
 | SalesTable | `.tsx` + `.module.css` | List view of sales |
 | GapAnalysis | `.tsx` + `.module.css` | Sales coverage gap analysis |
@@ -276,14 +328,14 @@ GitHub Issues created from Alisa's feedback email and weekly call:
 ```
 app/
 ├── page.tsx                       # Main dashboard
-├── page.module.css                # Main styles
+├── page.module.css                # Main styles (full-width for Gantt)
 ├── globals.css
 ├── layout.tsx
 └── components/
     ├── AddSaleModal.tsx
     ├── EditSaleModal.tsx
     ├── DuplicateSaleModal.tsx
-    ├── GanttChart.tsx
+    ├── GanttChart.tsx             # Responsive timeline
     ├── SaleBlock.tsx
     ├── SalesTable.tsx
     ├── GapAnalysis.tsx
@@ -315,4 +367,4 @@ docs/
 
 ---
 
-*Last Updated: January 9, 2025 - All 11 client feedback issues complete!*
+*Last Updated: January 9, 2025 - Responsive timeline complete! All 11 client feedback issues complete!*
