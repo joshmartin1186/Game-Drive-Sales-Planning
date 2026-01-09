@@ -1,6 +1,6 @@
 'use client'
 
-// Cache invalidation: 2026-01-09T05:35:00Z - Launch Sale Duration Fix
+// Cache invalidation: 2026-01-09T05:40:00Z - Launch Sale Duration Prop Fix
 
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { createClient } from '@supabase/supabase-js'
@@ -51,7 +51,7 @@ interface EditLaunchDateState {
   productId: string
   productName: string
   currentLaunchDate: string
-  currentDuration?: number
+  currentLaunchSaleDuration?: number
 }
 
 interface SaleSnapshot {
@@ -771,8 +771,8 @@ export default function GameDriveDashboard() {
   }, [products, sales])
 
   // Edit launch date handler - opens modal (click)
-  const handleEditLaunchDate = useCallback((productId: string, productName: string, currentLaunchDate: string, currentDuration?: number) => {
-    setEditLaunchDateState({ productId, productName, currentLaunchDate, currentDuration })
+  const handleEditLaunchDate = useCallback((productId: string, productName: string, currentLaunchDate: string, currentLaunchSaleDuration?: number) => {
+    setEditLaunchDateState({ productId, productName, currentLaunchDate, currentLaunchSaleDuration })
   }, [])
 
   // Save launch date from modal (with optional sales shift and duration)
@@ -1428,7 +1428,7 @@ export default function GameDriveDashboard() {
           productId={editLaunchDateState.productId}
           productName={editLaunchDateState.productName}
           currentLaunchDate={editLaunchDateState.currentLaunchDate}
-          currentDuration={editLaunchDateState.currentDuration}
+          currentLaunchSaleDuration={editLaunchDateState.currentLaunchSaleDuration || 7}
           onSave={handleSaveLaunchDate}
           salesCount={sales.filter(s => s.product_id === editLaunchDateState.productId).length}
           platforms={platforms}
