@@ -34,6 +34,7 @@ export default function EditSaleModal({
   const [duration, setDuration] = useState(
     differenceInDays(parseISO(sale.end_date), parseISO(sale.start_date)) + 1
   )
+  const [endDate, setEndDate] = useState(sale.end_date)
   const [discountPercentage, setDiscountPercentage] = useState(sale.discount_percentage || 50)
   const [saleName, setSaleName] = useState(sale.sale_name || '')
   const [saleType, setSaleType] = useState<SaleType>(sale.sale_type || 'custom')
@@ -50,13 +51,9 @@ export default function EditSaleModal({
   
   const [saving, setSaving] = useState(false)
   const [validationError, setValidationError] = useState<string | null>(null)
+  const [durationWarning, setDurationWarning] = useState<string | null>(null)
   
   const selectedPlatform = platforms.find(p => p.id === platformId)
-  
-  // Calculate end date from start date + duration
-  const endDate = startDate 
-    ? format(addDays(parseISO(startDate), duration - 1), 'yyyy-MM-dd')
-    : ''
   
   // Calculate cooldown end date
   const cooldownEndDate = endDate && selectedPlatform
@@ -74,6 +71,43 @@ export default function EditSaleModal({
     ).sort((a, b) => new Date(b.end_date).getTime() - new Date(a.end_date).getTime())
     return relevantSales.length > 0 ? relevantSales[0].end_date : null
   })()
+
+  // Handle start date change - keep duration, update end date
+  const handleStartDateChange = (newStartDate: string) => {
+    setStartDate(newStartDate)
+    if (newStartDate) {
+      const newEndDate = format(addDays(parseISO(newStartDate), duration - 1), 'yyyy-MM-dd')
+      setEndDate(newEndDate)
+    }
+  }
+
+  // Handle duration change - update end date
+  const handleDurationChange = (newDuration: number) => {
+    const clampedDuration = Math.max(1, newDuration)
+    setDuration(clampedDuration)
+    if (startDate) {
+      const newEndDate = format(addDays(parseISO(startDate), clampedDuration - 1), 'yyyy-MM-dd')
+      setEndDate(newEndDate)
+    }
+  }
+
+  // Handle end date change - update duration
+  const handleEndDateChange = (newEndDate: string) => {
+    setEndDate(newEndDate)
+    if (startDate && newEndDate) {
+      const newDuration = differenceInDays(parseISO(newEndDate), parseISO(startDate)) + 1
+      setDuration(Math.max(1, newDuration))
+    }
+  }
+
+  // Check duration warning (soft limit)
+  useEffect(() => {
+    if (selectedPlatform && duration > selectedPlatform.max_sale_days) {
+      setDurationWarning(`Exceeds platform recommendation of ${selectedPlatform.max_sale_days} days`)
+    } else {
+      setDurationWarning(null)
+    }
+  }, [selectedPlatform, duration])
   
   // Validate on change
   useEffect(() => {
@@ -100,13 +134,6 @@ export default function EditSaleModal({
     
     setValidationError(validation.valid ? null : validation.message || 'Conflicts with existing sale or cooldown')
   }, [productId, platformId, startDate, endDate, saleType, existingSales, platforms, sale.id])
-  
-  // Limit duration based on platform
-  useEffect(() => {
-    if (selectedPlatform && duration > selectedPlatform.max_sale_days) {
-      setDuration(selectedPlatform.max_sale_days)
-    }
-  }, [selectedPlatform, duration])
   
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -178,6 +205,12 @@ export default function EditSaleModal({
             </div>
           )}
           
+          {durationWarning && (
+            <div className={styles.warning}>
+              <span>⚠️ {durationWarning}</span>
+            </div>
+          )}
+          
           <div className={styles.row}>
             <div className={styles.field}>
               <label>Product *</label>
@@ -222,33 +255,32 @@ export default function EditSaleModal({
               <input 
                 type="date" 
                 value={startDate}
-                onChange={e => setStartDate(e.target.value)}
+                onChange={e => handleStartDateChange(e.target.value)}
                 required
               />
             </div>
             
             <div className={styles.field}>
-              <label>Duration (days) *</label>
+              <label>Duration (days)</label>
               <input 
                 type="number" 
                 value={duration}
-                onChange={e => setDuration(Math.max(1, Math.min(parseInt(e.target.value) || 1, selectedPlatform?.max_sale_days || 30)))}
+                onChange={e => handleDurationChange(parseInt(e.target.value) || 1)}
                 min={1}
-                max={selectedPlatform?.max_sale_days || 30}
-                required
               />
               {selectedPlatform && (
-                <span className={styles.hint}>Max: {selectedPlatform.max_sale_days} days</span>
+                <span className={styles.hint}>Recommended: {selectedPlatform.max_sale_days} days max</span>
               )}
             </div>
             
             <div className={styles.field}>
-              <label>End Date</label>
+              <label>End Date *</label>
               <input 
                 type="date" 
                 value={endDate}
-                disabled
-                className={styles.disabled}
+                onChange={e => handleEndDateChange(e.target.value)}
+                min={startDate}
+                required
               />
             </div>
           </div>
@@ -313,7 +345,7 @@ export default function EditSaleModal({
               <label>Goal</label>
               <select 
                 value={goalType} 
-                onChange={e => setGoalType(e.target.value as any)}
+                onChange={e => setGoalType(e.target.value as typeof goalType)}
               >
                 <option value="">Select goal...</option>
                 <option value="acquisition">Acquisition</option>
