@@ -125,20 +125,24 @@ export default function GanttChart(props: GanttChartProps) {
   })
   const [monthCount, setMonthCount] = useState(initialMonthCount + 6)
   const [zoomIndex, setZoomIndex] = useState(DEFAULT_ZOOM_INDEX)
-  const [containerWidth, setContainerWidth] = useState(1200)
+  const [containerWidth, setContainerWidth] = useState(0) // Start at 0 to detect when measured
+  const [isContainerReady, setIsContainerReady] = useState(false)
   const [hasInitialScrolled, setHasInitialScrolled] = useState(false)
   const [legendCollapsed, setLegendCollapsed] = useState(false)
   const [selectedSaleId, setSelectedSaleId] = useState&lt;string | null&gt;(null)
   const [clipboardSale, setClipboardSale] = useState&lt;ClipboardSale | null&gt;(null)
   const [copyFeedback, setCopyFeedback] = useState&lt;string | null&gt;(null)
   
+  // Use a safe containerWidth for calculations (fallback to 1200 if not measured yet)
+  const safeContainerWidth = containerWidth > 0 ? containerWidth : 1200
+  
   const dayWidth = useMemo(() => {
     const monthsVisible = ZOOM_LEVELS[zoomIndex].monthsVisible
     const daysVisible = monthsVisible * 30.44
-    const availableWidth = containerWidth - SIDEBAR_WIDTH
+    const availableWidth = safeContainerWidth - SIDEBAR_WIDTH
     const calculated = availableWidth / daysVisible
     return Math.max(4, calculated)
-  }, [zoomIndex, containerWidth])
+  }, [zoomIndex, safeContainerWidth])
   
   const [draggedSale, setDraggedSale] = useState&lt;SaleWithDetails | null&gt;(null)
   const [validationError, setValidationError] = useState&lt;string | null&gt;(null)
@@ -179,6 +183,7 @@ export default function GanttChart(props: GanttChartProps) {
     isThumbDrag: boolean
   } | null&gt;(null)
   
+  // Container size observer - sets isContainerReady when measured
   useEffect(() => {
     const container = containerRef.current
     if (!container) return
@@ -188,12 +193,19 @@ export default function GanttChart(props: GanttChartProps) {
         const width = entry.contentRect.width
         if (width > 0) {
           setContainerWidth(width)
+          setIsContainerReady(true)
         }
       }
     })
     
     resizeObserver.observe(container)
-    setContainerWidth(container.clientWidth || 1200)
+    
+    // Initial measurement
+    const initialWidth = container.clientWidth
+    if (initialWidth > 0) {
+      setContainerWidth(initialWidth)
+      setIsContainerReady(true)
+    }
     
     return () => resizeObserver.disconnect()
   }, [])
@@ -241,7 +253,7 @@ export default function GanttChart(props: GanttChartProps) {
   const visibleDateRange = useMemo(() => {
     if (!scrollContainerRef.current) return null
     const scrollLeft = scrollContainerRef.current.scrollLeft
-    const visibleWidth = containerWidth - SIDEBAR_WIDTH
+    const visibleWidth = safeContainerWidth - SIDEBAR_WIDTH
     const startDayIndex = Math.floor(scrollLeft / dayWidth)
     const endDayIndex = Math.min(Math.floor((scrollLeft + visibleWidth) / dayWidth), days.length - 1)
     
@@ -252,7 +264,7 @@ export default function GanttChart(props: GanttChartProps) {
       }
     }
     return null
-  }, [days, dayWidth, scrollProgress, containerWidth])
+  }, [days, dayWidth, scrollProgress, safeContainerWidth])
 
   const steamPlatformIds = useMemo(() => {
     return platforms
@@ -460,20 +472,20 @@ export default function GanttChart(props: GanttChartProps) {
     if (todayIndex === -1 || !scrollContainerRef.current) return
     
     const todayPosition = todayIndex * dayWidth
-    const visibleWidth = containerWidth - SIDEBAR_WIDTH
+    const visibleWidth = safeContainerWidth - SIDEBAR_WIDTH
     const scrollTarget = todayPosition - (visibleWidth / 2) + (dayWidth / 2)
     
     scrollContainerRef.current.scrollTo({
       left: Math.max(0, scrollTarget),
       behavior: 'smooth'
     })
-  }, [todayIndex, dayWidth, containerWidth])
+  }, [todayIndex, dayWidth, safeContainerWidth])
   
   const handleZoomIn = useCallback(() => {
     if (zoomIndex &lt; ZOOM_LEVELS.length - 1) {
       const scrollContainer = scrollContainerRef.current
       if (scrollContainer) {
-        const visibleWidth = containerWidth - SIDEBAR_WIDTH
+        const visibleWidth = safeContainerWidth - SIDEBAR_WIDTH
         const centerX = scrollContainer.scrollLeft + visibleWidth / 2
         const centerDayIndex = centerX / dayWidth
         
@@ -482,7 +494,7 @@ export default function GanttChart(props: GanttChartProps) {
         requestAnimationFrame(() => {
           const newMonthsVisible = ZOOM_LEVELS[zoomIndex + 1].monthsVisible
           const newDaysVisible = newMonthsVisible * 30.44
-          const newDayWidth = Math.max(4, (containerWidth - SIDEBAR_WIDTH) / newDaysVisible)
+          const newDayWidth = Math.max(4, (safeContainerWidth - SIDEBAR_WIDTH) / newDaysVisible)
           const newScrollLeft = centerDayIndex * newDayWidth - visibleWidth / 2
           scrollContainer.scrollLeft = Math.max(0, newScrollLeft)
         })
@@ -490,13 +502,13 @@ export default function GanttChart(props: GanttChartProps) {
         setZoomIndex(prev => prev + 1)
       }
     }
-  }, [zoomIndex, dayWidth, containerWidth])
+  }, [zoomIndex, dayWidth, safeContainerWidth])
   
   const handleZoomOut = useCallback(() => {
     if (zoomIndex > 0) {
       const scrollContainer = scrollContainerRef.current
       if (scrollContainer) {
-        const visibleWidth = containerWidth - SIDEBAR_WIDTH
+        const visibleWidth = safeContainerWidth - SIDEBAR_WIDTH
         const centerX = scrollContainer.scrollLeft + visibleWidth / 2
         const centerDayIndex = centerX / dayWidth
         
@@ -505,7 +517,7 @@ export default function GanttChart(props: GanttChartProps) {
         requestAnimationFrame(() => {
           const newMonthsVisible = ZOOM_LEVELS[zoomIndex - 1].monthsVisible
           const newDaysVisible = newMonthsVisible * 30.44
-          const newDayWidth = Math.max(4, (containerWidth - SIDEBAR_WIDTH) / newDaysVisible)
+          const newDayWidth = Math.max(4, (safeContainerWidth - SIDEBAR_WIDTH) / newDaysVisible)
           const newScrollLeft = centerDayIndex * newDayWidth - visibleWidth / 2
           scrollContainer.scrollLeft = Math.max(0, newScrollLeft)
         })
@@ -513,13 +525,13 @@ export default function GanttChart(props: GanttChartProps) {
         setZoomIndex(prev => prev - 1)
       }
     }
-  }, [zoomIndex, dayWidth, containerWidth])
+  }, [zoomIndex, dayWidth, safeContainerWidth])
   
   const handleZoomPreset = useCallback((index: number) => {
     if (index >= 0 &amp;&amp; index &lt; ZOOM_LEVELS.length &amp;&amp; index !== zoomIndex) {
       const scrollContainer = scrollContainerRef.current
       if (scrollContainer) {
-        const visibleWidth = containerWidth - SIDEBAR_WIDTH
+        const visibleWidth = safeContainerWidth - SIDEBAR_WIDTH
         const centerX = scrollContainer.scrollLeft + visibleWidth / 2
         const centerDayIndex = centerX / dayWidth
         
@@ -528,7 +540,7 @@ export default function GanttChart(props: GanttChartProps) {
         requestAnimationFrame(() => {
           const newMonthsVisible = ZOOM_LEVELS[index].monthsVisible
           const newDaysVisible = newMonthsVisible * 30.44
-          const newDayWidth = Math.max(4, (containerWidth - SIDEBAR_WIDTH) / newDaysVisible)
+          const newDayWidth = Math.max(4, (safeContainerWidth - SIDEBAR_WIDTH) / newDaysVisible)
           const newScrollLeft = centerDayIndex * newDayWidth - visibleWidth / 2
           scrollContainer.scrollLeft = Math.max(0, newScrollLeft)
         })
@@ -536,7 +548,7 @@ export default function GanttChart(props: GanttChartProps) {
         setZoomIndex(index)
       }
     }
-  }, [zoomIndex, dayWidth, containerWidth])
+  }, [zoomIndex, dayWidth, safeContainerWidth])
   
   // Copy sale to clipboard
   const handleCopySale = useCallback((sale: SaleWithDetails) => {
@@ -554,6 +566,7 @@ export default function GanttChart(props: GanttChartProps) {
       platform_id: sale.platform_id,
       duration
     })
+    setSelectedSaleId(sale.id)
     
     setCopyFeedback('Sale copied! Press ⌘V to paste')
     setTimeout(() => setCopyFeedback(null), 2000)
@@ -563,7 +576,7 @@ export default function GanttChart(props: GanttChartProps) {
   const handlePasteSale = useCallback(() => {
     if (!clipboardSale || !onCreateSale) return
     
-    // Paste at the same dates but allow user to move
+    // Paste at today's date with same duration
     const today = new Date()
     const startDate = format(today, 'yyyy-MM-dd')
     const endDate = format(addDays(today, clipboardSale.duration - 1), 'yyyy-MM-dd')
@@ -581,12 +594,17 @@ export default function GanttChart(props: GanttChartProps) {
   
   // Handle sale selection for keyboard shortcuts
   const handleSaleSelect = useCallback((sale: SaleWithDetails) => {
-    setSelectedSaleId(sale.id)
+    setSelectedSaleId(prev => prev === sale.id ? null : sale.id)
   }, [])
   
   // Keyboard shortcuts for zoom and copy/paste
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't handle shortcuts if user is typing in an input
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        return
+      }
+      
       // Zoom shortcuts
       if ((e.ctrlKey || e.metaKey) &amp;&amp; (e.key === '=' || e.key === '+')) {
         e.preventDefault()
@@ -1106,26 +1124,31 @@ export default function GanttChart(props: GanttChartProps) {
     }
   }, [handleScroll])
   
-  // Scroll to today on initial load - use setTimeout to ensure everything is ready
+  // Scroll to today on initial load - ONLY when container is ready and measured
   useEffect(() => {
+    // Don't scroll if already done
     if (hasInitialScrolled) return
+    // Don't scroll if container not ready (width not measured yet)
+    if (!isContainerReady) return
+    // Don't scroll if today isn't in the timeline
     if (todayIndex === -1) return
+    // Don't scroll if scroll container doesn't exist
+    if (!scrollContainerRef.current) return
     
-    // Use a longer timeout to ensure DOM and data are fully ready
+    // Use a small timeout to ensure layout is complete
     const timeoutId = setTimeout(() => {
       if (!scrollContainerRef.current) return
-      if (containerWidth &lt;= 0 || dayWidth &lt;= 0) return
       
       const todayPosition = todayIndex * dayWidth
-      const visibleWidth = containerWidth - SIDEBAR_WIDTH
+      const visibleWidth = safeContainerWidth - SIDEBAR_WIDTH
       const scrollTarget = todayPosition - (visibleWidth / 2) + (dayWidth / 2)
       
       scrollContainerRef.current.scrollLeft = Math.max(0, scrollTarget)
       setHasInitialScrolled(true)
-    }, 100)
+    }, 50)
     
     return () => clearTimeout(timeoutId)
-  }, [todayIndex, dayWidth, containerWidth, hasInitialScrolled])
+  }, [isContainerReady, todayIndex, dayWidth, safeContainerWidth, hasInitialScrolled])
   
   useEffect(() => {
     const handleWindowMouseMove = (e: MouseEvent) => {
@@ -1248,7 +1271,7 @@ export default function GanttChart(props: GanttChartProps) {
   
   const scrollThumbStyle = useMemo(() => {
     const totalWidth = totalDays * dayWidth
-    const visibleWidth = containerWidth - SIDEBAR_WIDTH
+    const visibleWidth = safeContainerWidth - SIDEBAR_WIDTH
     const thumbWidthPercent = Math.max(10, Math.min(100, (visibleWidth / totalWidth) * 100))
     const maxLeftPercent = 100 - thumbWidthPercent
     const leftPercent = scrollProgress * maxLeftPercent
@@ -1257,7 +1280,7 @@ export default function GanttChart(props: GanttChartProps) {
       width: `${thumbWidthPercent}%`,
       left: `${leftPercent}%`
     }
-  }, [totalDays, scrollProgress, dayWidth, containerWidth])
+  }, [totalDays, scrollProgress, dayWidth, safeContainerWidth])
   
   const handleDragStart = (event: DragStartEvent) => {
     const saleId = event.active.id as string
