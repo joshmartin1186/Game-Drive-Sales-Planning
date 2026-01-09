@@ -1,6 +1,6 @@
 'use client'
 
-// Cache invalidation: 2026-01-09T21:55:00Z - Fix Bulk Edit Type Error
+// Cache invalidation: 2026-01-09T22:00:00Z - Fix Bulk Edit Status Type
 
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { createClient } from '@supabase/supabase-js'
@@ -68,6 +68,9 @@ interface SaleSnapshot {
   product_name?: string
   platform_name?: string
 }
+
+// Type for valid sale status values
+type SaleStatus = 'planned' | 'submitted' | 'confirmed' | 'live' | 'ended'
 
 export default function GameDriveDashboard() {
   const [sales, setSales] = useState<SaleWithDetails[]>([])
@@ -472,14 +475,14 @@ export default function GameDriveDashboard() {
       return
     }
     
-    // Handle other updates - convert null to undefined for Sale type compatibility
+    // Handle other updates - convert types for Sale compatibility
     const dbUpdates: Partial<Sale> = {}
     if (updates.discount_percentage !== undefined) {
       dbUpdates.discount_percentage = updates.discount_percentage === null ? undefined : updates.discount_percentage
     }
     if (updates.platform_id !== undefined) dbUpdates.platform_id = updates.platform_id
     if (updates.sale_name !== undefined) dbUpdates.sale_name = updates.sale_name || undefined
-    if (updates.status !== undefined) dbUpdates.status = updates.status
+    if (updates.status !== undefined) dbUpdates.status = updates.status as SaleStatus
     
     // Optimistically update local state
     setSales(prev => prev.map(sale => {
