@@ -28,6 +28,11 @@
   cursor: grabbing;
 }
 
+.saleBlock.resizing {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  cursor: ew-resize;
+}
+
 .dragHandle {
   display: flex;
   align-items: center;
@@ -92,4 +97,53 @@
 
 .deleteBtn:hover {
   background: rgba(239, 68, 68, 0.8);
+}
+
+/* Resize handles */
+.resizeHandle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  cursor: ew-resize;
+  z-index: 10;
+  background: transparent;
+  transition: background 0.15s;
+  /* Counter-rotate the skew so handles are vertical */
+  transform: skewX(8deg);
+}
+
+.resizeHandle:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.resizeHandle:active {
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.resizeHandleLeft {
+  left: 0;
+  border-radius: 4px 0 0 4px;
+}
+
+.resizeHandleRight {
+  right: 0;
+  border-radius: 0 4px 4px 0;
+}
+
+/* Visual indicator lines on hover */
+.saleBlock:hover .resizeHandle::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 2px;
+  height: 60%;
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: 1px;
+}
+
+.saleBlock.resizing .resizeHandle::after {
+  background: rgba(255, 255, 255, 0.9);
 }
