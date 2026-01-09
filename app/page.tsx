@@ -1,6 +1,6 @@
 'use client'
 
-// Cache invalidation: 2026-01-08T21:45:00Z - Fix stat icons
+// Cache invalidation: 2026-01-09T04:30:00Z - Platform selection for auto-generate
 
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { createClient } from '@supabase/supabase-js'
@@ -36,7 +36,6 @@ interface CalendarGenerationState {
   productId: string
   productName: string
   launchDate: string
-  variations: CalendarVariation[]
 }
 
 interface ClearSalesState {
@@ -411,25 +410,13 @@ export default function GameDriveDashboard() {
     // Use provided launch date or today's date
     const effectiveLaunchDate = launchDate || format(new Date(), 'yyyy-MM-dd')
     
-    const variations = generateSaleCalendar({
-      productId,
-      platforms,
-      platformEvents,
-      launchDate: effectiveLaunchDate,
-      defaultDiscount: 50,
-      existingSales: sales // Pass existing sales to avoid conflicts
-    })
-    
-    // Store variations for export
-    setLastGeneratedVariations(variations)
-    
+    // Open the modal - it will handle platform selection and generation internally
     setCalendarGeneration({
       productId,
       productName,
-      launchDate: effectiveLaunchDate,
-      variations
+      launchDate: effectiveLaunchDate
     })
-  }, [platforms, platformEvents, sales])
+  }, [])
 
   const handleApplyCalendar = useCallback(async (generatedSales: GeneratedSale[]) => {
     setIsApplyingCalendar(true)
@@ -1127,9 +1114,12 @@ export default function GameDriveDashboard() {
         <SaleCalendarPreviewModal
           isOpen={true}
           onClose={() => setCalendarGeneration(null)}
+          productId={calendarGeneration.productId}
           productName={calendarGeneration.productName}
           launchDate={calendarGeneration.launchDate}
-          variations={calendarGeneration.variations}
+          platforms={platforms}
+          platformEvents={platformEvents}
+          existingSales={sales}
           onApply={handleApplyCalendar}
           isApplying={isApplyingCalendar}
         />
