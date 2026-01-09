@@ -16,6 +16,7 @@ interface SaleBlockProps {
   optimisticLeft?: number
   onEdit: (sale: SaleWithDetails) => void
   onDelete: (saleId: string) => Promise<void>
+  onDuplicate?: (sale: SaleWithDetails) => void
   onResize?: (saleId: string, newStart: string, newEnd: string) => Promise<void>
 }
 
@@ -28,6 +29,7 @@ export default function SaleBlock({
   optimisticLeft,
   onEdit,
   onDelete,
+  onDuplicate,
   onResize
 }: SaleBlockProps) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
@@ -229,6 +231,18 @@ export default function SaleBlock({
       </div>
       
       <div className={styles.actions}>
+        {onDuplicate && (
+          <button
+            className={styles.duplicateBtn}
+            onClick={(e) => {
+              e.stopPropagation()
+              onDuplicate(sale)
+            }}
+            title="Duplicate sale"
+          >
+            📋
+          </button>
+        )}
         <button
           className={styles.deleteBtn}
           onClick={(e) => {
