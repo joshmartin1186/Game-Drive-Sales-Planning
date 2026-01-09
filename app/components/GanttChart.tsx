@@ -779,6 +779,69 @@ export default function GanttChart(props: GanttChartProps) {
     }, 500)
   }
   
+  // Handle sale resize from SaleBlock
+  const handleSaleResize = useCallback(async (saleId: string, newStartDate: string, newEndDate: string) => {
+    const sale = sales.find(s => s.id === saleId)
+    if (!sale) return
+    
+    const platform = platforms.find(p => p.id === sale.platform_id)
+    if (!platform) {
+      setValidationError('Platform not found')
+      return
+    }
+    
+    // Validate the new dates
+    const validation = validateSale(
+      {
+        product_id: sale.product_id,
+        platform_id: sale.platform_id,
+        start_date: newStartDate,
+        end_date: newEndDate,
+        sale_type: sale.sale_type
+      },
+      allSales,
+      platform,
+      saleId
+    )
+    
+    if (!validation.valid) {
+      setValidationError(validation.message || 'Invalid resize - conflicts with cooldown')
+      setTimeout(() => setValidationError(null), 3000)
+      return
+    }
+    
+    // Optimistic update
+    setOptimisticUpdates(prev => ({
+      ...prev,
+      [saleId]: { startDate: newStartDate, endDate: newEndDate }
+    }))
+    
+    try {
+      await onSaleUpdate(saleId, {
+        start_date: newStartDate,
+        end_date: newEndDate
+      })
+    } catch (err) {
+      // Revert on error
+      setOptimisticUpdates(prev => {
+        const updated = { ...prev }
+        delete updated[saleId]
+        return updated
+      })
+      setValidationError('Failed to resize - reverted')
+      setTimeout(() => setValidationError(null), 3000)
+    }
+    
+    // Clean up optimistic update
+    setTimeout(() => {
+      setOptimisticUpdates(prev => {
+        const updated = { ...prev }
+        delete updated[saleId]
+        return updated
+      })
+    }, 500)
+  }, [sales, platforms, allSales, onSaleUpdate])
+  
   const handleMouseLeave = useCallback(() => {
     if (selectionRef.current) {
       selectionRef.current = null
@@ -1073,8 +1136,10 @@ export default function GanttChart(props: GanttChartProps) {
                                         sale={sale}
                                         left={left}
                                         width={width}
+                                        dayWidth={DAY_WIDTH}
                                         onEdit={onSaleEdit}
                                         onDelete={onSaleDelete}
+                                        onResize={handleSaleResize}
                                       />
                                     </div>
                                   )
