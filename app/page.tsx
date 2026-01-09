@@ -1,6 +1,6 @@
 'use client'
 
-// Cache invalidation: 2026-01-09T05:10:00Z - Version Manager
+// Cache invalidation: 2026-01-09T05:20:00Z - Duplicate Sale
 
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { createClient } from '@supabase/supabase-js'
@@ -18,7 +18,8 @@ import EditLaunchDateModal from './components/EditLaunchDateModal'
 import GapAnalysis from './components/GapAnalysis'
 import ImportSalesModal from './components/ImportSalesModal'
 import VersionManager from './components/VersionManager'
-import { generateSaleCalendar, GeneratedSale, CalendarVariation, generatedSaleToCreateFormat } from '@/lib/sale-calendar-generator'
+import DuplicateSaleModal from './components/DuplicateSaleModal'
+import { GeneratedSale, CalendarVariation, generatedSaleToCreateFormat } from '@/lib/sale-calendar-generator'
 import { useUndo } from '@/lib/undo-context'
 import styles from './page.module.css'
 import { Sale, Platform, Product, Game, Client, SaleWithDetails, PlatformEvent } from '@/lib/types'
@@ -82,6 +83,7 @@ export default function GameDriveDashboard() {
   const [showImportModal, setShowImportModal] = useState(false)
   const [showVersionManager, setShowVersionManager] = useState(false)
   const [editingSale, setEditingSale] = useState<SaleWithDetails | null>(null)
+  const [duplicatingSale, setDuplicatingSale] = useState<SaleWithDetails | null>(null)
   const [viewMode, setViewMode] = useState<'gantt' | 'table'>('gantt')
   const [showEvents, setShowEvents] = useState(true)
   const [salePrefill, setSalePrefill] = useState<SalePrefill | null>(null)
@@ -456,6 +458,51 @@ export default function GameDriveDashboard() {
     }
   }, [pushAction])
 
+  // Duplicate sales handler
+  const handleDuplicateSales = useCallback(async (salesToCreate: Omit<Sale, 'id' | 'created_at'>[]) => {
+    try {
+      const { data, error } = await supabase
+        .from('sales')
+        .insert(salesToCreate)
+        .select(`
+          *,
+          product:products(
+            *,
+            game:games(
+              *,
+              client:clients(*)
+            )
+          ),
+          platform:platforms(*)
+        `)
+      
+      if (error) throw error
+      
+      if (data && data.length > 0) {
+        setSales(prev => [...prev, ...data].sort((a, b) => 
+          new Date(a.start_date).getTime() - new Date(b.start_date).getTime()
+        ))
+        
+        // Push batch action to undo stack
+        pushAction({
+          type: 'BATCH_CREATE_SALES',
+          sales: data.map(s => ({
+            id: s.id,
+            data: salesToCreate.find(sc => 
+              sc.product_id === s.product_id && 
+              sc.start_date === s.start_date &&
+              sc.platform_id === s.platform_id
+            ) as Record<string, unknown>
+          }))
+        })
+      }
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to duplicate sales'
+      console.error('Error duplicating sales:', err)
+      throw new Error(errorMessage)
+    }
+  }, [pushAction])
+
   // Restore version handler
   const handleRestoreVersion = useCallback(async (salesSnapshot: SaleSnapshot[]) => {
     // Delete all current sales first
@@ -508,6 +555,10 @@ export default function GameDriveDashboard() {
 
   const handleSaleEdit = useCallback((sale: SaleWithDetails) => {
     setEditingSale(sale)
+  }, [])
+
+  const handleSaleDuplicate = useCallback((sale: SaleWithDetails) => {
+    setDuplicatingSale(sale)
   }, [])
 
   const handleTimelineCreate = useCallback((prefill: SalePrefill) => {
@@ -1162,6 +1213,7 @@ export default function GameDriveDashboard() {
             onSaleUpdate={handleSaleUpdate}
             onSaleDelete={handleSaleDelete}
             onSaleEdit={handleSaleEdit}
+            onSaleDuplicate={handleSaleDuplicate}
             onCreateSale={handleTimelineCreate}
             onGenerateCalendar={handleGenerateCalendar}
             onClearSales={handleClearSales}
@@ -1176,6 +1228,7 @@ export default function GameDriveDashboard() {
             platforms={platforms}
             onDelete={handleSaleDelete}
             onEdit={handleSaleEdit}
+            onDuplicate={handleSaleDuplicate}
           />
         )}
       </div>
@@ -1204,7 +1257,20 @@ export default function GameDriveDashboard() {
           existingSales={sales}
           onSave={handleSaleUpdate}
           onDelete={handleSaleDelete}
+          onDuplicate={handleSaleDuplicate}
           onClose={() => setEditingSale(null)}
+        />
+      )}
+
+      {/* Duplicate Sale Modal */}
+      {duplicatingSale && (
+        <DuplicateSaleModal
+          sale={duplicatingSale}
+          products={products}
+          platforms={platforms}
+          existingSales={sales}
+          onDuplicate={handleDuplicateSales}
+          onClose={() => setDuplicatingSale(null)}
         />
       )}
 
