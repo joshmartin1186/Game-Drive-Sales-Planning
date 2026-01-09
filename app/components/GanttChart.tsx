@@ -143,7 +143,7 @@ export default function GanttChart(props: GanttChartProps) {
   const containerRef = useRef&lt;HTMLDivElement&gt;(null)
   const scrollContainerRef = useRef&lt;HTMLDivElement&gt;(null)
   const scrollTrackRef = useRef&lt;HTMLDivElement&gt;(null)
-  const hasInitiallyScrolled = useRef(false) // Track if we've done initial scroll
+  const hasInitiallyScrolled = useRef(false)
   
   const selectionRef = useRef&lt;{
     data: SelectionState
@@ -1048,19 +1048,22 @@ export default function GanttChart(props: GanttChartProps) {
     }
   }, [handleScroll])
   
-  // Initial scroll to today - with proper dependencies and guards
+  // Initial scroll to today - wait for proper initialization
   useEffect(() =&gt; {
-    // Only scroll once, and only when all values are ready
+    // Only scroll once
     if (hasInitiallyScrolled.current) return
+    // Need today to be in the timeline
     if (todayIndex === -1) return
+    // Need scroll container
     if (!scrollContainerRef.current) return
-    if (containerWidth &lt;= 0 || containerWidth === 1200) return // Still using default
-    if (dayWidth &lt;= 4) return // dayWidth not properly calculated yet
+    // Wait for containerWidth to be measured (not the default)
+    if (containerWidth === 1200) return
+    // Wait for dayWidth to be properly calculated (not minimum)
+    if (dayWidth &lt;= 4) return
     
     const todayPosition = todayIndex * dayWidth
     const visibleWidth = containerWidth - SIDEBAR_WIDTH
     const scrollTarget = todayPosition - (visibleWidth / 2) + (dayWidth / 2)
-    
     scrollContainerRef.current.scrollLeft = Math.max(0, scrollTarget)
     hasInitiallyScrolled.current = true
   }, [todayIndex, dayWidth, containerWidth])
