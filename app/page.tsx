@@ -1,6 +1,6 @@
 'use client'
 
-// Cache invalidation: 2026-01-09T04:38:00Z - Gap Analysis component
+// Cache invalidation: 2026-01-09T05:00:00Z - Import Sales Modal
 
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { createClient } from '@supabase/supabase-js'
@@ -16,6 +16,7 @@ import ClearSalesModal from './components/ClearSalesModal'
 import TimelineExportModal from './components/TimelineExportModal'
 import EditLaunchDateModal from './components/EditLaunchDateModal'
 import GapAnalysis from './components/GapAnalysis'
+import ImportSalesModal from './components/ImportSalesModal'
 import { generateSaleCalendar, GeneratedSale, CalendarVariation, generatedSaleToCreateFormat } from '@/lib/sale-calendar-generator'
 import { useUndo } from '@/lib/undo-context'
 import styles from './page.module.css'
@@ -63,6 +64,7 @@ export default function GameDriveDashboard() {
   const [showProductManager, setShowProductManager] = useState(false)
   const [showPlatformSettings, setShowPlatformSettings] = useState(false)
   const [showExportModal, setShowExportModal] = useState(false)
+  const [showImportModal, setShowImportModal] = useState(false)
   const [editingSale, setEditingSale] = useState<SaleWithDetails | null>(null)
   const [viewMode, setViewMode] = useState<'gantt' | 'table'>('gantt')
   const [showEvents, setShowEvents] = useState(true)
@@ -392,6 +394,51 @@ export default function GameDriveDashboard() {
       setError(errorMessage)
     }
   }
+
+  // Bulk import handler
+  const handleBulkImport = useCallback(async (salesToCreate: Omit<Sale, 'id' | 'created_at'>[]) => {
+    try {
+      const { data, error } = await supabase
+        .from('sales')
+        .insert(salesToCreate)
+        .select(`
+          *,
+          product:products(
+            *,
+            game:games(
+              *,
+              client:clients(*)
+            )
+          ),
+          platform:platforms(*)
+        `)
+      
+      if (error) throw error
+      
+      if (data && data.length > 0) {
+        setSales(prev => [...prev, ...data].sort((a, b) => 
+          new Date(a.start_date).getTime() - new Date(b.start_date).getTime()
+        ))
+        
+        // Push batch action to undo stack
+        pushAction({
+          type: 'BATCH_CREATE_SALES',
+          sales: data.map(s => ({
+            id: s.id,
+            data: salesToCreate.find(sc => 
+              sc.product_id === s.product_id && 
+              sc.start_date === s.start_date &&
+              sc.platform_id === s.platform_id
+            ) as Record<string, unknown>
+          }))
+        })
+      }
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to import sales'
+      console.error('Error importing sales:', err)
+      throw new Error(errorMessage)
+    }
+  }, [pushAction])
 
   const handleSaleEdit = useCallback((sale: SaleWithDetails) => {
     setEditingSale(sale)
@@ -1012,6 +1059,9 @@ export default function GameDriveDashboard() {
           <button className={styles.primaryBtn} onClick={() => setShowAddModal(true)}>
             + Add Sale
           </button>
+          <button className={styles.secondaryBtn} onClick={() => setShowImportModal(true)}>
+            Import CSV
+          </button>
           <button className={styles.secondaryBtn} onClick={() => setShowProductManager(true)}>
             Manage Products
           </button>
@@ -1088,6 +1138,16 @@ export default function GameDriveDashboard() {
           onClose={() => setEditingSale(null)}
         />
       )}
+
+      {/* Import Sales Modal */}
+      <ImportSalesModal
+        isOpen={showImportModal}
+        onClose={() => setShowImportModal(false)}
+        products={products}
+        platforms={platforms}
+        existingSales={sales}
+        onImport={handleBulkImport}
+      />
 
       {/* Product Manager Modal */}
       {showProductManager && (
