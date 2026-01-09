@@ -1229,14 +1229,6 @@ export default function GameDriveDashboard() {
     return result
   }, [sales, filterClientId, filterGameId])
 
-  // Games with client name for bulk edit modal
-  const gamesWithClient = useMemo(() => {
-    return games.map(g => ({
-      ...g,
-      client: { name: g.client?.name || '' }
-    }))
-  }, [games])
-
   const conflicts = 0
   const upcomingEvents = platformEvents.filter(e => new Date(e.start_date) > new Date()).length
 
@@ -1450,7 +1442,6 @@ export default function GameDriveDashboard() {
           <SalesTable
             sales={filteredSales}
             platforms={platforms}
-            games={gamesWithClient}
             onDelete={handleSaleDelete}
             onEdit={handleSaleEdit}
             onDuplicate={handleSaleDuplicate}
@@ -1506,7 +1497,6 @@ export default function GameDriveDashboard() {
         onClose={() => setBulkEditSales([])}
         selectedSales={bulkEditSales}
         platforms={platforms}
-        games={gamesWithClient}
         onBulkUpdate={handleBulkUpdate}
         onBulkDelete={handleBulkDelete}
       />
