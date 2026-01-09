@@ -79,20 +79,29 @@
   opacity: 1;
 }
 
-.deleteBtn {
+.deleteBtn,
+.duplicateBtn {
   width: 18px;
   height: 18px;
   border-radius: 50%;
   border: none;
   background: rgba(255, 255, 255, 0.3);
   color: white;
-  font-size: 14px;
+  font-size: 10px;
   line-height: 1;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: background 0.2s;
+}
+
+.duplicateBtn:hover {
+  background: rgba(59, 130, 246, 0.8);
+}
+
+.deleteBtn {
+  font-size: 14px;
 }
 
 .deleteBtn:hover {
