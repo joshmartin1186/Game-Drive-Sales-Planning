@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useRef, useCallback, useEffect } from 'react'
 import { DndContext, DragEndEvent, DragStartEvent, useSensor, useSensors, PointerSensor, DragOverlay } from '@dnd-kit/core'
-import { format, addDays, differenceInDays, parseISO, startOfMonth, endOfMonth, eachDayOfInterval, isToday, isSameDay } from 'date-fns'
+import { format, addDays, differenceInDays, parseISO, startOfMonth, endOfMonth, eachDayOfInterval, isToday } from 'date-fns'
 import { Sale, Platform, Product, Game, Client, SaleWithDetails, PlatformEvent } from '@/lib/types'
 import { validateSale } from '@/lib/validation'
 import { normalizeToLocalDate } from '@/lib/dateUtils'
@@ -126,45 +126,25 @@ export default function GanttChart(props: GanttChartProps) {
     return { months: monthsArr, days: daysArr, totalDays: daysArr.length }
   }, [timelineStart, monthCount])
   
-  // Calculate today's position in the timeline
-  const todayInfo = useMemo(() =&gt; {
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    
-    const todayIndex = days.findIndex(day =&gt; isSameDay(day, today))
-    const isInRange = todayIndex &gt;= 0
-    const left = isInRange ? todayIndex * DAY_WIDTH : -1
-    
-    return { today, todayIndex, isInRange, left }
+  const todayIndex = useMemo(() =&gt; {
+    const todayDate = new Date()
+    todayDate.setHours(0, 0, 0, 0)
+    for (let i = 0; i &lt; days.length; i++) {
+      if (isToday(days[i])) {
+        return i
+      }
+    }
+    return -1
   }, [days])
   
-  // Scroll to today's position
   const scrollToToday = useCallback(() =&gt; {
-    if (!scrollContainerRef.current || !todayInfo.isInRange) return
-    
-    const container = scrollContainerRef.current
-    const containerWidth = container.clientWidth
-    const labelWidth = 220 // Match the productLabel width
-    
-    // Center today in the visible area (accounting for label column)
-    const targetScroll = todayInfo.left - (containerWidth - labelWidth) / 2 + DAY_WIDTH / 2
-    
-    container.scrollTo({
-      left: Math.max(0, targetScroll),
+    if (todayIndex === -1 || !scrollContainerRef.current) return
+    const targetPosition = todayIndex * DAY_WIDTH - scrollContainerRef.current.clientWidth / 2 + DAY_WIDTH / 2
+    scrollContainerRef.current.scrollTo({
+      left: Math.max(0, targetPosition),
       behavior: 'smooth'
     })
-  }, [todayInfo])
-  
-  // Auto-scroll to today on initial load
-  useEffect(() =&gt; {
-    if (todayInfo.isInRange) {
-      // Small delay to ensure container is rendered
-      const timer = setTimeout(() =&gt; {
-        scrollToToday()
-      }, 100)
-      return () =&gt; clearTimeout(timer)
-    }
-  }, []) // Only on mount
+  }, [todayIndex])
   
   const groupedProducts = useMemo(() =&gt; {
     const groups: { game: Game &amp; { client: Client }; products: (Product &amp; { game: Game &amp; { client: Client } })[] }[] = []
@@ -822,7 +802,7 @@ export default function GanttChart(props: GanttChartProps) {
     &gt;
       {validationError &amp;&amp; (
         &lt;div className={`${styles.validationError} ${validationError.includes('Auto-shifted') ? styles.infoMessage : ''}`}&gt;
-          &lt;span&gt;{validationError.includes('Auto-shifted') ? 'ℹ️' : '⚠️'} {validationError}&lt;/span&gt;
+          &lt;span&gt;{validationError.includes('Auto-shifted') ? 'i' : '!'} {validationError}&lt;/span&gt;
         &lt;/div&gt;
       )}
       
@@ -844,13 +824,13 @@ export default function GanttChart(props: GanttChartProps) {
         className={`${styles.scrollGrabBar} ${isGrabbing ? styles.grabbing : ''}`}
       &gt;
         &lt;div className={styles.scrollBarControls}&gt;
-          &lt;button 
+          &lt;button
             className={styles.todayButton}
             onClick={scrollToToday}
-            disabled={!todayInfo.isInRange}
-            title={todayInfo.isInRange ? `Jump to ${format(todayInfo.today, 'MMM d, yyyy')}` : 'Today is not in the current timeline range'}
+            disabled={todayIndex === -1}
+            title={todayIndex === -1 ? 'Today is not visible in this timeline' : 'Jump to today'}
           &gt;
-            📍 Today
+            Today
           &lt;/button&gt;
           &lt;div 
             className={styles.scrollGrabTrack}
@@ -862,7 +842,7 @@ export default function GanttChart(props: GanttChartProps) {
               style={scrollThumbStyle}
               onMouseDown={handleScrollThumbStart}
             &gt;
-              &lt;span className={styles.scrollGrabIcon}&gt;⟷&lt;/span&gt;
+              &lt;span className={styles.scrollGrabIcon}&gt;::&lt;/span&gt;
             &lt;/div&gt;
           &lt;/div&gt;
         &lt;/div&gt;
@@ -894,7 +874,7 @@ export default function GanttChart(props: GanttChartProps) {
               {days.map((day, idx) =&gt; {
                 const isWeekend = day.getDay() === 0 || day.getDay() === 6
                 const isFirstOfMonth = day.getDate() === 1
-                const isTodayDate = isSameDay(day, todayInfo.today)
+                const isTodayDate = idx === todayIndex
                 return (
                   &lt;div 
                     key={idx}
@@ -907,14 +887,12 @@ export default function GanttChart(props: GanttChartProps) {
               })}
             &lt;/div&gt;
             
-            {/* Today indicator line - runs through entire timeline */}
-            {todayInfo.isInRange &amp;&amp; (
+            {todayIndex &gt;= 0 &amp;&amp; (
               &lt;div 
                 className={styles.todayIndicator}
-                style={{ left: 220 + todayInfo.left + DAY_WIDTH / 2 }}
-                title={`Today: ${format(todayInfo.today, 'MMMM d, yyyy')}`}
+                style={{ left: todayIndex * DAY_WIDTH + DAY_WIDTH / 2 + 220 }}
               &gt;
-                &lt;div className={styles.todayIndicatorLabel}&gt;TODAY&lt;/div&gt;
+                &lt;span className={styles.todayIndicatorLabel}&gt;TODAY&lt;/span&gt;
               &lt;/div&gt;
             )}
             
@@ -946,7 +924,7 @@ export default function GanttChart(props: GanttChartProps) {
                                   onClick={() =&gt; onEditLaunchDate &amp;&amp; product.launch_date &amp;&amp; onEditLaunchDate(product.id, product.name, product.launch_date)}
                                   title="Click to edit launch date"
                                 &gt;
-                                  🚀 {format(normalizeToLocalDate(product.launch_date), 'MMM d')}
+                                  Launch: {format(normalizeToLocalDate(product.launch_date), 'MMM d')}
                                 &lt;/span&gt;
                               )}
                             &lt;/div&gt;
@@ -957,7 +935,7 @@ export default function GanttChart(props: GanttChartProps) {
                                   onClick={() =&gt; onGenerateCalendar(product.id, product.name, product.launch_date || undefined)}
                                   title="Auto-generate sale calendar for this product"
                                 &gt;
-                                  🗓️
+                                  Cal
                                 &lt;/button&gt;
                               )}
                               {onClearSales &amp;&amp; saleCount &gt; 0 &amp;&amp; (
@@ -966,7 +944,7 @@ export default function GanttChart(props: GanttChartProps) {
                                   onClick={() =&gt; onClearSales(product.id, product.name)}
                                   title={`Clear sales for this product (${saleCount})`}
                                 &gt;
-                                  🗑️
+                                  X
                                 &lt;/button&gt;
                               )}
                             &lt;/div&gt;
@@ -994,7 +972,7 @@ export default function GanttChart(props: GanttChartProps) {
                               &gt;
                                 &lt;div className={styles.launchMarkerLine} /&gt;
                                 &lt;div className={styles.launchMarkerFlag}&gt;
-                                  🚀
+                                  L
                                 &lt;/div&gt;
                               &lt;/div&gt;
                             )}
@@ -1067,11 +1045,11 @@ export default function GanttChart(props: GanttChartProps) {
                                       backgroundColor: `${platform.color_hex}25`,
                                       borderColor: platform.color_hex,
                                     }}
-                                    title={`${event.name}\n${format(event.displayStart, 'MMM d')} - ${format(event.displayEnd, 'MMM d, yyyy')}${!event.requires_cooldown ? '\n★ No cooldown required' : ''}`}
+                                    title={`${event.name}\n${format(event.displayStart, 'MMM d')} - ${format(event.displayEnd, 'MMM d, yyyy')}${!event.requires_cooldown ? '\nNo cooldown required' : ''}`}
                                   &gt;
                                     &lt;span className={styles.platformEventLabel}&gt;
                                       {event.name}
-                                      {!event.requires_cooldown &amp;&amp; &lt;span className={styles.noCooldownStar}&gt;★&lt;/span&gt;}
+                                      {!event.requires_cooldown &amp;&amp; &lt;span className={styles.noCooldownStar}&gt;*&lt;/span&gt;}
                                     &lt;/span&gt;
                                   &lt;/div&gt;
                                 ))}
