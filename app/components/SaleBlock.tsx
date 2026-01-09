@@ -15,9 +15,12 @@ interface SaleBlockProps {
   isDragging?: boolean
   optimisticLeft?: number
   onEdit: (sale: SaleWithDetails) => void
-  onDelete: (saleId: string) => Promise<void>
+  onDelete: (saleId: string) => Promise&lt;void&gt;
   onDuplicate?: (sale: SaleWithDetails) => void
-  onResize?: (saleId: string, newStart: string, newEnd: string) => Promise<void>
+  onResize?: (saleId: string, newStart: string, newEnd: string) => Promise&lt;void&gt;
+  onSelect?: (sale: SaleWithDetails) => void
+  onCopy?: (sale: SaleWithDetails) => void
+  isSelected?: boolean
 }
 
 export default function SaleBlock({ 
@@ -30,21 +33,26 @@ export default function SaleBlock({
   onEdit,
   onDelete,
   onDuplicate,
-  onResize
+  onResize,
+  onSelect,
+  onCopy,
+  isSelected = false
 }: SaleBlockProps) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: sale.id,
     data: { sale }
   })
   
-  const [isResizing, setIsResizing] = useState<'left' | 'right' | null>(null)
+  const [isResizing, setIsResizing] = useState&lt;'left' | 'right' | null&gt;(null)
   const [resizeOffset, setResizeOffset] = useState(0)
-  const resizeRef = useRef<{
+  const [showContextMenu, setShowContextMenu] = useState(false)
+  const [contextMenuPos, setContextMenuPos] = useState({ x: 0, y: 0 })
+  const resizeRef = useRef&lt;{
     startX: number
     initialStart: string
     initialEnd: string
     edge: 'left' | 'right'
-  } | null>(null)
+  } | null&gt;(null)
   
   // Use optimistic position if provided, otherwise use actual position
   const displayLeft = optimisticLeft !== undefined ? optimisticLeft : left
@@ -63,8 +71,9 @@ export default function SaleBlock({
     backgroundColor: sale.platform?.color_hex || '#3b82f6',
     transform: CSS.Translate.toString(transform),
     opacity: isDragging ? 0.7 : 1,
-    zIndex: isDragging || isResizing ? 100 : 5,
+    zIndex: isDragging || isResizing ? 100 : isSelected ? 10 : 5,
     cursor: isDragging ? 'grabbing' : isResizing ? 'ew-resize' : 'grab',
+    boxShadow: isSelected ? `0 0 0 2px white, 0 0 0 4px ${sale.platform?.color_hex || '#3b82f6'}` : undefined,
   }
   
   const startDate = parseISO(sale.start_date)
@@ -74,7 +83,7 @@ export default function SaleBlock({
   const discountText = sale.discount_percentage ? `-${sale.discount_percentage}%` : ''
   
   // Status badge
-  const statusColors: Record<string, string> = {
+  const statusColors: Record&lt;string, string&gt; = {
     planned: '#94a3b8',
     submitted: '#f59e0b',
     confirmed: '#22c55e',
@@ -83,11 +92,51 @@ export default function SaleBlock({
   }
 
   const handleClick = (e: React.MouseEvent) => {
-    // Only trigger edit if not dragging/resizing and click target is not a button or handle
+    // Only trigger if not dragging/resizing and click target is not a button or handle
     if (!isDragging && !isResizing && !(e.target as HTMLElement).closest('button') && !(e.target as HTMLElement).closest(`.${styles.resizeHandle}`)) {
-      onEdit(sale)
+      // If clicking with modifier key, select instead of edit
+      if (e.ctrlKey || e.metaKey) {
+        if (onSelect) {
+          e.preventDefault()
+          e.stopPropagation()
+          onSelect(sale)
+        }
+      } else {
+        onEdit(sale)
+      }
     }
   }
+
+  // Right-click context menu
+  const handleContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    
+    // Select the sale on right-click
+    if (onSelect) {
+      onSelect(sale)
+    }
+    
+    setContextMenuPos({ x: e.clientX, y: e.clientY })
+    setShowContextMenu(true)
+  }
+
+  // Close context menu when clicking outside
+  useEffect(() => {
+    if (!showContextMenu) return
+    
+    const handleClickOutside = () => {
+      setShowContextMenu(false)
+    }
+    
+    document.addEventListener('click', handleClickOutside)
+    document.addEventListener('contextmenu', handleClickOutside)
+    
+    return () => {
+      document.removeEventListener('click', handleClickOutside)
+      document.removeEventListener('contextmenu', handleClickOutside)
+    }
+  }, [showContextMenu])
 
   const handleResizeStart = useCallback((edge: 'left' | 'right', e: React.MouseEvent) => {
     if (!onResize) return
@@ -196,72 +245,116 @@ export default function SaleBlock({
   }, [isResizing, handleResizeMove, handleResizeEnd])
 
   return (
-    <div
-      ref={setNodeRef}
-      className={`${styles.saleBlock} ${isDragging ? styles.dragging : ''} ${isResizing ? styles.resizing : ''}`}
-      style={style}
-      onClick={handleClick}
-      title={`${displayName}\n${format(startDate, 'MMM d')} - ${format(endDate, 'MMM d, yyyy')}\n${sale.platform?.name || 'Unknown Platform'}\n${discountText}\nClick to edit • Drag edges to resize`}
-    >
-      {/* Left resize handle */}
-      {onResize && (
-        <div
-          className={`${styles.resizeHandle} ${styles.resizeHandleLeft}`}
-          onMouseDown={(e) => handleResizeStart('left', e)}
-        />
-      )}
-      
-      <div 
-        className={styles.dragHandle}
-        {...listeners}
-        {...attributes}
-      >
-        <span className={styles.saleName}>
-          {displayName} {discountText}
-        </span>
-        
-        {sale.status && (
-          <span 
-            className={styles.statusBadge}
-            style={{ backgroundColor: statusColors[sale.status] || '#6b7280' }}
-          >
-            {sale.status}
-          </span>
+    &lt;&gt;
+      &lt;div
+        ref={setNodeRef}
+        className={`${styles.saleBlock} ${isDragging ? styles.dragging : ''} ${isResizing ? styles.resizing : ''} ${isSelected ? styles.selected : ''}`}
+        style={style}
+        onClick={handleClick}
+        onContextMenu={handleContextMenu}
+        title={`${displayName}\n${format(startDate, 'MMM d')} - ${format(endDate, 'MMM d, yyyy')}\n${sale.platform?.name || 'Unknown Platform'}\n${discountText}\nClick to edit • Ctrl/⌘+Click to select • Right-click for menu`}
+      &gt;
+        {/* Left resize handle */}
+        {onResize &amp;&amp; (
+          &lt;div
+            className={`${styles.resizeHandle} ${styles.resizeHandleLeft}`}
+            onMouseDown={(e) => handleResizeStart('left', e)}
+          /&gt;
         )}
-      </div>
-      
-      <div className={styles.actions}>
-        {onDuplicate && (
-          <button
-            className={styles.duplicateBtn}
+        
+        &lt;div 
+          className={styles.dragHandle}
+          {...listeners}
+          {...attributes}
+        &gt;
+          &lt;span className={styles.saleName}&gt;
+            {displayName} {discountText}
+          &lt;/span&gt;
+          
+          {sale.status &amp;&amp; (
+            &lt;span 
+              className={styles.statusBadge}
+              style={{ backgroundColor: statusColors[sale.status] || '#6b7280' }}
+            &gt;
+              {sale.status}
+            &lt;/span&gt;
+          )}
+        &lt;/div&gt;
+        
+        &lt;div className={styles.actions}&gt;
+          {onCopy &amp;&amp; (
+            &lt;button
+              className={styles.copyBtn}
+              onClick={(e) => {
+                e.stopPropagation()
+                onCopy(sale)
+              }}
+              title="Copy sale (⌘C)"
+            &gt;
+              📋
+            &lt;/button&gt;
+          )}
+          {onDuplicate &amp;&amp; (
+            &lt;button
+              className={styles.duplicateBtn}
+              onClick={(e) => {
+                e.stopPropagation()
+                onDuplicate(sale)
+              }}
+              title="Duplicate sale"
+            &gt;
+              ⧉
+            &lt;/button&gt;
+          )}
+          &lt;button
+            className={styles.deleteBtn}
             onClick={(e) => {
               e.stopPropagation()
-              onDuplicate(sale)
+              onDelete(sale.id)
             }}
-            title="Duplicate sale"
-          >
-            📋
-          </button>
+            title="Delete sale"
+          &gt;
+            ×
+          &lt;/button&gt;
+        &lt;/div&gt;
+        
+        {/* Right resize handle */}
+        {onResize &amp;&amp; (
+          &lt;div
+            className={`${styles.resizeHandle} ${styles.resizeHandleRight}`}
+            onMouseDown={(e) => handleResizeStart('right', e)}
+          /&gt;
         )}
-        <button
-          className={styles.deleteBtn}
-          onClick={(e) => {
-            e.stopPropagation()
-            onDelete(sale.id)
-          }}
-          title="Delete sale"
-        >
-          ×
-        </button>
-      </div>
+      &lt;/div&gt;
       
-      {/* Right resize handle */}
-      {onResize && (
-        <div
-          className={`${styles.resizeHandle} ${styles.resizeHandleRight}`}
-          onMouseDown={(e) => handleResizeStart('right', e)}
-        />
+      {/* Context Menu */}
+      {showContextMenu &amp;&amp; (
+        &lt;div 
+          className={styles.contextMenu}
+          style={{ left: contextMenuPos.x, top: contextMenuPos.y }}
+        &gt;
+          &lt;button onClick={() => { onEdit(sale); setShowContextMenu(false); }}&gt;
+            ✏️ Edit Sale
+          &lt;/button&gt;
+          {onCopy &amp;&amp; (
+            &lt;button onClick={() => { onCopy(sale); setShowContextMenu(false); }}&gt;
+              📋 Copy (⌘C)
+            &lt;/button&gt;
+          )}
+          {onDuplicate &amp;&amp; (
+            &lt;button onClick={() => { onDuplicate(sale); setShowContextMenu(false); }}&gt;
+              ⧉ Duplicate
+            &lt;/button&gt;
+          )}
+          &lt;hr /&gt;
+          &lt;button 
+            className={styles.deleteMenuItem}
+            onClick={() => { onDelete(sale.id); setShowContextMenu(false); }}
+          &gt;
+            🗑️ Delete
+          &lt;/button&gt;
+        &lt;/div&gt;
       )}
-    </div>
+    &lt;/&gt;
   )
 }
