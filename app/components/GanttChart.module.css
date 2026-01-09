@@ -837,7 +837,6 @@
   white-space: nowrap;
   text-overflow: ellipsis;
   z-index: 3;
-  pointer-events: none;
   /* Slant to match regular sale blocks */
   transform: skewX(-8deg);
   min-width: 4px;
@@ -848,20 +847,88 @@
   transition: left 0.15s ease-out, width 0.15s ease-out;
 }
 
+/* Make launch sale block interactive when resizing is enabled */
+.launchSaleBlock.resizable {
+  pointer-events: auto;
+  cursor: default;
+}
+
+.launchSaleBlock.resizable:hover {
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.35) 0%, rgba(22, 163, 74, 0.45) 100%);
+  box-shadow: 0 2px 8px rgba(34, 197, 94, 0.3);
+}
+
+.launchSaleBlock.resizing {
+  transition: none;
+  box-shadow: 0 3px 12px rgba(34, 197, 94, 0.4);
+  z-index: 10;
+}
+
 .launchSaleBlockContent {
   display: flex;
   align-items: center;
   gap: 4px;
   transform: skewX(8deg);
+  flex: 1;
+  min-width: 0;
 }
 
 .launchSaleIcon {
   font-size: 0.6875rem;
+  flex-shrink: 0;
 }
 
 .launchSaleLabel {
   text-transform: uppercase;
   letter-spacing: 0.3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Launch Sale Block Resize Handles */
+.launchSaleResizeHandle {
+  position: absolute;
+  top: 0;
+  width: 12px;
+  height: 100%;
+  cursor: ew-resize;
+  z-index: 5;
+  /* Counter-skew to make the handle vertical */
+  transform: skewX(8deg);
+}
+
+.launchSaleResizeHandle::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 16px;
+  background: #22c55e;
+  border-radius: 2px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.launchSaleResizeHandleRight {
+  right: -4px;
+}
+
+.launchSaleResizeHandleRight::after {
+  right: 4px;
+}
+
+.launchSaleResizeHandleLeft {
+  left: -4px;
+}
+
+.launchSaleResizeHandleLeft::after {
+  left: 4px;
+}
+
+.launchSaleBlock:hover .launchSaleResizeHandle::after,
+.launchSaleBlock.resizing .launchSaleResizeHandle::after {
+  opacity: 1;
 }
 
 /* Launch Sale Block with conflict warning */
@@ -873,6 +940,10 @@
 
 .launchSaleBlock.hasConflict .launchSaleIcon {
   animation: conflictPulse 1s ease-in-out infinite;
+}
+
+.launchSaleBlock.hasConflict .launchSaleResizeHandle::after {
+  background: #ef4444;
 }
 
 @keyframes conflictPulse {
