@@ -2,10 +2,15 @@
 
 .container {
   padding: 24px;
-  max-width: 1400px;
-  margin: 0 auto;
   background-color: #f8fafc;
   min-height: 100vh;
+  /* Removed max-width to allow full-width Gantt chart */
+}
+
+/* Constrained content wrapper for header/stats/filters */
+.constrainedContent {
+  max-width: 1400px;
+  margin: 0 auto;
 }
 
 /* Loading State */
@@ -35,6 +40,9 @@
 /* Header */
 .header {
   margin-bottom: 24px;
+  max-width: 1400px;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .header h1 {
@@ -63,6 +71,9 @@
   color: #dc2626;
   font-size: 14px;
   font-weight: 500;
+  max-width: 1400px;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .errorBanner button {
@@ -80,6 +91,9 @@
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 20px;
   margin-bottom: 24px;
+  max-width: 1400px;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .statCard {
@@ -149,6 +163,9 @@
   padding: 16px;
   border-radius: 8px;
   border: 1px solid #e2e8f0;
+  max-width: 1400px;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .filterGroup {
@@ -238,6 +255,9 @@
   margin-bottom: 24px;
   flex-wrap: wrap;
   gap: 16px;
+  max-width: 1400px;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .viewToggle {
@@ -322,13 +342,15 @@
   color: #1e293b;
 }
 
-/* Main Content */
+/* Main Content - Full width for Gantt chart */
 .mainContent {
   background: white;
   border-radius: 12px;
   box-shadow: 0 1px 3px rgba(0,0,0,0.1);
   border: 1px solid #e2e8f0;
   overflow: hidden;
+  /* Full width - no max-width constraint */
+  width: 100%;
 }
 
 /* Responsive Design */
