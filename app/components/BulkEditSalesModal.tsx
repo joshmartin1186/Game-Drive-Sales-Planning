@@ -14,7 +14,7 @@ interface BulkEditSalesModalProps {
   onBulkUpdate: (saleIds: string[], updates: Partial<{
     discount_percentage: number | null
     platform_id: string
-    sale_name: string
+    sale_name: string | undefined
     status: string
     dateShiftDays: number
   }>) => Promise<void>
@@ -91,7 +91,7 @@ export default function BulkEditSalesModal({
         const updates: Partial<{
           discount_percentage: number | null
           platform_id: string
-          sale_name: string
+          sale_name: string | undefined
           status: string
           dateShiftDays: number
         }> = {}
@@ -109,7 +109,7 @@ export default function BulkEditSalesModal({
             updates.platform_id = platformValue
             break
           case 'saleName':
-            updates.sale_name = saleNameValue.trim() || null
+            updates.sale_name = saleNameValue.trim() || undefined
             break
           case 'dateShift':
             updates.dateShiftDays = dateShiftDays
