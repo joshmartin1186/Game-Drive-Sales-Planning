@@ -25,6 +25,7 @@ interface GanttChartProps {
   onClearSales?: (productId: string, productName: string) => void
   onLaunchDateChange?: (productId: string, newLaunchDate: string) => Promise<void>
   onEditLaunchDate?: (productId: string, productName: string, currentLaunchDate: string, currentDuration: number) => void
+  onLaunchSaleDurationChange?: (productId: string, newDuration: number) => Promise<void>
   allSales: SaleWithDetails[]
   showEvents?: boolean
 }
@@ -40,6 +41,13 @@ interface LaunchDateDragState {
   productId: string
   originalDate: string
   currentDayIndex: number
+}
+
+interface LaunchSaleResizeState {
+  productId: string
+  originalDuration: number
+  currentDuration: number
+  edge: 'right'
 }
 
 interface CascadeShift {
@@ -77,6 +85,9 @@ const DAY_STATUS = {
   IN_COOLDOWN: 2
 } as const
 
+const MIN_LAUNCH_SALE_DAYS = 1
+const MAX_LAUNCH_SALE_DAYS = 30
+
 export default function GanttChart(props: GanttChartProps) {
   const {
     sales,
@@ -94,6 +105,7 @@ export default function GanttChart(props: GanttChartProps) {
     onClearSales,
     onLaunchDateChange,
     onEditLaunchDate,
+    onLaunchSaleDurationChange,
     allSales,
     showEvents = true
   } = props
@@ -124,6 +136,7 @@ export default function GanttChart(props: GanttChartProps) {
   const [optimisticUpdates, setOptimisticUpdates] = useState<Record<string, { startDate: string; endDate: string }>>({})
   const [selection, setSelection] = useState<SelectionState | null>(null)
   const [launchDateDrag, setLaunchDateDrag] = useState<LaunchDateDragState | null>(null)
+  const [launchSaleResize, setLaunchSaleResize] = useState<LaunchSaleResizeState | null>(null)
   const [isGrabbing, setIsGrabbing] = useState(false)
   const [scrollProgress, setScrollProgress] = useState(0)
   const [isLoadingMore, setIsLoadingMore] = useState(false)
@@ -142,6 +155,13 @@ export default function GanttChart(props: GanttChartProps) {
     originalDate: string
     startX: number
     hasMoved: boolean
+  } | null>(null)
+  
+  const launchSaleResizeRef = useRef<{
+    productId: string
+    originalDuration: number
+    startX: number
+    launchDate: string
   } | null>(null)
   
   const scrollGrabRef = useRef<{
@@ -785,7 +805,7 @@ export default function GanttChart(props: GanttChartProps) {
   }, [])
   
   const handleSelectionStart = useCallback((productId: string, platformId: string, dayIndex: number, e: React.MouseEvent) => {
-    if ((e.target as HTMLElement).closest('[data-sale-block]') || (e.target as HTMLElement).closest('[data-launch-marker]')) {
+    if ((e.target as HTMLElement).closest('[data-sale-block]') || (e.target as HTMLElement).closest('[data-launch-marker]') || (e.target as HTMLElement).closest('[data-launch-sale-block]')) {
       return
     }
     
@@ -884,6 +904,60 @@ export default function GanttChart(props: GanttChartProps) {
       await onLaunchDateChange(productId, newDate)
     }
   }, [launchDateDrag, onLaunchDateChange, onEditLaunchDate, days, products])
+  
+  // Launch sale resize handlers
+  const handleLaunchSaleResizeStart = useCallback((productId: string, launchDate: string, currentDuration: number, e: React.MouseEvent) => {
+    if (e.button !== 0) return
+    if (!onLaunchSaleDurationChange) return
+    
+    e.preventDefault()
+    e.stopPropagation()
+    
+    launchSaleResizeRef.current = {
+      productId,
+      originalDuration: currentDuration,
+      startX: e.clientX,
+      launchDate
+    }
+    
+    setLaunchSaleResize({
+      productId,
+      originalDuration: currentDuration,
+      currentDuration: currentDuration,
+      edge: 'right'
+    })
+  }, [onLaunchSaleDurationChange])
+  
+  const handleLaunchSaleResizeMove = useCallback((e: MouseEvent) => {
+    if (!launchSaleResizeRef.current || !launchSaleResize) return
+    
+    const deltaX = e.clientX - launchSaleResizeRef.current.startX
+    const daysDelta = Math.round(deltaX / dayWidth)
+    
+    // Calculate new duration (only right edge, so we add to duration)
+    const newDuration = Math.max(MIN_LAUNCH_SALE_DAYS, Math.min(MAX_LAUNCH_SALE_DAYS, launchSaleResizeRef.current.originalDuration + daysDelta))
+    
+    setLaunchSaleResize(prev => prev ? { ...prev, currentDuration: newDuration } : null)
+  }, [launchSaleResize, dayWidth])
+  
+  const handleLaunchSaleResizeEnd = useCallback(async () => {
+    if (!launchSaleResizeRef.current || !launchSaleResize) {
+      launchSaleResizeRef.current = null
+      setLaunchSaleResize(null)
+      return
+    }
+    
+    const { productId, originalDuration } = launchSaleResizeRef.current
+    const { currentDuration } = launchSaleResize
+    
+    launchSaleResizeRef.current = null
+    setLaunchSaleResize(null)
+    
+    // Only save if duration actually changed
+    if (currentDuration !== originalDuration && onLaunchSaleDurationChange) {
+      await onLaunchSaleDurationChange(productId, currentDuration)
+    }
+  }, [launchSaleResize, onLaunchSaleDurationChange])
   
   const updateScrollFromPosition = useCallback((clientX: number, isThumbDrag: boolean) => {
     if (!scrollContainerRef.current || !scrollTrackRef.current) return
@@ -989,6 +1063,10 @@ export default function GanttChart(props: GanttChartProps) {
         handleScrollGrabMove(e)
         return
       }
+      if (launchSaleResizeRef.current) {
+        handleLaunchSaleResizeMove(e)
+        return
+      }
       if (launchDragRef.current) {
         handleLaunchDragMove(e)
       }
@@ -997,6 +1075,11 @@ export default function GanttChart(props: GanttChartProps) {
     const handleWindowMouseUp = () => {
       if (scrollGrabRef.current) {
         handleScrollGrabEnd()
+        return
+      }
+      
+      if (launchSaleResizeRef.current) {
+        handleLaunchSaleResizeEnd()
         return
       }
       
@@ -1018,7 +1101,7 @@ export default function GanttChart(props: GanttChartProps) {
       window.removeEventListener('mousemove', handleWindowMouseMove)
       window.removeEventListener('mouseup', handleWindowMouseUp, { capture: true })
     }
-  }, [completeSelection, handleLaunchDragMove, handleLaunchDragEnd, handleScrollGrabMove, handleScrollGrabEnd])
+  }, [completeSelection, handleLaunchDragMove, handleLaunchDragEnd, handleLaunchSaleResizeMove, handleLaunchSaleResizeEnd, handleScrollGrabMove, handleScrollGrabEnd])
   
   const getSelectionStyle = useCallback((productId: string, platformId: string) => {
     if (!selection || selection.productId !== productId || selection.platformId !== platformId) {
@@ -1060,7 +1143,11 @@ export default function GanttChart(props: GanttChartProps) {
   const getLaunchSaleBlock = useCallback((product: Product) => {
     if (!product.launch_date) return null
 
-    const duration = product.launch_sale_duration || 7
+    // Use resize state if actively resizing this product's launch sale
+    const duration = (launchSaleResize && launchSaleResize.productId === product.id)
+      ? launchSaleResize.currentDuration
+      : (product.launch_sale_duration || 7)
+    
     const launchStart = normalizeToLocalDate(product.launch_date)
     const launchEnd = addDays(launchStart, duration - 1)
 
@@ -1080,6 +1167,8 @@ export default function GanttChart(props: GanttChartProps) {
     // Check for conflicts
     const conflicts = getLaunchSaleConflicts(product.launch_date, duration)
 
+    const isResizing = launchSaleResize && launchSaleResize.productId === product.id
+
     return {
       left,
       width,
@@ -1087,9 +1176,10 @@ export default function GanttChart(props: GanttChartProps) {
       hasConflict: conflicts.length > 0,
       conflicts,
       startDate: launchStart,
-      endDate: launchEnd
+      endDate: launchEnd,
+      isResizing
     }
-  }, [getDayIndexForDate, days, dayWidth, getLaunchSaleConflicts])
+  }, [getDayIndexForDate, days, dayWidth, getLaunchSaleConflicts, launchSaleResize])
   
   const scrollThumbStyle = useMemo(() => {
     const totalWidth = totalDays * dayWidth
@@ -1322,7 +1412,7 @@ export default function GanttChart(props: GanttChartProps) {
         ))}
         <div className={styles.legendLaunchSale}>
           <span className={styles.legendLaunchColor} />
-          <span>Launch Sale Period</span>
+          <span>Launch Sale Period (drag edge to resize)</span>
         </div>
       </div>
       
@@ -1514,14 +1604,16 @@ export default function GanttChart(props: GanttChartProps) {
                             {/* Launch Sale Block - visual representation of launch sale period */}
                             {launchSaleBlock && (
                               <div
-                                className={`${styles.launchSaleBlock} ${launchSaleBlock.hasConflict ? styles.hasConflict : ''}`}
+                                data-launch-sale-block
+                                className={`${styles.launchSaleBlock} ${launchSaleBlock.hasConflict ? styles.hasConflict : ''} ${onLaunchSaleDurationChange ? styles.resizable : ''} ${launchSaleBlock.isResizing ? styles.resizing : ''}`}
                                 style={{ 
                                   left: launchSaleBlock.left, 
-                                  width: launchSaleBlock.width 
+                                  width: launchSaleBlock.width,
+                                  transition: launchSaleBlock.isResizing ? 'none' : undefined
                                 }}
                                 title={launchSaleBlock.hasConflict 
                                   ? `⚠️ Launch Sale (${launchSaleBlock.duration}d) - CONFLICTS WITH:\n${launchSaleBlock.conflicts.map(c => `• ${c.eventName} (${c.overlapDays}d overlap)`).join('\n')}`
-                                  : `Launch Sale: ${format(launchSaleBlock.startDate, 'MMM d')} - ${format(launchSaleBlock.endDate, 'MMM d')} (${launchSaleBlock.duration} days)`
+                                  : `Launch Sale: ${format(launchSaleBlock.startDate, 'MMM d')} - ${format(launchSaleBlock.endDate, 'MMM d')} (${launchSaleBlock.duration} days)\nDrag right edge to resize`
                                 }
                               >
                                 <div className={styles.launchSaleBlockContent}>
@@ -1532,6 +1624,14 @@ export default function GanttChart(props: GanttChartProps) {
                                     Launch {launchSaleBlock.duration}d
                                   </span>
                                 </div>
+                                
+                                {/* Right resize handle */}
+                                {onLaunchSaleDurationChange && product.launch_date && (
+                                  <div
+                                    className={`${styles.launchSaleResizeHandle} ${styles.launchSaleResizeHandleRight}`}
+                                    onMouseDown={(e) => handleLaunchSaleResizeStart(product.id, product.launch_date!, launchSaleBlock.duration, e)}
+                                  />
+                                )}
                               </div>
                             )}
                             
