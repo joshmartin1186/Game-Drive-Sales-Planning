@@ -15,6 +15,7 @@
 ### Repository & Deployment
 - **GitHub:** joshmartin1186/Game-Drive-Sales-Planning (main branch)
 - **Vercel Team ID:** team_6piiLSU3y16pH8Kt0uAlDFUu
+- **Vercel Project ID:** prj_G1cbQAX5nL5VDKO37D73HnHNHnnR
 - **Production URL:** https://gamedrivesalesplanning.vercel.app
 - **Supabase Project ID:** znueqcmlqfdhetnierno (eu-west-1)
 
@@ -25,6 +26,7 @@
   - `.platformRow`: `height: 36px`
 - **Deployment:** GitHub commits auto-deploy to Vercel within 2-3 minutes
 - **Testing:** Always request screenshot verification after UI changes - deployment success doesn't guarantee visual correctness
+- **GitHub API Encoding:** When updating files via GitHub API, be careful of HTML entity encoding (`&amp;` vs `&`) - this has caused TypeScript build failures
 
 ### Key Files
 - `app/page.tsx` - Main application component
@@ -50,9 +52,13 @@
 | Platform Sub-Rows | ✅ Complete | 100% |
 | Platform Events System | ✅ Complete | 100% |
 | Click-Drag Sale Creation | ✅ Complete | 100% |
+| Auto Sale Calendar | ✅ Complete | 100% |
+| Sales Gap Indicator (#8) | ✅ Complete | 100% |
+| CSV Import (#9) | ✅ Complete | 100% |
+| Version Management (#10) | ✅ Complete | 100% |
+| Duplicate Sale (#11) | 🟡 In Progress | 90% |
 | Steam API Integration | 🔲 Pending | 0% |
 | Excel Export | 🔲 Pending | 0% |
-| Auto Sale Calendar | ✅ Complete | 100% |
 
 ---
 
@@ -66,8 +72,16 @@ GitHub Issues created from Alisa's feedback email and weekly call:
 | #1 | PowerPoint Export Bug | ✅ Fixed | Jan 9 |
 | #2 | Timeline vs Sale Modal Date Mismatch | ✅ Fixed | Jan 8 |
 | #3 | "Today" Date Visibility | ✅ Fixed | Jan 9 |
+| #8 | Sales Gap Indicator | ✅ Complete | Jan 9 |
+| #9 | Historical Sales Import | ✅ Complete | Jan 9 |
+| #10 | Version/Draft System | ✅ Complete | Jan 9 |
 
-### 🟠 High Priority
+### 🟡 In Progress
+| Issue | Title | Status | Notes |
+|-------|-------|--------|-------|
+| #11 | Duplicate Sale Feature | 🟡 90% | Deployment blocked by syntax error |
+
+### 🟠 High Priority (Not Started)
 | Issue | Title | Description |
 |-------|-------|-------------|
 | #4 | Duration Input Flexibility | Remove 14-day limit, allow hard Start/End dates |
@@ -75,18 +89,124 @@ GitHub Issues created from Alisa's feedback email and weekly call:
 | #6 | Auto-Generate Platform Selection | Choose platforms, exclude 0-day cooldown |
 | #7 | Platform Color Editing | Add color picker, some colors too similar |
 
-### 🟡 Medium Priority
-| Issue | Title | Description |
-|-------|-------|-------------|
-| #8 | Sales Gap Indicator | Show "X days without sale in Q1" per platform |
-| #9 | Historical Sales Import | Bulk import from Excel master sheet |
-| #10 | Version/Draft System | Save multiple calendar versions, compare |
-
 ---
 
 ## Recent Session Log
 
-### January 9, 2025 - Issues #1 and #3 Completed
+### January 9, 2025 (Evening) - Issues #8, #9, #10, #11
+
+#### Issue #8: Sales Gap Indicator ✅ COMPLETE
+**Problem:** Users need to see gaps in sales coverage per platform/quarter
+
+**Solution Implemented:**
+- GapAnalysis component with collapsible panel
+- Analyzes gaps per product/platform/quarter
+- **Smart cooldown awareness:** Excludes cooldown periods from "actionable gaps"
+- Shows breakdown: X days sale / X days cooldown / X days available
+- Gap percentage based on available opportunities (not total days)
+- Filters by platform, minimum gap days
+- Sort by gap length, percentage, or quarter
+- Critical gap highlighting (30+ days)
+
+**Commits:**
+| Commit | Description |
+|--------|-------------|
+| `c36c2c6` | Add GapAnalysis component |
+| `0cfebda` | Add GapAnalysis CSS styles |
+| `6f1683b` | Integrate GapAnalysis into main dashboard |
+| `647fe4f` | Update to exclude cooldown periods from gaps |
+
+---
+
+#### Issue #9: Historical Sales Import ✅ COMPLETE
+**Problem:** Users need to bulk import historical sales from Excel
+
+**Solution Implemented:**
+- ImportSalesModal with 3-step wizard: Upload → Map Columns → Preview & Import
+- Auto-detects column mappings from common header names
+- Parses multiple date formats (ISO, US, EU, etc.)
+- Validates products/platforms against existing database
+- Shows errors/warnings per row with color coding
+- Duplicate detection
+- Preview table with validation indicators before import
+
+**Commits:**
+| Commit | Description |
+|--------|-------------|
+| `ce56e72` | Add ImportSalesModal component |
+| `04a1265` | Add ImportSalesModal CSS styles |
+| `fb44ee8` | Integrate ImportSalesModal into main page |
+
+---
+
+#### Issue #10: Version/Draft System ✅ COMPLETE
+**Problem:** Users need to save calendar snapshots and compare/restore versions
+
+**Solution Implemented:**
+- VersionManager component for calendar snapshots
+- Save current calendar state as named version
+- List all saved versions with metadata (date, sale count, date range)
+- Preview version contents before restoring (platform breakdown)
+- Restore version (replaces all current sales)
+- Delete versions
+- "Versions" button in main toolbar
+
+**Commits:**
+| Commit | Description |
+|--------|-------------|
+| `7ee2e90` | Add VersionManager component |
+| `5994441` | Add VersionManager CSS styles |
+| `61b1b7d` | Integrate VersionManager into main page |
+
+---
+
+#### Issue #11: Duplicate Sale Feature 🟡 IN PROGRESS (90%)
+**Problem:** Users need to quickly duplicate sales to new dates or platforms
+
+**Solution Implemented:**
+- DuplicateSaleModal component with two modes:
+  - Duplicate to new date (with quick offset buttons: +1 week, +2 weeks, +1 month, +1 quarter)
+  - Duplicate to multiple platforms at once
+- Real-time validation for all duplicates
+- Shows conflicts/cooldown violations per target
+- Batch creation of valid duplicates only
+- Duplicate button added to SaleBlock (timeline)
+- Duplicate button added to SalesTable (list view)
+- Duplicate button added to EditSaleModal
+
+**Status:** All components created and integrated, but **deployment blocked by syntax error**
+
+**Issue:** EditSaleModal.tsx was uploaded with HTML entities (`&amp;`, `&lt;`, `&gt;`) instead of actual TypeScript characters (`&`, `<`, `>`), causing TypeScript compilation errors.
+
+**Commits:**
+| Commit | SHA | Status |
+|--------|-----|--------|
+| DuplicateSaleModal component | `4638f5c` | ✅ Deployed |
+| DuplicateSaleModal styles | `c80e0d0` | ✅ Deployed |
+| Main page integration | `9610c0a` | ❌ Build Error |
+| SaleBlock duplicate button | `3ebf9b5` | ❌ Build Error |
+| SaleBlock duplicate styles | `945d0c2` | ❌ Build Error |
+| GanttChart prop wiring | `aa3aaa0` | ❌ Build Error |
+| SalesTable duplicate button | `fa8c5ac` | ❌ Build Error |
+| SalesTable duplicate styles | `acd3d90` | ❌ Build Error |
+| EditSaleModal onDuplicate prop | `4e2c8a6` | ❌ Build Error (syntax) |
+| AddSaleModal duplicate styles | `444c8af` | ❌ Build Error (syntax) |
+
+**🔴 TO FIX NEXT SESSION:**
+Re-upload `app/components/EditSaleModal.tsx` with proper TypeScript syntax (no HTML entities).
+
+Error location: Line 11
+```typescript
+// Current (broken):
+products: (Product &amp; { game: Game &amp; { client: Client } })[]
+
+// Should be:
+products: (Product & { game: Game & { client: Client } })[]
+```
+
+---
+
+### January 9, 2025 (Morning) - Issues #1 and #3 Completed
 
 #### Issue #3: "Today" Date Visibility ✅
 **Problem:** Users couldn't easily navigate to current date on the timeline
@@ -139,6 +259,13 @@ GitHub Issues created from Alisa's feedback email and weekly call:
 1. **Always use fixed `height` for timeline rows** - `min-height` breaks absolute positioning
 2. **CSS Modules only** - Tailwind had silent compilation failures on Vercel
 3. **Test visually after every CSS change** - Build success ≠ visual correctness
+
+### GitHub API Pitfalls
+1. **HTML Entity Encoding:** When uploading TypeScript files via GitHub API, ensure content doesn't get HTML-encoded
+   - `&` should NOT become `&amp;`
+   - `<` should NOT become `&lt;`
+   - `>` should NOT become `&gt;`
+2. **Always verify deployment success** after file updates - check Vercel build logs
 
 ### Debugging Patterns That Work
 1. **Compare deployment timestamps with commit history** to identify breaking changes
@@ -246,6 +373,12 @@ GitHub Issues created from Alisa's feedback email and weekly call:
 - [x] Clear filters button
 - [x] Stats update based on filters
 
+### Advanced Features (Jan 9)
+- [x] **Sales Gap Analysis** - Identify gaps in coverage per platform/quarter (Issue #8)
+- [x] **CSV Import** - Bulk import historical sales with validation (Issue #9)
+- [x] **Version Management** - Save/restore calendar snapshots (Issue #10)
+- [ ] **Duplicate Sale** - Quick duplicate to new dates/platforms (Issue #11) - 90% complete
+
 ### UI/UX Polish (Dec 29, Jan 1, Jan 8, Jan 9)
 - [x] Clean typography with Inter font
 - [x] Bold, readable text (font-weight 600-700)
@@ -263,6 +396,30 @@ GitHub Issues created from Alisa's feedback email and weekly call:
 
 ---
 
+## New Components Added (Jan 9)
+
+### GapAnalysis Component
+- **File:** `app/components/GapAnalysis.tsx` + `GapAnalysis.module.css`
+- **Purpose:** Analyze and display sales coverage gaps
+- **Features:** Platform/quarter breakdown, cooldown-aware calculations, filtering, sorting
+
+### ImportSalesModal Component
+- **File:** `app/components/ImportSalesModal.tsx` + `ImportSalesModal.module.css`
+- **Purpose:** Bulk CSV/Excel import with validation
+- **Features:** 3-step wizard, auto column mapping, preview, error handling
+
+### VersionManager Component
+- **File:** `app/components/VersionManager.tsx` + `VersionManager.module.css`
+- **Purpose:** Save and restore calendar snapshots
+- **Features:** Save/list/preview/restore/delete versions
+
+### DuplicateSaleModal Component
+- **File:** `app/components/DuplicateSaleModal.tsx` + `DuplicateSaleModal.module.css`
+- **Purpose:** Duplicate sales to new dates or platforms
+- **Features:** Quick offset buttons, multi-platform duplicate, validation
+
+---
+
 ## Key Architecture Decisions
 
 1. **CSS Modules over Tailwind** - Tailwind had silent compilation failures on Vercel that were extremely difficult to debug
@@ -277,33 +434,35 @@ GitHub Issues created from Alisa's feedback email and weekly call:
 
 ## Next Development Priorities
 
-### Immediate (High Priority from Client Feedback)
+### 🔴 IMMEDIATE FIX NEEDED
+Fix Issue #11 deployment error by re-uploading EditSaleModal.tsx with proper TypeScript syntax
+
+### High Priority (Remaining from Client Feedback)
 1. **Issue #4: Duration Input Flexibility** - Remove 14-day limit, allow hard Start/End dates
 2. **Issue #5: Resize Sales on Timeline** - Drag edges to change duration directly
 3. **Issue #6: Auto-Generate Platform Selection** - Choose platforms, exclude 0-day cooldown
 4. **Issue #7: Platform Color Editing** - Add color picker, some colors too similar
 
-### Medium Priority
-5. **Issue #8: Sales Gap Indicator** - Show gaps per platform per quarter
-6. **Issue #9: Historical Sales Import** - Bulk Excel import
-7. **Issue #10: Version/Draft System** - Save multiple calendar versions
-
 ### Later
-8. **Excel export** - Must match existing column structure for Alisa's formulas
-9. **Steam API integration** - Performance data correlation
+5. **Excel export** - Must match existing column structure for Alisa's formulas
+6. **Steam API integration** - Performance data correlation
 
 ---
 
 ## Known Issues & Technical Debt
 
 ### Active Issues (GitHub)
+- [x] #8 Sales Gap Indicator → COMPLETE Jan 9
+- [x] #9 Historical Sales Import → COMPLETE Jan 9
+- [x] #10 Version/Draft System → COMPLETE Jan 9
+- [ ] #11 Duplicate Sale Feature → 90% (blocked by deployment error)
 - [ ] #4 Duration Input Flexibility - remove 14-day limit
 - [ ] #5 Resize Sales on Timeline - drag edges
 - [ ] #6 Auto-Generate Platform Selection - choose platforms
 - [ ] #7 Platform Color Editing - add color picker
-- [ ] #8 Sales Gap Indicator - show gaps per platform
-- [ ] #9 Historical Sales Import - bulk Excel import
-- [ ] #10 Version/Draft System - save multiple versions
+
+### 🔴 Deployment Blocker
+**EditSaleModal.tsx has HTML entity encoding error** - needs re-upload with proper TypeScript syntax
 
 ### To Address
 - [ ] Conflicts card shows 0 - needs actual calculation
@@ -336,11 +495,21 @@ app/
 └── components/
     ├── AddSaleModal.tsx           # Create new sales
     ├── AddSaleModal.module.css
-    ├── EditSaleModal.tsx          # Edit existing sales
+    ├── EditSaleModal.tsx          # Edit existing sales (⚠️ needs syntax fix)
+    ├── DuplicateSaleModal.tsx     # Duplicate sales [NEW]
+    ├── DuplicateSaleModal.module.css
     ├── GanttChart.tsx             # Main timeline view with platform sub-rows
     ├── GanttChart.module.css
     ├── SaleBlock.tsx              # Draggable sale blocks
     ├── SaleBlock.module.css
+    ├── SalesTable.tsx             # List view of sales
+    ├── SalesTable.module.css
+    ├── GapAnalysis.tsx            # Sales gap indicator [NEW]
+    ├── GapAnalysis.module.css
+    ├── ImportSalesModal.tsx       # CSV import wizard [NEW]
+    ├── ImportSalesModal.module.css
+    ├── VersionManager.tsx         # Calendar versioning [NEW]
+    ├── VersionManager.module.css
     ├── ProductManager.tsx         # Client/Game/Product CRUD
     ├── ProductManager.module.css
     ├── PlatformSettings.tsx       # Platform event management
@@ -364,7 +533,8 @@ docs/
 - **Supabase Project:** znueqcmlqfdhetnierno
 - **Region:** eu-west-1
 - **Vercel Team ID:** team_6piiLSU3y16pH8Kt0uAlDFUu
+- **Vercel Project ID:** prj_G1cbQAX5nL5VDKO37D73HnHNHnnR
 
 ---
 
-*Last Updated: January 9, 2025*
+*Last Updated: January 9, 2025 (Evening)*
