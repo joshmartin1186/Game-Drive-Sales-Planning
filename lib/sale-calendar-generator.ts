@@ -37,6 +37,7 @@ export interface GenerateCalendarParams {
   launchDate: string // ISO date string - calendar generates 12 months from this date
   defaultDiscount?: number
   existingSales?: SaleWithDetails[] // Existing sales to check against
+  selectedPlatformIds?: string[] // Optional: Only generate for these platforms
 }
 
 // Convert existing sale to GeneratedSale format for conflict checking
@@ -343,7 +344,8 @@ export function generateSaleCalendar(params: GenerateCalendarParams): CalendarVa
     platformEvents,
     launchDate,
     defaultDiscount = 50,
-    existingSales = []
+    existingSales = [],
+    selectedPlatformIds
   } = params
   
   const periodStart = parseISO(launchDate)
@@ -354,7 +356,11 @@ export function generateSaleCalendar(params: GenerateCalendarParams): CalendarVa
     .filter(s => s.product_id === productId)
     .map(existingSaleToGenerated)
   
-  const allPlatforms = platforms
+  // Filter platforms if selectedPlatformIds is provided
+  const allPlatforms = selectedPlatformIds 
+    ? platforms.filter(p => selectedPlatformIds.includes(p.id))
+    : platforms
+  
   const variations: CalendarVariation[] = []
   
   const variationConfigs: { key: 'aggressive' | 'balanced' | 'conservative'; name: string; description: string }[] = [
@@ -406,6 +412,13 @@ export function generateSaleCalendar(params: GenerateCalendarParams): CalendarVa
   }
   
   return variations
+}
+
+// Helper to get default selected platforms (exclude 0-day cooldown)
+export function getDefaultSelectedPlatforms(platforms: Platform[]): string[] {
+  return platforms
+    .filter(p => p.cooldown_days > 0)
+    .map(p => p.id)
 }
 
 // Export utility to convert generated sales to actual sale creation format
