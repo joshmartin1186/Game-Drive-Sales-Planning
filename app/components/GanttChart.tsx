@@ -19,6 +19,7 @@ interface GanttChartProps {
   onSaleUpdate: (saleId: string, updates: Partial<Sale>) => Promise<void>
   onSaleDelete: (saleId: string) => Promise<void>
   onSaleEdit: (sale: SaleWithDetails) => void
+  onSaleDuplicate?: (sale: SaleWithDetails) => void
   onCreateSale?: (prefill: { productId: string; platformId: string; startDate: string; endDate: string }) => void
   onGenerateCalendar?: (productId: string, productName: string, launchDate?: string) => void
   onClearSales?: (productId: string, productName: string) => void
@@ -62,6 +63,7 @@ export default function GanttChart(props: GanttChartProps) {
     onSaleUpdate,
     onSaleDelete,
     onSaleEdit,
+    onSaleDuplicate,
     onCreateSale,
     onGenerateCalendar,
     onClearSales,
@@ -123,19 +125,16 @@ export default function GanttChart(props: GanttChartProps) {
       daysArr.push(...monthDays)
     }
     
-    // Find today's index in the timeline
     const todayIdx = daysArr.findIndex(day => isToday(day))
     
     return { months: monthsArr, days: daysArr, totalDays: daysArr.length, todayIndex: todayIdx }
   }, [timelineStart, monthCount])
   
-  // Scroll to today function
   const scrollToToday = useCallback(() => {
     if (todayIndex === -1 || !scrollContainerRef.current) return
     
     const todayPosition = todayIndex * DAY_WIDTH
     const containerWidth = scrollContainerRef.current.clientWidth
-    // Center today in the viewport
     const scrollTarget = todayPosition - (containerWidth / 2) + (DAY_WIDTH / 2)
     
     scrollContainerRef.current.scrollTo({
@@ -779,7 +778,6 @@ export default function GanttChart(props: GanttChartProps) {
     }, 500)
   }
   
-  // Handle sale resize from SaleBlock
   const handleSaleResize = useCallback(async (saleId: string, newStartDate: string, newEndDate: string) => {
     const sale = sales.find(s => s.id === saleId)
     if (!sale) return
@@ -790,7 +788,6 @@ export default function GanttChart(props: GanttChartProps) {
       return
     }
     
-    // Validate the new dates
     const validation = validateSale(
       {
         product_id: sale.product_id,
@@ -810,7 +807,6 @@ export default function GanttChart(props: GanttChartProps) {
       return
     }
     
-    // Optimistic update
     setOptimisticUpdates(prev => ({
       ...prev,
       [saleId]: { startDate: newStartDate, endDate: newEndDate }
@@ -822,7 +818,6 @@ export default function GanttChart(props: GanttChartProps) {
         end_date: newEndDate
       })
     } catch (err) {
-      // Revert on error
       setOptimisticUpdates(prev => {
         const updated = { ...prev }
         delete updated[saleId]
@@ -832,7 +827,6 @@ export default function GanttChart(props: GanttChartProps) {
       setTimeout(() => setValidationError(null), 3000)
     }
     
-    // Clean up optimistic update
     setTimeout(() => {
       setOptimisticUpdates(prev => {
         const updated = { ...prev }
@@ -946,7 +940,6 @@ export default function GanttChart(props: GanttChartProps) {
               })}
             </div>
             
-            {/* Today indicator line */}
             {todayIndex !== -1 && (
               <div 
                 className={styles.todayIndicator}
@@ -1139,6 +1132,7 @@ export default function GanttChart(props: GanttChartProps) {
                                         dayWidth={DAY_WIDTH}
                                         onEdit={onSaleEdit}
                                         onDelete={onSaleDelete}
+                                        onDuplicate={onSaleDuplicate}
                                         onResize={handleSaleResize}
                                       />
                                     </div>
