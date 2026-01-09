@@ -1,6 +1,6 @@
 'use client'
 
-// Cache invalidation: 2026-01-09T04:30:00Z - Platform selection for auto-generate
+// Cache invalidation: 2026-01-09T04:38:00Z - Gap Analysis component
 
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { createClient } from '@supabase/supabase-js'
@@ -15,6 +15,7 @@ import SaleCalendarPreviewModal from './components/SaleCalendarPreviewModal'
 import ClearSalesModal from './components/ClearSalesModal'
 import TimelineExportModal from './components/TimelineExportModal'
 import EditLaunchDateModal from './components/EditLaunchDateModal'
+import GapAnalysis from './components/GapAnalysis'
 import { generateSaleCalendar, GeneratedSale, CalendarVariation, generatedSaleToCreateFormat } from '@/lib/sale-calendar-generator'
 import { useUndo } from '@/lib/undo-context'
 import styles from './page.module.css'
@@ -931,6 +932,15 @@ export default function GameDriveDashboard() {
           </div>
         </div>
       </div>
+
+      {/* Gap Analysis Panel */}
+      <GapAnalysis
+        sales={filteredSales}
+        products={filteredProducts}
+        platforms={platforms}
+        timelineStart={timelineStart}
+        monthCount={monthCount}
+      />
 
       {/* Filters */}
       <div className={styles.filters}>
