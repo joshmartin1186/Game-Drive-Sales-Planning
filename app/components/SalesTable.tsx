@@ -1,23 +1,48 @@
 'use client'
 
+import { useState, useMemo } from 'react'
 import { format, parseISO, differenceInDays, addDays } from 'date-fns'
-import { SaleWithDetails, Platform } from '@/lib/types'
+import { SaleWithDetails, Platform, Game } from '@/lib/types'
 import styles from './SalesTable.module.css'
 import * as XLSX from 'xlsx'
 
 interface SalesTableProps {
   sales: SaleWithDetails[]
   platforms: Platform[]
+  games: (Game & { client: { name: string } })[]
   onDelete: (saleId: string) => Promise<void>
   onEdit: (sale: SaleWithDetails) => void
   onDuplicate?: (sale: SaleWithDetails) => void
+  onBulkEdit?: (selectedSales: SaleWithDetails[]) => void
 }
 
-export default function SalesTable({ sales, platforms, onDelete, onEdit, onDuplicate }: SalesTableProps) {
+export default function SalesTable({ sales, platforms, games, onDelete, onEdit, onDuplicate, onBulkEdit }: SalesTableProps) {
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [selectMode, setSelectMode] = useState(false)
+  
   // Sort sales by start date
   const sortedSales = [...sales].sort((a, b) => 
     new Date(a.start_date).getTime() - new Date(b.start_date).getTime()
   )
+  
+  // Get unique games for group selection
+  const uniqueGames = useMemo(() => {
+    const gameMap = new Map<string, { id: string; name: string; clientName: string; saleCount: number }>()
+    sales.forEach(sale => {
+      const gameId = sale.product?.game_id
+      const gameName = sale.product?.game?.name
+      const clientName = sale.product?.game?.client?.name
+      if (gameId && gameName) {
+        const existing = gameMap.get(gameId)
+        if (existing) {
+          existing.saleCount++
+        } else {
+          gameMap.set(gameId, { id: gameId, name: gameName, clientName: clientName || '', saleCount: 1 })
+        }
+      }
+    })
+    return Array.from(gameMap.values())
+  }, [sales])
   
   const calculateDays = (start: string, end: string): number => {
     return differenceInDays(parseISO(end), parseISO(start)) + 1
@@ -31,9 +56,60 @@ export default function SalesTable({ sales, platforms, onDelete, onEdit, onDupli
     return format(cooldownEnd, 'dd/MM/yyyy')
   }
   
+  // Selection handlers
+  const toggleSelectMode = () => {
+    if (selectMode) {
+      setSelectedIds(new Set())
+    }
+    setSelectMode(!selectMode)
+  }
+  
+  const toggleSelect = (saleId: string) => {
+    const newSelected = new Set(selectedIds)
+    if (newSelected.has(saleId)) {
+      newSelected.delete(saleId)
+    } else {
+      newSelected.add(saleId)
+    }
+    setSelectedIds(newSelected)
+  }
+  
+  const selectAll = () => {
+    if (selectedIds.size === sortedSales.length) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(sortedSales.map(s => s.id)))
+    }
+  }
+  
+  const selectByGame = (gameId: string) => {
+    const gameSaleIds = sales
+      .filter(s => s.product?.game_id === gameId)
+      .map(s => s.id)
+    
+    // Check if all game sales are already selected
+    const allSelected = gameSaleIds.every(id => selectedIds.has(id))
+    
+    const newSelected = new Set(selectedIds)
+    if (allSelected) {
+      // Deselect all from this game
+      gameSaleIds.forEach(id => newSelected.delete(id))
+    } else {
+      // Select all from this game
+      gameSaleIds.forEach(id => newSelected.add(id))
+    }
+    setSelectedIds(newSelected)
+  }
+  
+  const handleBulkEdit = () => {
+    if (onBulkEdit && selectedIds.size > 0) {
+      const selectedSales = sales.filter(s => selectedIds.has(s.id))
+      onBulkEdit(selectedSales)
+    }
+  }
+  
   const exportToExcel = () => {
     // Prepare data for Excel - matching client's exact column structure
-    // Client columns: Start date | End date | Days | Platform | Cooldown | Sale Name | Product | Campaign? | Goal | Discount % | Submitted? | Confirmed? | Comment | Cooldown Until | Prev. Sale Stops Date
     const excelData = sortedSales.map(sale => {
       const platform = platforms.find(p => p.id === sale.platform_id)
       return {
@@ -59,59 +135,26 @@ export default function SalesTable({ sales, platforms, onDelete, onEdit, onDupli
       }
     })
     
-    // Create workbook and worksheet
     const wb = XLSX.utils.book_new()
     const ws = XLSX.utils.json_to_sheet(excelData)
     
-    // Set column widths for better readability
     ws['!cols'] = [
-      { wch: 12 }, // Start date
-      { wch: 12 }, // End date
-      { wch: 6 },  // Days
-      { wch: 15 }, // Platform
-      { wch: 10 }, // Cooldown
-      { wch: 25 }, // Sale Name
-      { wch: 25 }, // Product
-      { wch: 20 }, // Game
-      { wch: 15 }, // Client
-      { wch: 10 }, // Campaign?
-      { wch: 12 }, // Goal
-      { wch: 12 }, // Discount %
-      { wch: 10 }, // Submitted?
-      { wch: 10 }, // Confirmed?
-      { wch: 30 }, // Comment
-      { wch: 14 }, // Cooldown Until
-      { wch: 18 }, // Prev. Sale Stops Date
+      { wch: 12 }, { wch: 12 }, { wch: 6 }, { wch: 15 }, { wch: 10 },
+      { wch: 25 }, { wch: 25 }, { wch: 20 }, { wch: 15 }, { wch: 10 },
+      { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 10 }, { wch: 30 },
+      { wch: 14 }, { wch: 18 },
     ]
     
     XLSX.utils.book_append_sheet(wb, ws, 'Sales Schedule')
-    
-    // Generate filename with date
     const filename = `sales_schedule_${format(new Date(), 'yyyy-MM-dd')}.xlsx`
-    
-    // Download file
     XLSX.writeFile(wb, filename)
   }
   
   const exportToCSV = () => {
     const headers = [
-      'Start date',
-      'End date', 
-      'Days',
-      'Platform',
-      'Cooldown',
-      'Sale Name',
-      'Product',
-      'Game',
-      'Client',
-      'Campaign?',
-      'Goal',
-      'Discount %',
-      'Submitted?',
-      'Confirmed?',
-      'Comment',
-      'Cooldown Until',
-      'Prev. Sale Stops Date'
+      'Start date', 'End date', 'Days', 'Platform', 'Cooldown', 'Sale Name',
+      'Product', 'Game', 'Client', 'Campaign?', 'Goal', 'Discount %',
+      'Submitted?', 'Confirmed?', 'Comment', 'Cooldown Until', 'Prev. Sale Stops Date'
     ]
     
     const rows = sortedSales.map(sale => {
@@ -156,15 +199,30 @@ export default function SalesTable({ sales, platforms, onDelete, onEdit, onDupli
   }
   
   const handleRowClick = (sale: SaleWithDetails, e: React.MouseEvent) => {
-    // Don't trigger edit if clicking on action buttons
     if ((e.target as HTMLElement).closest('button')) return
-    onEdit(sale)
+    if ((e.target as HTMLElement).closest('input[type="checkbox"]')) return
+    
+    if (selectMode) {
+      toggleSelect(sale.id)
+    } else {
+      onEdit(sale)
+    }
   }
   
   return (
     <div className={styles.container}>
       <div className={styles.header}>
-        <span className={styles.count}>{sales.length} sales scheduled</span>
+        <div className={styles.headerLeft}>
+          <span className={styles.count}>{sales.length} sales scheduled</span>
+          {onBulkEdit && (
+            <button 
+              className={`${styles.selectModeBtn} ${selectMode ? styles.active : ''}`}
+              onClick={toggleSelectMode}
+            >
+              {selectMode ? '✕ Cancel' : '☑️ Select'}
+            </button>
+          )}
+        </div>
         <div className={styles.exportButtons}>
           <button className={styles.exportBtn} onClick={exportToExcel} title="Export to Excel">
             📊 Export Excel
@@ -175,10 +233,67 @@ export default function SalesTable({ sales, platforms, onDelete, onEdit, onDupli
         </div>
       </div>
       
+      {/* Bulk Selection Controls */}
+      {selectMode && (
+        <div className={styles.bulkControls}>
+          <div className={styles.bulkLeft}>
+            <button 
+              className={styles.selectAllBtn}
+              onClick={selectAll}
+            >
+              {selectedIds.size === sortedSales.length ? 'Deselect All' : 'Select All'}
+            </button>
+            
+            <div className={styles.gameFilters}>
+              <span className={styles.filterLabel}>By Game:</span>
+              {uniqueGames.map(game => {
+                const gameSaleIds = sales.filter(s => s.product?.game_id === game.id).map(s => s.id)
+                const selectedCount = gameSaleIds.filter(id => selectedIds.has(id)).length
+                const isPartial = selectedCount > 0 && selectedCount < gameSaleIds.length
+                const isAll = selectedCount === gameSaleIds.length
+                
+                return (
+                  <button
+                    key={game.id}
+                    className={`${styles.gameFilterBtn} ${isAll ? styles.allSelected : ''} ${isPartial ? styles.partialSelected : ''}`}
+                    onClick={() => selectByGame(game.id)}
+                    title={`${game.clientName} - ${game.saleCount} sales`}
+                  >
+                    {game.name}
+                    {selectedCount > 0 && <span className={styles.selectedBadge}>{selectedCount}</span>}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+          
+          {selectedIds.size > 0 && (
+            <div className={styles.bulkRight}>
+              <span className={styles.selectedCount}>{selectedIds.size} selected</span>
+              <button 
+                className={styles.bulkEditBtn}
+                onClick={handleBulkEdit}
+              >
+                ✏️ Bulk Edit
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+      
       <div className={styles.tableWrapper}>
         <table className={styles.table}>
           <thead>
             <tr>
+              {selectMode && (
+                <th className={styles.checkboxCol}>
+                  <input 
+                    type="checkbox"
+                    checked={selectedIds.size === sortedSales.length && sortedSales.length > 0}
+                    onChange={selectAll}
+                  />
+                </th>
+              )}
               <th>Start Date</th>
               <th>End Date</th>
               <th>Days</th>
@@ -197,7 +312,7 @@ export default function SalesTable({ sales, platforms, onDelete, onEdit, onDupli
           <tbody>
             {sortedSales.length === 0 ? (
               <tr>
-                <td colSpan={13} className={styles.emptyRow}>
+                <td colSpan={selectMode ? 14 : 13} className={styles.emptyRow}>
                   No sales scheduled. Click "+ Add Sale" to create one.
                 </td>
               </tr>
@@ -206,14 +321,25 @@ export default function SalesTable({ sales, platforms, onDelete, onEdit, onDupli
                 const platform = platforms.find(p => p.id === sale.platform_id)
                 const days = calculateDays(sale.start_date, sale.end_date)
                 const cooldownUntil = calculateCooldownUntil(sale.end_date, sale.platform_id)
+                const isSelected = selectedIds.has(sale.id)
                 
                 return (
                   <tr 
                     key={sale.id} 
                     onClick={(e) => handleRowClick(sale, e)}
-                    className={styles.clickableRow}
-                    title="Click to edit"
+                    className={`${styles.clickableRow} ${isSelected ? styles.selectedRow : ''}`}
+                    title={selectMode ? "Click to select" : "Click to edit"}
                   >
+                    {selectMode && (
+                      <td className={styles.checkboxCol}>
+                        <input 
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => toggleSelect(sale.id)}
+                          onClick={e => e.stopPropagation()}
+                        />
+                      </td>
+                    )}
                     <td>{format(parseISO(sale.start_date), 'dd/MM/yyyy')}</td>
                     <td>{format(parseISO(sale.end_date), 'dd/MM/yyyy')}</td>
                     <td>{days}</td>
