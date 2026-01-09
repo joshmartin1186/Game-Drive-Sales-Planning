@@ -228,23 +228,25 @@ export default function GanttChart(props: GanttChartProps) {
     return null
   }, [days, dayWidth, scrollProgress, containerWidth]) // scrollProgress triggers recalc
 
-  // Find Steam platform for conflict detection
-  const steamPlatform = useMemo(() => {
-    return platforms.find(p => p.name.toLowerCase() === 'steam')
+  // Find all Steam platform IDs for conflict detection
+  const steamPlatformIds = useMemo(() => {
+    return platforms
+      .filter(p => p.name.toLowerCase().includes('steam'))
+      .map(p => p.id)
   }, [platforms])
 
-  // Get Steam seasonal events for conflict detection
+  // Get Steam seasonal events for conflict detection (from ANY Steam platform)
   const steamSeasonalEvents = useMemo(() => {
-    if (!steamPlatform) return []
+    if (steamPlatformIds.length === 0) return []
     return platformEvents.filter(e => 
-      e.platform_id === steamPlatform.id && 
+      steamPlatformIds.includes(e.platform_id) && 
       e.event_type === 'seasonal'
     )
-  }, [platformEvents, steamPlatform])
+  }, [platformEvents, steamPlatformIds])
 
   // Check if launch sale conflicts with Steam seasonal sales
   const getLaunchSaleConflicts = useCallback((launchDate: string, duration: number): LaunchConflict[] => {
-    if (!steamPlatform || steamSeasonalEvents.length === 0) return []
+    if (steamPlatformIds.length === 0 || steamSeasonalEvents.length === 0) return []
 
     const launchStart = normalizeToLocalDate(launchDate)
     const launchEnd = addDays(launchStart, duration - 1)
@@ -273,7 +275,7 @@ export default function GanttChart(props: GanttChartProps) {
     }
 
     return conflicts
-  }, [steamPlatform, steamSeasonalEvents])
+  }, [steamPlatformIds, steamSeasonalEvents])
 
   const platformGaps = useMemo(() => {
     const gapMap = new Map<string, PlatformGapInfo[]>()
