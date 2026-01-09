@@ -10,9 +10,10 @@ interface SalesTableProps {
   platforms: Platform[]
   onDelete: (saleId: string) => Promise<void>
   onEdit: (sale: SaleWithDetails) => void
+  onDuplicate?: (sale: SaleWithDetails) => void
 }
 
-export default function SalesTable({ sales, platforms, onDelete, onEdit }: SalesTableProps) {
+export default function SalesTable({ sales, platforms, onDelete, onEdit, onDuplicate }: SalesTableProps) {
   // Sort sales by start date
   const sortedSales = [...sales].sort((a, b) => 
     new Date(a.start_date).getTime() - new Date(b.start_date).getTime()
@@ -262,6 +263,18 @@ export default function SalesTable({ sales, platforms, onDelete, onEdit }: Sales
                       >
                         ✏️
                       </button>
+                      {onDuplicate && (
+                        <button 
+                          className={styles.duplicateBtn}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            onDuplicate(sale)
+                          }}
+                          title="Duplicate sale"
+                        >
+                          📋
+                        </button>
+                      )}
                       <button 
                         className={styles.deleteBtn}
                         onClick={(e) => {
