@@ -1,6 +1,8 @@
 .container {
   display: flex;
   flex-direction: column;
+  width: 100%;
+  min-width: 0; /* Allow container to shrink below content size */
 }
 
 /* When dragging, disable smooth transitions for instant visual feedback */
@@ -79,6 +81,7 @@
   background: #f8fafc;
   border-bottom: 1px solid #e2e8f0;
   user-select: none;
+  flex-wrap: wrap;
 }
 
 .zoomLabel {
@@ -151,6 +154,17 @@
   background: #3b82f6;
   color: white;
   box-shadow: 0 1px 3px rgba(59, 130, 246, 0.3);
+}
+
+.zoomInfo {
+  font-size: 0.6875rem;
+  color: #475569;
+  font-weight: 500;
+  white-space: nowrap;
+  background: #f1f5f9;
+  padding: 4px 10px;
+  border-radius: 4px;
+  border: 1px solid #e2e8f0;
 }
 
 .dateRange {
@@ -283,6 +297,7 @@
   margin: 0;
   padding: 0;
   background: #f8fafc; /* Grey background to match UI */
+  width: 100%;
 }
 
 .timeline {
@@ -315,6 +330,11 @@
   background: #f1f5f9;
   border-bottom: 1px solid #e2e8f0;
   border-right: 1px solid #e2e8f0;
+  /* Handle small widths at high zoom out */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
 }
 
 /* CRITICAL FIX: Day headers need left padding to align with timeline rows */
@@ -340,6 +360,8 @@
   border-right: 1px solid #f1f5f9;
   /* Ensure day cells handle small widths gracefully */
   overflow: hidden;
+  min-width: 0;
+  flex-shrink: 0;
 }
 
 .dayHeader.weekend {
@@ -647,6 +669,7 @@
   height: 100%;
   flex: 1;
   overflow: visible;
+  min-width: 0;
 }
 
 /* Clickable timeline for creating sales */
@@ -840,6 +863,8 @@
   z-index: 5;
   /* SLANT EFFECT - creates parallelogram shape */
   transform: skewX(-8deg);
+  /* Handle very small widths at year view */
+  min-width: 4px;
 }
 
 /* Keep text readable inside slanted block */
