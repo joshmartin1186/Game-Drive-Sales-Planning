@@ -8,11 +8,12 @@ import styles from './AddSaleModal.module.css'
 
 interface EditSaleModalProps {
   sale: SaleWithDetails
-  products: (Product & { game: Game & { client: Client } })[]
+  products: (Product &amp; { game: Game &amp; { client: Client } })[]
   platforms: Platform[]
   existingSales: SaleWithDetails[]
-  onSave: (saleId: string, updates: Partial<Sale>) => Promise<void>
-  onDelete: (saleId: string) => Promise<void>
+  onSave: (saleId: string, updates: Partial&lt;Sale&gt;) => Promise&lt;void&gt;
+  onDelete: (saleId: string) => Promise&lt;void&gt;
+  onDuplicate?: (sale: SaleWithDetails) => void
   onClose: () => void
 }
 
@@ -26,6 +27,7 @@ export default function EditSaleModal({
   existingSales,
   onSave,
   onDelete,
+  onDuplicate,
   onClose
 }: EditSaleModalProps) {
   const [productId, setProductId] = useState(sale.product_id)
@@ -37,9 +39,9 @@ export default function EditSaleModal({
   const [endDate, setEndDate] = useState(sale.end_date)
   const [discountPercentage, setDiscountPercentage] = useState(sale.discount_percentage || 50)
   const [saleName, setSaleName] = useState(sale.sale_name || '')
-  const [saleType, setSaleType] = useState<SaleType>(sale.sale_type || 'custom')
-  const [status, setStatus] = useState<SaleStatus>(sale.status || 'planned')
-  const [goalType, setGoalType] = useState<'acquisition' | 'visibility' | 'event' | 'revenue' | ''>(
+  const [saleType, setSaleType] = useState&lt;SaleType&gt;(sale.sale_type || 'custom')
+  const [status, setStatus] = useState&lt;SaleStatus&gt;(sale.status || 'planned')
+  const [goalType, setGoalType] = useState&lt;'acquisition' | 'visibility' | 'event' | 'revenue' | ''&gt;(
     sale.goal_type || ''
   )
   const [notes, setNotes] = useState(sale.notes || '')
@@ -50,13 +52,13 @@ export default function EditSaleModal({
   const [comment, setComment] = useState(sale.comment || '')
   
   const [saving, setSaving] = useState(false)
-  const [validationError, setValidationError] = useState<string | null>(null)
-  const [durationWarning, setDurationWarning] = useState<string | null>(null)
+  const [validationError, setValidationError] = useState&lt;string | null&gt;(null)
+  const [durationWarning, setDurationWarning] = useState&lt;string | null&gt;(null)
   
   const selectedPlatform = platforms.find(p => p.id === platformId)
   
   // Calculate cooldown end date
-  const cooldownEndDate = endDate && selectedPlatform
+  const cooldownEndDate = endDate &amp;&amp; selectedPlatform
     ? format(addDays(parseISO(endDate), selectedPlatform.cooldown_days), 'yyyy-MM-dd')
     : ''
 
@@ -64,9 +66,9 @@ export default function EditSaleModal({
   const prevSaleEndDate = (() => {
     if (!productId || !platformId || !startDate) return sale.prev_sale_end_date || null
     const relevantSales = existingSales.filter(s => 
-      s.product_id === productId && 
-      s.platform_id === platformId &&
-      s.end_date < startDate &&
+      s.product_id === productId &amp;&amp; 
+      s.platform_id === platformId &amp;&amp;
+      s.end_date &lt; startDate &amp;&amp;
       s.id !== sale.id
     ).sort((a, b) => new Date(b.end_date).getTime() - new Date(a.end_date).getTime())
     return relevantSales.length > 0 ? relevantSales[0].end_date : null
@@ -94,7 +96,7 @@ export default function EditSaleModal({
   // Handle end date change - update duration
   const handleEndDateChange = (newEndDate: string) => {
     setEndDate(newEndDate)
-    if (startDate && newEndDate) {
+    if (startDate &amp;&amp; newEndDate) {
       const newDuration = differenceInDays(parseISO(newEndDate), parseISO(startDate)) + 1
       setDuration(Math.max(1, newDuration))
     }
@@ -102,7 +104,7 @@ export default function EditSaleModal({
 
   // Check duration warning (soft limit)
   useEffect(() => {
-    if (selectedPlatform && duration > selectedPlatform.max_sale_days) {
+    if (selectedPlatform &amp;&amp; duration > selectedPlatform.max_sale_days) {
       setDurationWarning(`Exceeds platform recommendation of ${selectedPlatform.max_sale_days} days`)
     } else {
       setDurationWarning(null)
@@ -179,6 +181,13 @@ export default function EditSaleModal({
       console.error('Error deleting sale:', err)
     }
   }
+
+  const handleDuplicate = () => {
+    if (onDuplicate) {
+      onClose()
+      onDuplicate(sale)
+    }
+  }
   
   // Group products by game for easier selection
   const groupedProducts = products.reduce((acc, product) => {
@@ -188,267 +197,276 @@ export default function EditSaleModal({
     }
     acc[gameName].push(product)
     return acc
-  }, {} as Record<string, typeof products>)
+  }, {} as Record&lt;string, typeof products&gt;)
   
   return (
-    <div className={styles.overlay} onClick={onClose}>
-      <div className={styles.modal} onClick={e => e.stopPropagation()}>
-        <div className={styles.header}>
-          <h2>Edit Sale</h2>
-          <button className={styles.closeBtn} onClick={onClose}>×</button>
-        </div>
+    &lt;div className={styles.overlay} onClick={onClose}&gt;
+      &lt;div className={styles.modal} onClick={e => e.stopPropagation()}&gt;
+        &lt;div className={styles.header}&gt;
+          &lt;h2&gt;Edit Sale&lt;/h2&gt;
+          &lt;button className={styles.closeBtn} onClick={onClose}&gt;×&lt;/button&gt;
+        &lt;/div&gt;
         
-        <form onSubmit={handleSubmit} className={styles.form}>
-          {validationError && (
-            <div className={styles.error}>
-              <span>⚠️ {validationError}</span>
-            </div>
+        &lt;form onSubmit={handleSubmit} className={styles.form}&gt;
+          {validationError &amp;&amp; (
+            &lt;div className={styles.error}&gt;
+              &lt;span&gt;⚠️ {validationError}&lt;/span&gt;
+            &lt;/div&gt;
           )}
           
-          {durationWarning && (
-            <div className={styles.warning}>
-              <span>⚠️ {durationWarning}</span>
-            </div>
+          {durationWarning &amp;&amp; (
+            &lt;div className={styles.warning}&gt;
+              &lt;span&gt;⚠️ {durationWarning}&lt;/span&gt;
+            &lt;/div&gt;
           )}
           
-          <div className={styles.row}>
-            <div className={styles.field}>
-              <label>Product *</label>
-              <select 
+          &lt;div className={styles.row}&gt;
+            &lt;div className={styles.field}&gt;
+              &lt;label&gt;Product *&lt;/label&gt;
+              &lt;select 
                 value={productId} 
                 onChange={e => setProductId(e.target.value)}
                 required
-              >
-                <option value="">Select a product...</option>
+              &gt;
+                &lt;option value=""&gt;Select a product...&lt;/option&gt;
                 {Object.entries(groupedProducts).map(([gameName, prods]) => (
-                  <optgroup key={gameName} label={gameName}>
+                  &lt;optgroup key={gameName} label={gameName}&gt;
                     {prods.map(product => (
-                      <option key={product.id} value={product.id}>
+                      &lt;option key={product.id} value={product.id}&gt;
                         {product.name} ({product.product_type})
-                      </option>
+                      &lt;/option&gt;
                     ))}
-                  </optgroup>
+                  &lt;/optgroup&gt;
                 ))}
-              </select>
-            </div>
+              &lt;/select&gt;
+            &lt;/div&gt;
             
-            <div className={styles.field}>
-              <label>Platform *</label>
-              <select 
+            &lt;div className={styles.field}&gt;
+              &lt;label&gt;Platform *&lt;/label&gt;
+              &lt;select 
                 value={platformId} 
                 onChange={e => setPlatformId(e.target.value)}
                 required
-              >
-                <option value="">Select a platform...</option>
+              &gt;
+                &lt;option value=""&gt;Select a platform...&lt;/option&gt;
                 {platforms.map(platform => (
-                  <option key={platform.id} value={platform.id}>
+                  &lt;option key={platform.id} value={platform.id}&gt;
                     {platform.name} ({platform.cooldown_days}d cooldown)
-                  </option>
+                  &lt;/option&gt;
                 ))}
-              </select>
-            </div>
-          </div>
+              &lt;/select&gt;
+            &lt;/div&gt;
+          &lt;/div&gt;
           
-          <div className={styles.row}>
-            <div className={styles.field}>
-              <label>Start Date *</label>
-              <input 
+          &lt;div className={styles.row}&gt;
+            &lt;div className={styles.field}&gt;
+              &lt;label&gt;Start Date *&lt;/label&gt;
+              &lt;input 
                 type="date" 
                 value={startDate}
                 onChange={e => handleStartDateChange(e.target.value)}
                 required
-              />
-            </div>
+              /&gt;
+            &lt;/div&gt;
             
-            <div className={styles.field}>
-              <label>Duration (days)</label>
-              <input 
+            &lt;div className={styles.field}&gt;
+              &lt;label&gt;Duration (days)&lt;/label&gt;
+              &lt;input 
                 type="number" 
                 value={duration}
                 onChange={e => handleDurationChange(parseInt(e.target.value) || 1)}
                 min={1}
-              />
-              {selectedPlatform && (
-                <span className={styles.hint}>Recommended: {selectedPlatform.max_sale_days} days max</span>
+              /&gt;
+              {selectedPlatform &amp;&amp; (
+                &lt;span className={styles.hint}&gt;Recommended: {selectedPlatform.max_sale_days} days max&lt;/span&gt;
               )}
-            </div>
+            &lt;/div&gt;
             
-            <div className={styles.field}>
-              <label>End Date *</label>
-              <input 
+            &lt;div className={styles.field}&gt;
+              &lt;label&gt;End Date *&lt;/label&gt;
+              &lt;input 
                 type="date" 
                 value={endDate}
                 onChange={e => handleEndDateChange(e.target.value)}
                 min={startDate}
                 required
-              />
-            </div>
-          </div>
+              /&gt;
+            &lt;/div&gt;
+          &lt;/div&gt;
           
-          <div className={styles.row}>
-            <div className={styles.field}>
-              <label>Discount % *</label>
-              <input 
+          &lt;div className={styles.row}&gt;
+            &lt;div className={styles.field}&gt;
+              &lt;label&gt;Discount % *&lt;/label&gt;
+              &lt;input 
                 type="number" 
                 value={discountPercentage}
                 onChange={e => setDiscountPercentage(Math.max(5, Math.min(parseInt(e.target.value) || 5, 95)))}
                 min={5}
                 max={95}
                 required
-              />
-              <span className={styles.hint}>5% - 95%</span>
-            </div>
+              /&gt;
+              &lt;span className={styles.hint}&gt;5% - 95%&lt;/span&gt;
+            &lt;/div&gt;
             
-            <div className={styles.field}>
-              <label>Sale Name</label>
-              <input 
+            &lt;div className={styles.field}&gt;
+              &lt;label&gt;Sale Name&lt;/label&gt;
+              &lt;input 
                 type="text" 
                 value={saleName}
                 onChange={e => setSaleName(e.target.value)}
                 placeholder="Custom Sale"
-              />
-            </div>
+              /&gt;
+            &lt;/div&gt;
             
-            <div className={styles.field}>
-              <label>Sale Type</label>
-              <select 
+            &lt;div className={styles.field}&gt;
+              &lt;label&gt;Sale Type&lt;/label&gt;
+              &lt;select 
                 value={saleType} 
                 onChange={e => setSaleType(e.target.value as SaleType)}
-              >
-                <option value="custom">Custom / Regular</option>
-                <option value="seasonal">Seasonal (Steam)</option>
-                <option value="festival">Festival</option>
-                <option value="special">Special Event</option>
-              </select>
-              {(saleType === 'seasonal' || saleType === 'special') && selectedPlatform?.special_sales_no_cooldown && (
-                <span className={styles.hint}>✓ No cooldown for this sale type</span>
+              &gt;
+                &lt;option value="custom"&gt;Custom / Regular&lt;/option&gt;
+                &lt;option value="seasonal"&gt;Seasonal (Steam)&lt;/option&gt;
+                &lt;option value="festival"&gt;Festival&lt;/option&gt;
+                &lt;option value="special"&gt;Special Event&lt;/option&gt;
+              &lt;/select&gt;
+              {(saleType === 'seasonal' || saleType === 'special') &amp;&amp; selectedPlatform?.special_sales_no_cooldown &amp;&amp; (
+                &lt;span className={styles.hint}&gt;✓ No cooldown for this sale type&lt;/span&gt;
               )}
-            </div>
-          </div>
+            &lt;/div&gt;
+          &lt;/div&gt;
           
-          <div className={styles.row}>
-            <div className={styles.field}>
-              <label>Status</label>
-              <select 
+          &lt;div className={styles.row}&gt;
+            &lt;div className={styles.field}&gt;
+              &lt;label&gt;Status&lt;/label&gt;
+              &lt;select 
                 value={status} 
                 onChange={e => setStatus(e.target.value as SaleStatus)}
-              >
-                <option value="planned">Planned</option>
-                <option value="submitted">Submitted</option>
-                <option value="confirmed">Confirmed</option>
-                <option value="live">Live</option>
-                <option value="ended">Ended</option>
-              </select>
-            </div>
+              &gt;
+                &lt;option value="planned"&gt;Planned&lt;/option&gt;
+                &lt;option value="submitted"&gt;Submitted&lt;/option&gt;
+                &lt;option value="confirmed"&gt;Confirmed&lt;/option&gt;
+                &lt;option value="live"&gt;Live&lt;/option&gt;
+                &lt;option value="ended"&gt;Ended&lt;/option&gt;
+              &lt;/select&gt;
+            &lt;/div&gt;
 
-            <div className={styles.field}>
-              <label>Goal</label>
-              <select 
+            &lt;div className={styles.field}&gt;
+              &lt;label&gt;Goal&lt;/label&gt;
+              &lt;select 
                 value={goalType} 
                 onChange={e => setGoalType(e.target.value as typeof goalType)}
-              >
-                <option value="">Select goal...</option>
-                <option value="acquisition">Acquisition</option>
-                <option value="visibility">Visibility</option>
-                <option value="event">Event</option>
-                <option value="revenue">Revenue</option>
-              </select>
-            </div>
+              &gt;
+                &lt;option value=""&gt;Select goal...&lt;/option&gt;
+                &lt;option value="acquisition"&gt;Acquisition&lt;/option&gt;
+                &lt;option value="visibility"&gt;Visibility&lt;/option&gt;
+                &lt;option value="event"&gt;Event&lt;/option&gt;
+                &lt;option value="revenue"&gt;Revenue&lt;/option&gt;
+              &lt;/select&gt;
+            &lt;/div&gt;
             
-            <div className={styles.field}>
-              <label>Cooldown Until</label>
-              <input 
+            &lt;div className={styles.field}&gt;
+              &lt;label&gt;Cooldown Until&lt;/label&gt;
+              &lt;input 
                 type="text" 
                 value={cooldownEndDate ? format(parseISO(cooldownEndDate), 'dd/MM/yyyy') : '-'}
                 disabled
                 className={styles.disabled}
-              />
-            </div>
-          </div>
+              /&gt;
+            &lt;/div&gt;
+          &lt;/div&gt;
 
-          <div className={styles.row}>
-            <div className={styles.field}>
-              <label>Prev. Sale Ends</label>
-              <input 
+          &lt;div className={styles.row}&gt;
+            &lt;div className={styles.field}&gt;
+              &lt;label&gt;Prev. Sale Ends&lt;/label&gt;
+              &lt;input 
                 type="text" 
                 value={prevSaleEndDate ? format(parseISO(prevSaleEndDate), 'dd/MM/yyyy') : '-'}
                 disabled
                 className={styles.disabled}
-              />
-            </div>
-          </div>
+              /&gt;
+            &lt;/div&gt;
+          &lt;/div&gt;
 
           {/* Checkboxes row */}
-          <div className={styles.checkboxRow}>
-            <label className={styles.checkboxLabel}>
-              <input 
+          &lt;div className={styles.checkboxRow}&gt;
+            &lt;label className={styles.checkboxLabel}&gt;
+              &lt;input 
                 type="checkbox" 
                 checked={isCampaign}
                 onChange={e => setIsCampaign(e.target.checked)}
-              />
-              <span>Campaign?</span>
-            </label>
+              /&gt;
+              &lt;span&gt;Campaign?&lt;/span&gt;
+            &lt;/label&gt;
             
-            <label className={styles.checkboxLabel}>
-              <input 
+            &lt;label className={styles.checkboxLabel}&gt;
+              &lt;input 
                 type="checkbox" 
                 checked={isSubmitted}
                 onChange={e => setIsSubmitted(e.target.checked)}
-              />
-              <span>Submitted?</span>
-            </label>
+              /&gt;
+              &lt;span&gt;Submitted?&lt;/span&gt;
+            &lt;/label&gt;
             
-            <label className={styles.checkboxLabel}>
-              <input 
+            &lt;label className={styles.checkboxLabel}&gt;
+              &lt;input 
                 type="checkbox" 
                 checked={isConfirmed}
                 onChange={e => setIsConfirmed(e.target.checked)}
-              />
-              <span>Confirmed?</span>
-            </label>
-          </div>
+              /&gt;
+              &lt;span&gt;Confirmed?&lt;/span&gt;
+            &lt;/label&gt;
+          &lt;/div&gt;
           
-          <div className={styles.field + ' ' + styles.fullWidth}>
-            <label>Comment</label>
-            <textarea 
+          &lt;div className={styles.field + ' ' + styles.fullWidth}&gt;
+            &lt;label&gt;Comment&lt;/label&gt;
+            &lt;textarea 
               value={comment}
               onChange={e => setComment(e.target.value)}
               placeholder="Any comments about this sale..."
               rows={2}
-            />
-          </div>
+            /&gt;
+          &lt;/div&gt;
 
-          <div className={styles.field + ' ' + styles.fullWidth}>
-            <label>Internal Notes</label>
-            <textarea 
+          &lt;div className={styles.field + ' ' + styles.fullWidth}&gt;
+            &lt;label&gt;Internal Notes&lt;/label&gt;
+            &lt;textarea 
               value={notes}
               onChange={e => setNotes(e.target.value)}
               placeholder="Internal notes (not exported)..."
               rows={2}
-            />
-          </div>
+            /&gt;
+          &lt;/div&gt;
           
-          <div className={styles.actions}>
-            <button 
+          &lt;div className={styles.actions}&gt;
+            &lt;button 
               type="button" 
               className={styles.deleteBtn} 
               onClick={handleDelete}
-            >
+            &gt;
               Delete
-            </button>
-            <button type="button" className={styles.cancelBtn} onClick={onClose}>
+            &lt;/button&gt;
+            {onDuplicate &amp;&amp; (
+              &lt;button 
+                type="button" 
+                className={styles.duplicateBtn} 
+                onClick={handleDuplicate}
+              &gt;
+                Duplicate
+              &lt;/button&gt;
+            )}
+            &lt;button type="button" className={styles.cancelBtn} onClick={onClose}&gt;
               Cancel
-            </button>
-            <button 
+            &lt;/button&gt;
+            &lt;button 
               type="submit" 
               className={styles.saveBtn}
               disabled={saving || !!validationError || !productId || !platformId}
-            >
+            &gt;
               {saving ? 'Saving...' : 'Save Changes'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+            &lt;/button&gt;
+          &lt;/div&gt;
+        &lt;/form&gt;
+      &lt;/div&gt;
+    &lt;/div&gt;
   )
 }
