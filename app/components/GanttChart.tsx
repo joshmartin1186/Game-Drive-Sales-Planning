@@ -121,7 +121,7 @@ export default function GanttChart(props: GanttChartProps) {
   
   const [draggedSale, setDraggedSale] = useState<SaleWithDetails | null>(null)
   const [validationError, setValidationError] = useState<string | null>(null)
-  const [optimisticUpdates, setOptimisticUpdates] = useState<Record<string, { startDate: string; endDate: string }>>({}>()
+  const [optimisticUpdates, setOptimisticUpdates] = useState<Record<string, { startDate: string; endDate: string }>>({})
   const [selection, setSelection] = useState<SelectionState | null>(null)
   const [launchDateDrag, setLaunchDateDrag] = useState<LaunchDateDragState | null>(null)
   const [isGrabbing, setIsGrabbing] = useState(false)
