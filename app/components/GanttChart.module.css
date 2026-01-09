@@ -512,6 +512,27 @@
   text-overflow: ellipsis;
 }
 
+/* Gap Badge - shows available days per quarter next to platform name */
+.gapBadge {
+  font-size: 0.5625rem;
+  font-weight: 500;
+  color: #3b82f6;
+  background: #eff6ff;
+  padding: 1px 5px;
+  border-radius: 3px;
+  white-space: nowrap;
+  margin-left: auto;
+  flex-shrink: 0;
+  border: 1px solid #bfdbfe;
+}
+
+.gapBadge.gapWarning {
+  color: #dc2626;
+  background: #fef2f2;
+  border-color: #fecaca;
+  font-weight: 600;
+}
+
 .timelineRow {
   position: relative;
   height: 100%;
