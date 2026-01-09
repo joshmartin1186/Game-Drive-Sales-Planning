@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from 'react'
 import { format, parseISO, addDays } from 'date-fns'
-import { SaleWithDetails, Platform, Game } from '@/lib/types'
+import { SaleWithDetails, Platform } from '@/lib/types'
 import styles from './BulkEditSalesModal.module.css'
 
 interface BulkEditSalesModalProps {
@@ -10,7 +10,6 @@ interface BulkEditSalesModalProps {
   onClose: () => void
   selectedSales: SaleWithDetails[]
   platforms: Platform[]
-  games: (Game & { client: { name: string } })[]
   onBulkUpdate: (saleIds: string[], updates: Partial<{
     discount_percentage: number | null
     platform_id: string
@@ -28,7 +27,6 @@ export default function BulkEditSalesModal({
   onClose,
   selectedSales,
   platforms,
-  games,
   onBulkUpdate,
   onBulkDelete
 }: BulkEditSalesModalProps) {
@@ -123,8 +121,9 @@ export default function BulkEditSalesModal({
       }
       
       onClose()
-    } catch (err: any) {
-      setError(err.message || 'Failed to update sales')
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to update sales'
+      setError(errorMessage)
     } finally {
       setLoading(false)
     }
