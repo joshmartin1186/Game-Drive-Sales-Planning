@@ -54,16 +54,17 @@ interface PlatformGapInfo {
   longestGap: number
 }
 
-// Zoom presets
+// Zoom presets - now based on months visible in viewport
 const ZOOM_LEVELS = [
-  { name: 'Year', dayWidth: 8, label: 'Y' },
-  { name: 'Quarter', dayWidth: 14, label: 'Q' },
-  { name: 'Month', dayWidth: 22, label: 'M' },
-  { name: 'Week', dayWidth: 28, label: 'W' },
-  { name: 'Day', dayWidth: 40, label: 'D' },
+  { name: 'Year', monthsVisible: 12, label: 'Y' },
+  { name: 'Half Year', monthsVisible: 6, label: 'H' },
+  { name: 'Quarter', monthsVisible: 3, label: 'Q' },
+  { name: 'Month', monthsVisible: 1.5, label: 'M' },
+  { name: '2 Weeks', monthsVisible: 0.5, label: '2W' },
 ]
 
-const DEFAULT_ZOOM_INDEX = 3 // Week view (28px)
+const DEFAULT_ZOOM_INDEX = 1 // Half Year view
+const SIDEBAR_WIDTH = 220 // Width of the product label sidebar
 
 const ROW_HEIGHT = 40
 const HEADER_HEIGHT = 60
@@ -104,13 +105,23 @@ export default function GanttChart(props: GanttChartProps) {
   })
   const [monthCount, setMonthCount] = useState(initialMonthCount + 6) // Extra months for buffer
   
-  // Zoom state
+  // Zoom state and container width for responsive sizing
   const [zoomIndex, setZoomIndex] = useState(DEFAULT_ZOOM_INDEX)
-  const dayWidth = ZOOM_LEVELS[zoomIndex].dayWidth
+  const [containerWidth, setContainerWidth] = useState(1200) // Default, will be updated
+  
+  // Calculate dayWidth dynamically based on container width and zoom level
+  const dayWidth = useMemo(() => {
+    const monthsVisible = ZOOM_LEVELS[zoomIndex].monthsVisible
+    const daysVisible = monthsVisible * 30.44 // Average days per month
+    const availableWidth = containerWidth - SIDEBAR_WIDTH
+    const calculated = availableWidth / daysVisible
+    // Ensure minimum dayWidth for usability
+    return Math.max(4, calculated)
+  }, [zoomIndex, containerWidth])
   
   const [draggedSale, setDraggedSale] = useState<SaleWithDetails | null>(null)
   const [validationError, setValidationError] = useState<string | null>(null)
-  const [optimisticUpdates, setOptimisticUpdates] = useState<Record<string, { startDate: string; endDate: string }>>({})
+  const [optimisticUpdates, setOptimisticUpdates] = useState<Record<string, { startDate: string; endDate: string }>>({}>()
   const [selection, setSelection] = useState<SelectionState | null>(null)
   const [launchDateDrag, setLaunchDateDrag] = useState<LaunchDateDragState | null>(null)
   const [isGrabbing, setIsGrabbing] = useState(false)
@@ -138,6 +149,27 @@ export default function GanttChart(props: GanttChartProps) {
     startScrollLeft: number
     isThumbDrag: boolean
   } | null>(null)
+  
+  // Track container width with ResizeObserver
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container) return
+    
+    const resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const width = entry.contentRect.width
+        if (width > 0) {
+          setContainerWidth(width)
+        }
+      }
+    })
+    
+    resizeObserver.observe(container)
+    // Initial measurement
+    setContainerWidth(container.clientWidth || 1200)
+    
+    return () => resizeObserver.disconnect()
+  }, [])
   
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -183,9 +215,9 @@ export default function GanttChart(props: GanttChartProps) {
   const visibleDateRange = useMemo(() => {
     if (!scrollContainerRef.current) return null
     const scrollLeft = scrollContainerRef.current.scrollLeft
-    const containerWidth = scrollContainerRef.current.clientWidth
+    const visibleWidth = containerWidth - SIDEBAR_WIDTH
     const startDayIndex = Math.floor(scrollLeft / dayWidth)
-    const endDayIndex = Math.min(Math.floor((scrollLeft + containerWidth) / dayWidth), days.length - 1)
+    const endDayIndex = Math.min(Math.floor((scrollLeft + visibleWidth) / dayWidth), days.length - 1)
     
     if (startDayIndex >= 0 && startDayIndex < days.length && endDayIndex >= 0) {
       return {
@@ -194,7 +226,7 @@ export default function GanttChart(props: GanttChartProps) {
       }
     }
     return null
-  }, [days, dayWidth, scrollProgress]) // scrollProgress triggers recalc
+  }, [days, dayWidth, scrollProgress, containerWidth]) // scrollProgress triggers recalc
 
   const platformGaps = useMemo(() => {
     const gapMap = new Map<string, PlatformGapInfo[]>()
@@ -362,79 +394,88 @@ export default function GanttChart(props: GanttChartProps) {
     if (todayIndex === -1 || !scrollContainerRef.current) return
     
     const todayPosition = todayIndex * dayWidth
-    const containerWidth = scrollContainerRef.current.clientWidth
-    const scrollTarget = todayPosition - (containerWidth / 2) + (dayWidth / 2)
+    const visibleWidth = containerWidth - SIDEBAR_WIDTH
+    const scrollTarget = todayPosition - (visibleWidth / 2) + (dayWidth / 2)
     
     scrollContainerRef.current.scrollTo({
       left: Math.max(0, scrollTarget),
       behavior: 'smooth'
     })
-  }, [todayIndex, dayWidth])
+  }, [todayIndex, dayWidth, containerWidth])
   
   // Zoom handlers
   const handleZoomIn = useCallback(() => {
     if (zoomIndex < ZOOM_LEVELS.length - 1) {
       const scrollContainer = scrollContainerRef.current
       if (scrollContainer) {
-        // Calculate center point before zoom
-        const centerX = scrollContainer.scrollLeft + scrollContainer.clientWidth / 2
+        // Calculate center day before zoom
+        const visibleWidth = containerWidth - SIDEBAR_WIDTH
+        const centerX = scrollContainer.scrollLeft + visibleWidth / 2
         const centerDayIndex = centerX / dayWidth
         
         setZoomIndex(prev => prev + 1)
         
         // After zoom, scroll to maintain center
         requestAnimationFrame(() => {
-          const newDayWidth = ZOOM_LEVELS[zoomIndex + 1].dayWidth
-          const newScrollLeft = centerDayIndex * newDayWidth - scrollContainer.clientWidth / 2
+          const newMonthsVisible = ZOOM_LEVELS[zoomIndex + 1].monthsVisible
+          const newDaysVisible = newMonthsVisible * 30.44
+          const newDayWidth = Math.max(4, (containerWidth - SIDEBAR_WIDTH) / newDaysVisible)
+          const newScrollLeft = centerDayIndex * newDayWidth - visibleWidth / 2
           scrollContainer.scrollLeft = Math.max(0, newScrollLeft)
         })
       } else {
         setZoomIndex(prev => prev + 1)
       }
     }
-  }, [zoomIndex, dayWidth])
+  }, [zoomIndex, dayWidth, containerWidth])
   
   const handleZoomOut = useCallback(() => {
     if (zoomIndex > 0) {
       const scrollContainer = scrollContainerRef.current
       if (scrollContainer) {
-        // Calculate center point before zoom
-        const centerX = scrollContainer.scrollLeft + scrollContainer.clientWidth / 2
+        // Calculate center day before zoom
+        const visibleWidth = containerWidth - SIDEBAR_WIDTH
+        const centerX = scrollContainer.scrollLeft + visibleWidth / 2
         const centerDayIndex = centerX / dayWidth
         
         setZoomIndex(prev => prev - 1)
         
         // After zoom, scroll to maintain center
         requestAnimationFrame(() => {
-          const newDayWidth = ZOOM_LEVELS[zoomIndex - 1].dayWidth
-          const newScrollLeft = centerDayIndex * newDayWidth - scrollContainer.clientWidth / 2
+          const newMonthsVisible = ZOOM_LEVELS[zoomIndex - 1].monthsVisible
+          const newDaysVisible = newMonthsVisible * 30.44
+          const newDayWidth = Math.max(4, (containerWidth - SIDEBAR_WIDTH) / newDaysVisible)
+          const newScrollLeft = centerDayIndex * newDayWidth - visibleWidth / 2
           scrollContainer.scrollLeft = Math.max(0, newScrollLeft)
         })
       } else {
         setZoomIndex(prev => prev - 1)
       }
     }
-  }, [zoomIndex, dayWidth])
+  }, [zoomIndex, dayWidth, containerWidth])
   
   const handleZoomPreset = useCallback((index: number) => {
     if (index >= 0 && index < ZOOM_LEVELS.length && index !== zoomIndex) {
       const scrollContainer = scrollContainerRef.current
       if (scrollContainer) {
-        const centerX = scrollContainer.scrollLeft + scrollContainer.clientWidth / 2
+        const visibleWidth = containerWidth - SIDEBAR_WIDTH
+        const centerX = scrollContainer.scrollLeft + visibleWidth / 2
         const centerDayIndex = centerX / dayWidth
         
         setZoomIndex(index)
         
         requestAnimationFrame(() => {
-          const newDayWidth = ZOOM_LEVELS[index].dayWidth
-          const newScrollLeft = centerDayIndex * newDayWidth - scrollContainer.clientWidth / 2
+          const newMonthsVisible = ZOOM_LEVELS[index].monthsVisible
+          const newDaysVisible = newMonthsVisible * 30.44
+          const newDayWidth = Math.max(4, (containerWidth - SIDEBAR_WIDTH) / newDaysVisible)
+          const newScrollLeft = centerDayIndex * newDayWidth - visibleWidth / 2
           scrollContainer.scrollLeft = Math.max(0, newScrollLeft)
         })
       } else {
         setZoomIndex(index)
       }
     }
-  }, [zoomIndex, dayWidth])
+  }, [zoomIndex, dayWidth, containerWidth])
   
   // Keyboard shortcuts for zoom
   useEffect(() => {
@@ -887,8 +928,8 @@ export default function GanttChart(props: GanttChartProps) {
   useEffect(() => {
     if (todayIndex !== -1 && scrollContainerRef.current) {
       const todayPosition = todayIndex * dayWidth
-      const containerWidth = scrollContainerRef.current.clientWidth
-      const scrollTarget = todayPosition - (containerWidth / 2) + (dayWidth / 2)
+      const visibleWidth = containerWidth - SIDEBAR_WIDTH
+      const scrollTarget = todayPosition - (visibleWidth / 2) + (dayWidth / 2)
       scrollContainerRef.current.scrollLeft = Math.max(0, scrollTarget)
     }
   }, []) // Only on mount
@@ -968,8 +1009,8 @@ export default function GanttChart(props: GanttChartProps) {
   
   const scrollThumbStyle = useMemo(() => {
     const totalWidth = totalDays * dayWidth
-    const containerWidth = scrollContainerRef.current?.clientWidth || 800
-    const thumbWidthPercent = Math.max(10, Math.min(100, (containerWidth / totalWidth) * 100))
+    const visibleWidth = containerWidth - SIDEBAR_WIDTH
+    const thumbWidthPercent = Math.max(10, Math.min(100, (visibleWidth / totalWidth) * 100))
     const maxLeftPercent = 100 - thumbWidthPercent
     const leftPercent = scrollProgress * maxLeftPercent
     
@@ -977,7 +1018,7 @@ export default function GanttChart(props: GanttChartProps) {
       width: `${thumbWidthPercent}%`,
       left: `${leftPercent}%`
     }
-  }, [totalDays, scrollProgress, dayWidth])
+  }, [totalDays, scrollProgress, dayWidth, containerWidth])
   
   const handleDragStart = (event: DragStartEvent) => {
     const saleId = event.active.id as string
@@ -1199,7 +1240,7 @@ export default function GanttChart(props: GanttChartProps) {
       
       {/* Zoom Controls */}
       <div className={styles.zoomControls}>
-        <span className={styles.zoomLabel}>Zoom:</span>
+        <span className={styles.zoomLabel}>View:</span>
         <div className={styles.zoomButtons}>
           <button 
             className={styles.zoomBtn}
@@ -1214,7 +1255,7 @@ export default function GanttChart(props: GanttChartProps) {
               key={level.name}
               className={`${styles.zoomPreset} ${idx === zoomIndex ? styles.zoomActive : ''}`}
               onClick={() => handleZoomPreset(idx)}
-              title={`${level.name} view (${level.dayWidth}px/day)`}
+              title={`${level.name} view (${level.monthsVisible} months)`}
             >
               {level.label}
             </button>
@@ -1228,6 +1269,9 @@ export default function GanttChart(props: GanttChartProps) {
             +
           </button>
         </div>
+        <span className={styles.zoomInfo}>
+          {ZOOM_LEVELS[zoomIndex].name} ({Math.round(ZOOM_LEVELS[zoomIndex].monthsVisible * 30)} days)
+        </span>
         {visibleDateRange && (
           <span className={styles.dateRange}>
             {format(visibleDateRange.start, 'MMM d')} - {format(visibleDateRange.end, 'MMM d, yyyy')}
@@ -1263,7 +1307,7 @@ export default function GanttChart(props: GanttChartProps) {
           </div>
         </div>
         <span className={styles.scrollGrabHint}>
-          {isGrabbing ? 'Dragging...' : 'Scroll to edges to load more months'}
+          {isGrabbing ? 'Dragging...' : 'Drag to navigate • Scroll edges for more months'}
         </span>
       </div>
       
@@ -1291,7 +1335,7 @@ export default function GanttChart(props: GanttChartProps) {
                 const isWeekend = day.getDay() === 0 || day.getDay() === 6
                 const isFirstOfMonth = day.getDate() === 1
                 const isTodayDate = idx === todayIndex
-                // Only show day numbers at higher zoom levels
+                // Only show day numbers at higher zoom levels (when dayWidth is reasonable)
                 const showDayNumber = dayWidth >= 14
                 return (
                   <div 
@@ -1308,7 +1352,7 @@ export default function GanttChart(props: GanttChartProps) {
             {todayIndex !== -1 && (
               <div 
                 className={styles.todayIndicator}
-                style={{ left: todayIndex * dayWidth + dayWidth / 2 + 220 }}
+                style={{ left: todayIndex * dayWidth + dayWidth / 2 + SIDEBAR_WIDTH }}
               />
             )}
             
