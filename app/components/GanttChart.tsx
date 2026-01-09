@@ -3,7 +3,7 @@
 import { useState, useMemo, useRef, useCallback, useEffect } from 'react'
 import { DndContext, DragEndEvent, DragStartEvent, useSensor, useSensors, PointerSensor, DragOverlay } from '@dnd-kit/core'
 import { format, addDays, differenceInDays, parseISO, startOfMonth, endOfMonth, eachDayOfInterval, isToday, startOfQuarter, endOfQuarter, eachQuarterOfInterval, addMonths, subMonths } from 'date-fns'
-import { Sale, Platform, Product, Game, Client, SaleWithDetails, PlatformEvent } from '@/lib/types'
+import { Sale, Platform, Product, Game, Client, SaleWithDetails, PlatformEvent, LaunchConflict } from '@/lib/types'
 import { validateSale } from '@/lib/validation'
 import { normalizeToLocalDate } from '@/lib/dateUtils'
 import SaleBlock from './SaleBlock'
@@ -24,7 +24,7 @@ interface GanttChartProps {
   onGenerateCalendar?: (productId: string, productName: string, launchDate?: string) => void
   onClearSales?: (productId: string, productName: string) => void
   onLaunchDateChange?: (productId: string, newLaunchDate: string) => Promise<void>
-  onEditLaunchDate?: (productId: string, productName: string, currentLaunchDate: string) => void
+  onEditLaunchDate?: (productId: string, productName: string, currentLaunchDate: string, currentDuration: number) => void
   allSales: SaleWithDetails[]
   showEvents?: boolean
 }
@@ -227,6 +227,53 @@ export default function GanttChart(props: GanttChartProps) {
     }
     return null
   }, [days, dayWidth, scrollProgress, containerWidth]) // scrollProgress triggers recalc
+
+  // Find Steam platform for conflict detection
+  const steamPlatform = useMemo(() => {
+    return platforms.find(p => p.name.toLowerCase() === 'steam')
+  }, [platforms])
+
+  // Get Steam seasonal events for conflict detection
+  const steamSeasonalEvents = useMemo(() => {
+    if (!steamPlatform) return []
+    return platformEvents.filter(e => 
+      e.platform_id === steamPlatform.id && 
+      e.event_type === 'seasonal'
+    )
+  }, [platformEvents, steamPlatform])
+
+  // Check if launch sale conflicts with Steam seasonal sales
+  const getLaunchSaleConflicts = useCallback((launchDate: string, duration: number): LaunchConflict[] => {
+    if (!steamPlatform || steamSeasonalEvents.length === 0) return []
+
+    const launchStart = normalizeToLocalDate(launchDate)
+    const launchEnd = addDays(launchStart, duration - 1)
+
+    const conflicts: LaunchConflict[] = []
+
+    for (const event of steamSeasonalEvents) {
+      const eventStart = normalizeToLocalDate(event.start_date)
+      const eventEnd = normalizeToLocalDate(event.end_date)
+
+      // Check for overlap
+      if (launchStart <= eventEnd && launchEnd >= eventStart) {
+        const overlapStart = launchStart > eventStart ? launchStart : eventStart
+        const overlapEnd = launchEnd < eventEnd ? launchEnd : eventEnd
+        const overlapDays = differenceInDays(overlapEnd, overlapStart) + 1
+
+        conflicts.push({
+          eventName: event.name,
+          eventStart,
+          eventEnd,
+          overlapStart,
+          overlapEnd,
+          overlapDays
+        })
+      }
+    }
+
+    return conflicts
+  }, [steamPlatform, steamSeasonalEvents])
 
   const platformGaps = useMemo(() => {
     const gapMap = new Map<string, PlatformGapInfo[]>()
@@ -826,7 +873,7 @@ export default function GanttChart(props: GanttChartProps) {
     if (!hasMoved && onEditLaunchDate) {
       const product = products.find(p => p.id === productId)
       if (product) {
-        onEditLaunchDate(productId, product.name, originalDate)
+        onEditLaunchDate(productId, product.name, originalDate, product.launch_sale_duration || 7)
       }
       return
     }
@@ -1006,6 +1053,41 @@ export default function GanttChart(props: GanttChartProps) {
     const left = dayIndex * dayWidth
     return { left, date: normalizeToLocalDate(product.launch_date), isDragging: false }
   }, [launchDateDrag, getDayIndexForDate, days, dayWidth])
+
+  // Get launch sale block positioning and conflict info
+  const getLaunchSaleBlock = useCallback((product: Product) => {
+    if (!product.launch_date) return null
+
+    const duration = product.launch_sale_duration || 7
+    const launchStart = normalizeToLocalDate(product.launch_date)
+    const launchEnd = addDays(launchStart, duration - 1)
+
+    const startDayIndex = getDayIndexForDate(launchStart)
+    const endDayIndex = getDayIndexForDate(launchEnd)
+
+    // Check if visible in current timeline
+    if (endDayIndex < 0 || startDayIndex >= days.length) return null
+
+    // Clamp to visible range
+    const visibleStartIdx = Math.max(0, startDayIndex)
+    const visibleEndIdx = Math.min(days.length - 1, endDayIndex)
+
+    const left = visibleStartIdx * dayWidth
+    const width = (visibleEndIdx - visibleStartIdx + 1) * dayWidth
+
+    // Check for conflicts
+    const conflicts = getLaunchSaleConflicts(product.launch_date, duration)
+
+    return {
+      left,
+      width,
+      duration,
+      hasConflict: conflicts.length > 0,
+      conflicts,
+      startDate: launchStart,
+      endDate: launchEnd
+    }
+  }, [getDayIndexForDate, days, dayWidth, getLaunchSaleConflicts])
   
   const scrollThumbStyle = useMemo(() => {
     const totalWidth = totalDays * dayWidth
@@ -1236,6 +1318,10 @@ export default function GanttChart(props: GanttChartProps) {
             <span className={styles.legendCooldown}>({platform.cooldown_days}d cooldown)</span>
           </div>
         ))}
+        <div className={styles.legendLaunchSale}>
+          <span className={styles.legendLaunchColor} />
+          <span>Launch Sale Period</span>
+        </div>
       </div>
       
       {/* Zoom Controls */}
@@ -1370,6 +1456,7 @@ export default function GanttChart(props: GanttChartProps) {
                     const productPlatforms = getPlatformsForProduct(product.id)
                     const saleCount = getSaleCount(product.id)
                     const launchPosition = getLaunchDatePosition(product)
+                    const launchSaleBlock = getLaunchSaleBlock(product)
                     
                     return (
                       <div key={product.id} className={styles.productGroup}>
@@ -1381,7 +1468,7 @@ export default function GanttChart(props: GanttChartProps) {
                               {product.launch_date && (
                                 <span 
                                   className={`${styles.launchDateBadge} ${onEditLaunchDate ? styles.clickable : ''}`}
-                                  onClick={() => onEditLaunchDate && product.launch_date && onEditLaunchDate(product.id, product.name, product.launch_date)}
+                                  onClick={() => onEditLaunchDate && product.launch_date && onEditLaunchDate(product.id, product.name, product.launch_date, product.launch_sale_duration || 7)}
                                   title="Click to edit launch date"
                                 >
                                   🚀 {format(normalizeToLocalDate(product.launch_date), 'MMM d')}
@@ -1421,6 +1508,30 @@ export default function GanttChart(props: GanttChartProps) {
                                 />
                               )
                             })}
+                            
+                            {/* Launch Sale Block - visual representation of launch sale period */}
+                            {launchSaleBlock && (
+                              <div
+                                className={`${styles.launchSaleBlock} ${launchSaleBlock.hasConflict ? styles.hasConflict : ''}`}
+                                style={{ 
+                                  left: launchSaleBlock.left, 
+                                  width: launchSaleBlock.width 
+                                }}
+                                title={launchSaleBlock.hasConflict 
+                                  ? `⚠️ Launch Sale (${launchSaleBlock.duration}d) - CONFLICTS WITH:\n${launchSaleBlock.conflicts.map(c => `• ${c.eventName} (${c.overlapDays}d overlap)`).join('\n')}`
+                                  : `Launch Sale: ${format(launchSaleBlock.startDate, 'MMM d')} - ${format(launchSaleBlock.endDate, 'MMM d')} (${launchSaleBlock.duration} days)`
+                                }
+                              >
+                                <div className={styles.launchSaleBlockContent}>
+                                  <span className={styles.launchSaleIcon}>
+                                    {launchSaleBlock.hasConflict ? '⚠️' : '🚀'}
+                                  </span>
+                                  <span className={styles.launchSaleLabel}>
+                                    Launch {launchSaleBlock.duration}d
+                                  </span>
+                                </div>
+                              </div>
+                            )}
                             
                             {launchPosition && (onLaunchDateChange || onEditLaunchDate) && (
                               <div
