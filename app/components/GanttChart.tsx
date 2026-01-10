@@ -553,8 +553,8 @@ export default function GanttChart(props: GanttChartProps) {
     const duration = differenceInDays(endDate, startDate) + 1
     
     setClipboardSale({
-      saleName: sale.sale_name,
-      discountPercentage: sale.discount_percentage,
+      saleName: sale.sale_name ?? null,
+      discountPercentage: sale.discount_percentage ?? null,
       duration,
       saleType: sale.sale_type || 'regular',
       platformId: sale.platform_id,
