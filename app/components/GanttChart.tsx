@@ -62,6 +62,16 @@ interface PlatformGapInfo {
   longestGap: number
 }
 
+// Clipboard sale data for copy/paste
+interface ClipboardSale {
+  saleName: string | null
+  discountPercentage: number | null
+  duration: number
+  saleType: string
+  platformId: string
+  platformName: string
+}
+
 const ZOOM_LEVELS = [
   { name: 'Year', monthsVisible: 12, label: 'Y' },
   { name: 'Half Year', monthsVisible: 6, label: 'H' },
@@ -114,7 +124,16 @@ export default function GanttChart(props: GanttChartProps) {
   const [monthCount, setMonthCount] = useState(initialMonthCount + 6)
   const [zoomIndex, setZoomIndex] = useState(DEFAULT_ZOOM_INDEX)
   const [containerWidth, setContainerWidth] = useState(1200)
+  const [hasReceivedMeasurement, setHasReceivedMeasurement] = useState(false)
   const [hasInitialScrolled, setHasInitialScrolled] = useState(false)
+  
+  // Legend collapse state
+  const [isLegendCollapsed, setIsLegendCollapsed] = useState(false)
+  
+  // Copy/paste state
+  const [selectedSaleId, setSelectedSaleId] = useState<string | null>(null)
+  const [clipboardSale, setClipboardSale] = useState<ClipboardSale | null>(null)
+  const [copyFeedback, setCopyFeedback] = useState<string | null>(null)
   
   const dayWidth = useMemo(() => {
     const monthsVisible = ZOOM_LEVELS[zoomIndex].monthsVisible
@@ -172,12 +191,17 @@ export default function GanttChart(props: GanttChartProps) {
         const width = entry.contentRect.width
         if (width > 0) {
           setContainerWidth(width)
+          setHasReceivedMeasurement(true)
         }
       }
     })
     
     resizeObserver.observe(container)
-    setContainerWidth(container.clientWidth || 1200)
+    const initialWidth = container.clientWidth
+    if (initialWidth > 0) {
+      setContainerWidth(initialWidth)
+      setHasReceivedMeasurement(true)
+    }
     
     return () => resizeObserver.disconnect()
   }, [])
@@ -522,8 +546,35 @@ export default function GanttChart(props: GanttChartProps) {
     }
   }, [zoomIndex, dayWidth, containerWidth])
   
+  // Handle copy sale to clipboard
+  const handleCopySale = useCallback((sale: SaleWithDetails) => {
+    const startDate = normalizeToLocalDate(sale.start_date)
+    const endDate = normalizeToLocalDate(sale.end_date)
+    const duration = differenceInDays(endDate, startDate) + 1
+    
+    setClipboardSale({
+      saleName: sale.sale_name,
+      discountPercentage: sale.discount_percentage,
+      duration,
+      saleType: sale.sale_type || 'regular',
+      platformId: sale.platform_id,
+      platformName: sale.platform?.name || 'Unknown'
+    })
+    setSelectedSaleId(sale.id)
+    
+    setCopyFeedback(`Copied: ${sale.sale_name || 'Sale'} (${duration}d, ${sale.discount_percentage}%)`)
+    setTimeout(() => setCopyFeedback(null), 2000)
+  }, [])
+  
+  // Handle select sale
+  const handleSelectSale = useCallback((sale: SaleWithDetails) => {
+    setSelectedSaleId(prev => prev === sale.id ? null : sale.id)
+  }, [])
+  
+  // Keyboard shortcuts for zoom and copy/paste
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Zoom shortcuts
       if ((e.ctrlKey || e.metaKey) && (e.key === '=' || e.key === '+')) {
         e.preventDefault()
         handleZoomIn()
@@ -531,11 +582,34 @@ export default function GanttChart(props: GanttChartProps) {
         e.preventDefault()
         handleZoomOut()
       }
+      // Copy shortcut (Cmd/Ctrl+C)
+      else if ((e.ctrlKey || e.metaKey) && e.key === 'c') {
+        if (selectedSaleId) {
+          const sale = sales.find(s => s.id === selectedSaleId)
+          if (sale) {
+            e.preventDefault()
+            handleCopySale(sale)
+          }
+        }
+      }
+      // Paste shortcut (Cmd/Ctrl+V)
+      else if ((e.ctrlKey || e.metaKey) && e.key === 'v') {
+        if (clipboardSale && onCreateSale) {
+          e.preventDefault()
+          // Show feedback that paste requires clicking on timeline
+          setCopyFeedback('Click on timeline to paste sale')
+          setTimeout(() => setCopyFeedback(null), 3000)
+        }
+      }
+      // Escape to deselect
+      else if (e.key === 'Escape') {
+        setSelectedSaleId(null)
+      }
     }
     
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [handleZoomIn, handleZoomOut])
+  }, [handleZoomIn, handleZoomOut, selectedSaleId, sales, handleCopySale, clipboardSale, onCreateSale])
   
   const groupedProducts = useMemo(() => {
     const groups: { game: Game & { client: Client }; products: (Product & { game: Game & { client: Client } })[] }[] = []
@@ -771,13 +845,24 @@ export default function GanttChart(props: GanttChartProps) {
     const startDate = format(capturedDays[safeStartIdx], 'yyyy-MM-dd')
     const endDate = format(capturedDays[safeEndIdx], 'yyyy-MM-dd')
     
-    callback({
-      productId: data.productId,
-      platformId: data.platformId,
-      startDate,
-      endDate
-    })
-  }, [])
+    // If we have clipboard data and duration is just 1 day click, use clipboard data
+    if (clipboardSale && safeStartIdx === safeEndIdx) {
+      const pasteEndDate = format(addDays(capturedDays[safeStartIdx], clipboardSale.duration - 1), 'yyyy-MM-dd')
+      callback({
+        productId: data.productId,
+        platformId: data.platformId,
+        startDate,
+        endDate: pasteEndDate
+      })
+    } else {
+      callback({
+        productId: data.productId,
+        platformId: data.platformId,
+        startDate,
+        endDate
+      })
+    }
+  }, [clipboardSale])
   
   const handleSelectionStart = useCallback((productId: string, platformId: string, dayIndex: number, e: React.MouseEvent) => {
     if ((e.target as HTMLElement).closest('[data-sale-block]') || (e.target as HTMLElement).closest('[data-launch-marker]') || (e.target as HTMLElement).closest('[data-launch-sale-block]')) {
@@ -1018,28 +1103,32 @@ export default function GanttChart(props: GanttChartProps) {
     }
   }, [handleScroll])
   
-  // Scroll to today on initial load - with proper dependencies
+  // Scroll to today on initial load - FIXED: wait for actual measurement and data
   useEffect(() => {
     if (hasInitialScrolled) return
     if (todayIndex === -1) return
     if (!scrollContainerRef.current) return
-    if (containerWidth <= 0) return
-    if (dayWidth <= 0) return
+    if (!hasReceivedMeasurement) return // Wait for actual measurement, not default 1200
+    if (products.length === 0) return // Wait for products to load
     
-    // Use double RAF to ensure DOM is fully ready
-    requestAnimationFrame(() => {
+    // Add a small delay to ensure everything is rendered
+    const timeoutId = setTimeout(() => {
       requestAnimationFrame(() => {
-        if (!scrollContainerRef.current) return
-        
-        const todayPosition = todayIndex * dayWidth
-        const visibleWidth = containerWidth - SIDEBAR_WIDTH
-        const scrollTarget = todayPosition - (visibleWidth / 2) + (dayWidth / 2)
-        
-        scrollContainerRef.current.scrollLeft = Math.max(0, scrollTarget)
-        setHasInitialScrolled(true)
+        requestAnimationFrame(() => {
+          if (!scrollContainerRef.current) return
+          
+          const todayPosition = todayIndex * dayWidth
+          const visibleWidth = containerWidth - SIDEBAR_WIDTH
+          const scrollTarget = todayPosition - (visibleWidth / 2) + (dayWidth / 2)
+          
+          scrollContainerRef.current.scrollLeft = Math.max(0, scrollTarget)
+          setHasInitialScrolled(true)
+        })
       })
-    })
-  }, [todayIndex, dayWidth, containerWidth, hasInitialScrolled])
+    }, 100)
+    
+    return () => clearTimeout(timeoutId)
+  }, [todayIndex, dayWidth, containerWidth, hasInitialScrolled, hasReceivedMeasurement, products.length])
   
   useEffect(() => {
     const handleWindowMouseMove = (e: MouseEvent) => {
@@ -1377,22 +1466,41 @@ export default function GanttChart(props: GanttChartProps) {
         </div>
       )}
       
-      <div className={styles.legend}>
-        <span className={styles.legendTitle}>PLATFORMS:</span>
-        {platforms.map(platform => (
-          <div key={platform.id} className={styles.legendItem}>
-            <span 
-              className={styles.legendColor}
-              style={{ backgroundColor: platform.color_hex }}
-            />
-            <span>{platform.name}</span>
-            <span className={styles.legendCooldown}>({platform.cooldown_days}d cooldown)</span>
-          </div>
-        ))}
-        <div className={styles.legendLaunchSale}>
-          <span className={styles.legendLaunchColor} />
-          <span>Launch Sale Period (drag edge to resize)</span>
+      {copyFeedback && (
+        <div className={styles.copyFeedback}>
+          {copyFeedback}
         </div>
+      )}
+      
+      <div className={`${styles.legend} ${isLegendCollapsed ? styles.legendCollapsed : ''}`}>
+        <button 
+          className={styles.legendToggle}
+          onClick={() => setIsLegendCollapsed(!isLegendCollapsed)}
+          title={isLegendCollapsed ? 'Show platforms legend' : 'Hide platforms legend'}
+        >
+          {isLegendCollapsed ? '▶' : '▼'} PLATFORMS
+        </button>
+        {isLegendCollapsed && (
+          <span className={styles.legendCollapsedHint}>Click to expand</span>
+        )}
+        {!isLegendCollapsed && (
+          <>
+            {platforms.map(platform => (
+              <div key={platform.id} className={styles.legendItem}>
+                <span 
+                  className={styles.legendColor}
+                  style={{ backgroundColor: platform.color_hex }}
+                />
+                <span>{platform.name}</span>
+                <span className={styles.legendCooldown}>({platform.cooldown_days}d cooldown)</span>
+              </div>
+            ))}
+            <div className={styles.legendLaunchSale}>
+              <span className={styles.legendLaunchColor} />
+              <span>Launch Sale Period (drag edge to resize)</span>
+            </div>
+          </>
+        )}
       </div>
       
       <div className={styles.zoomControls}>
@@ -1428,6 +1536,11 @@ export default function GanttChart(props: GanttChartProps) {
         <span className={styles.zoomInfo}>
           {ZOOM_LEVELS[zoomIndex].name} ({Math.round(ZOOM_LEVELS[zoomIndex].monthsVisible * 30)} days)
         </span>
+        {clipboardSale && (
+          <span className={styles.clipboardIndicator}>
+            📋 {clipboardSale.saleName || 'Sale'} ({clipboardSale.duration}d)
+          </span>
+        )}
         {visibleDateRange && (
           <span className={styles.dateRange}>
             {format(visibleDateRange.start, 'MMM d')} - {format(visibleDateRange.end, 'MMM d, yyyy')}
@@ -1463,7 +1576,7 @@ export default function GanttChart(props: GanttChartProps) {
           </div>
         </div>
         <span className={styles.scrollGrabHint}>
-          {isGrabbing ? 'Dragging...' : 'Drag to navigate • Scroll edges for more months'}
+          {isGrabbing ? 'Dragging...' : 'Drag to navigate • ⌘C/V to copy/paste sales'}
         </span>
       </div>
       
@@ -1740,6 +1853,9 @@ export default function GanttChart(props: GanttChartProps) {
                                         onDelete={onSaleDelete}
                                         onDuplicate={onSaleDuplicate}
                                         onResize={handleSaleResize}
+                                        onSelect={handleSelectSale}
+                                        onCopy={handleCopySale}
+                                        isSelected={selectedSaleId === sale.id}
                                       />
                                     </div>
                                   )
