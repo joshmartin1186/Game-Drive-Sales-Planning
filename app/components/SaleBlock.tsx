@@ -15,9 +15,9 @@ interface SaleBlockProps {
   isDragging?: boolean
   optimisticLeft?: number
   onEdit: (sale: SaleWithDetails) => void
-  onDelete: (saleId: string) => Promise&lt;void&gt;
+  onDelete: (saleId: string) => Promise<void>
   onDuplicate?: (sale: SaleWithDetails) => void
-  onResize?: (saleId: string, newStart: string, newEnd: string) => Promise&lt;void&gt;
+  onResize?: (saleId: string, newStart: string, newEnd: string) => Promise<void>
   onSelect?: (sale: SaleWithDetails) => void
   onCopy?: (sale: SaleWithDetails) => void
   isSelected?: boolean
@@ -43,16 +43,16 @@ export default function SaleBlock({
     data: { sale }
   })
   
-  const [isResizing, setIsResizing] = useState&lt;'left' | 'right' | null&gt;(null)
+  const [isResizing, setIsResizing] = useState<'left' | 'right' | null>(null)
   const [resizeOffset, setResizeOffset] = useState(0)
   const [showContextMenu, setShowContextMenu] = useState(false)
   const [contextMenuPos, setContextMenuPos] = useState({ x: 0, y: 0 })
-  const resizeRef = useRef&lt;{
+  const resizeRef = useRef<{
     startX: number
     initialStart: string
     initialEnd: string
     edge: 'left' | 'right'
-  } | null&gt;(null)
+  } | null>(null)
   
   // Use optimistic position if provided, otherwise use actual position
   const displayLeft = optimisticLeft !== undefined ? optimisticLeft : left
@@ -83,7 +83,7 @@ export default function SaleBlock({
   const discountText = sale.discount_percentage ? `-${sale.discount_percentage}%` : ''
   
   // Status badge
-  const statusColors: Record&lt;string, string&gt; = {
+  const statusColors: Record<string, string> = {
     planned: '#94a3b8',
     submitted: '#f59e0b',
     confirmed: '#22c55e',
@@ -245,116 +245,116 @@ export default function SaleBlock({
   }, [isResizing, handleResizeMove, handleResizeEnd])
 
   return (
-    &lt;&gt;
-      &lt;div
+    <>
+      <div
         ref={setNodeRef}
         className={`${styles.saleBlock} ${isDragging ? styles.dragging : ''} ${isResizing ? styles.resizing : ''} ${isSelected ? styles.selected : ''}`}
         style={style}
         onClick={handleClick}
         onContextMenu={handleContextMenu}
         title={`${displayName}\n${format(startDate, 'MMM d')} - ${format(endDate, 'MMM d, yyyy')}\n${sale.platform?.name || 'Unknown Platform'}\n${discountText}\nClick to edit • Ctrl/⌘+Click to select • Right-click for menu`}
-      &gt;
+      >
         {/* Left resize handle */}
-        {onResize &amp;&amp; (
-          &lt;div
+        {onResize && (
+          <div
             className={`${styles.resizeHandle} ${styles.resizeHandleLeft}`}
             onMouseDown={(e) => handleResizeStart('left', e)}
-          /&gt;
+          />
         )}
         
-        &lt;div 
+        <div 
           className={styles.dragHandle}
           {...listeners}
           {...attributes}
-        &gt;
-          &lt;span className={styles.saleName}&gt;
+        >
+          <span className={styles.saleName}>
             {displayName} {discountText}
-          &lt;/span&gt;
+          </span>
           
-          {sale.status &amp;&amp; (
-            &lt;span 
+          {sale.status && (
+            <span 
               className={styles.statusBadge}
               style={{ backgroundColor: statusColors[sale.status] || '#6b7280' }}
-            &gt;
+            >
               {sale.status}
-            &lt;/span&gt;
+            </span>
           )}
-        &lt;/div&gt;
+        </div>
         
-        &lt;div className={styles.actions}&gt;
-          {onCopy &amp;&amp; (
-            &lt;button
+        <div className={styles.actions}>
+          {onCopy && (
+            <button
               className={styles.copyBtn}
               onClick={(e) => {
                 e.stopPropagation()
                 onCopy(sale)
               }}
               title="Copy sale (⌘C)"
-            &gt;
+            >
               📋
-            &lt;/button&gt;
+            </button>
           )}
-          {onDuplicate &amp;&amp; (
-            &lt;button
+          {onDuplicate && (
+            <button
               className={styles.duplicateBtn}
               onClick={(e) => {
                 e.stopPropagation()
                 onDuplicate(sale)
               }}
               title="Duplicate sale"
-            &gt;
+            >
               ⧉
-            &lt;/button&gt;
+            </button>
           )}
-          &lt;button
+          <button
             className={styles.deleteBtn}
             onClick={(e) => {
               e.stopPropagation()
               onDelete(sale.id)
             }}
             title="Delete sale"
-          &gt;
+          >
             ×
-          &lt;/button&gt;
-        &lt;/div&gt;
+          </button>
+        </div>
         
         {/* Right resize handle */}
-        {onResize &amp;&amp; (
-          &lt;div
+        {onResize && (
+          <div
             className={`${styles.resizeHandle} ${styles.resizeHandleRight}`}
             onMouseDown={(e) => handleResizeStart('right', e)}
-          /&gt;
+          />
         )}
-      &lt;/div&gt;
+      </div>
       
       {/* Context Menu */}
-      {showContextMenu &amp;&amp; (
-        &lt;div 
+      {showContextMenu && (
+        <div 
           className={styles.contextMenu}
           style={{ left: contextMenuPos.x, top: contextMenuPos.y }}
-        &gt;
-          &lt;button onClick={() => { onEdit(sale); setShowContextMenu(false); }}&gt;
+        >
+          <button onClick={() => { onEdit(sale); setShowContextMenu(false); }}>
             ✏️ Edit Sale
-          &lt;/button&gt;
-          {onCopy &amp;&amp; (
-            &lt;button onClick={() => { onCopy(sale); setShowContextMenu(false); }}&gt;
+          </button>
+          {onCopy && (
+            <button onClick={() => { onCopy(sale); setShowContextMenu(false); }}>
               📋 Copy (⌘C)
-            &lt;/button&gt;
+            </button>
           )}
-          {onDuplicate &amp;&amp; (
-            &lt;button onClick={() => { onDuplicate(sale); setShowContextMenu(false); }}&gt;
+          {onDuplicate && (
+            <button onClick={() => { onDuplicate(sale); setShowContextMenu(false); }}>
               ⧉ Duplicate
-            &lt;/button&gt;
+            </button>
           )}
-          &lt;hr /&gt;
-          &lt;button 
+          <hr />
+          <button 
             className={styles.deleteMenuItem}
             onClick={() => { onDelete(sale.id); setShowContextMenu(false); }}
-          &gt;
+          >
             🗑️ Delete
-          &lt;/button&gt;
-        &lt;/div&gt;
+          </button>
+        </div>
       )}
-    &lt;/&gt;
+    </>
   )
 }
