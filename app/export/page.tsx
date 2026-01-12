@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { Sidebar } from '../components/Sidebar'
+import * as XLSX from 'xlsx'
 
 interface Sale {
   id: string
@@ -27,7 +28,7 @@ export default function ExportPage() {
   const supabase = createClientComponentClient()
   const [sales, setSales] = useState<Sale[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const [exportFormat, setExportFormat] = useState<'csv' | 'xlsx'>('csv')
+  const [exportFormat, setExportFormat] = useState<'csv' | 'xlsx'>('xlsx')
   const [dateFilter, setDateFilter] = useState('all')
   const [isExporting, setIsExporting] = useState(false)
 
@@ -90,52 +91,82 @@ export default function ExportPage() {
     return Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1
   }
 
+  const buildExportData = () => {
+    const headers = [
+      'Game Name',
+      'Product',
+      'Platform',
+      'Start Date',
+      'End Date',
+      'Duration (Days)',
+      'Discount %',
+      'Sale Name',
+      'Status',
+      'Cooldown End'
+    ]
+
+    const rows = sales.map(sale => [
+      sale.products?.games?.name || '',
+      sale.products?.name || '',
+      sale.platforms?.name || '',
+      sale.start_date,
+      sale.end_date,
+      calculateDuration(sale.start_date, sale.end_date),
+      sale.discount_percentage || '',
+      sale.sale_name || '',
+      sale.status,
+      sale.platforms ? calculateCooldownEnd(sale.end_date, sale.platforms.cooldown_days) : ''
+    ])
+
+    return { headers, rows }
+  }
+
   const handleExport = async () => {
     setIsExporting(true)
     
     try {
-      // Build CSV data matching Game Drive's Excel format
-      const headers = [
-        'Game Name',
-        'Product',
-        'Platform',
-        'Start Date',
-        'End Date',
-        'Duration (Days)',
-        'Discount %',
-        'Sale Name',
-        'Status',
-        'Cooldown End'
-      ]
+      const { headers, rows } = buildExportData()
+      const filename = `gamedrive-sales-export-${new Date().toISOString().split('T')[0]}`
 
-      const rows = sales.map(sale => [
-        sale.products?.games?.name || '',
-        sale.products?.name || '',
-        sale.platforms?.name || '',
-        sale.start_date,
-        sale.end_date,
-        calculateDuration(sale.start_date, sale.end_date),
-        sale.discount_percentage || '',
-        sale.sale_name || '',
-        sale.status,
-        sale.platforms ? calculateCooldownEnd(sale.end_date, sale.platforms.cooldown_days) : ''
-      ])
+      if (exportFormat === 'xlsx') {
+        // Create workbook and worksheet
+        const wb = XLSX.utils.book_new()
+        const wsData = [headers, ...rows]
+        const ws = XLSX.utils.aoa_to_sheet(wsData)
 
-      const csvContent = [
-        headers.join(','),
-        ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
-      ].join('\n')
+        // Set column widths
+        ws['!cols'] = [
+          { wch: 20 }, // Game Name
+          { wch: 20 }, // Product
+          { wch: 12 }, // Platform
+          { wch: 12 }, // Start Date
+          { wch: 12 }, // End Date
+          { wch: 8 },  // Duration
+          { wch: 10 }, // Discount
+          { wch: 25 }, // Sale Name
+          { wch: 12 }, // Status
+          { wch: 14 }, // Cooldown End
+        ]
 
-      // Download file
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
-      const url = URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = `gamedrive-sales-export-${new Date().toISOString().split('T')[0]}.csv`
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      URL.revokeObjectURL(url)
+        XLSX.utils.book_append_sheet(wb, ws, 'Sales')
+        XLSX.writeFile(wb, `${filename}.xlsx`)
+      } else {
+        // CSV export
+        const csvContent = [
+          headers.join(','),
+          ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+        ].join('\n')
+
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+        const url = URL.createObjectURL(blob)
+        const link = document.createElement('a')
+        link.href = url
+        link.download = `${filename}.csv`
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+        URL.revokeObjectURL(url)
+      }
     } catch (error) {
       console.error('Export error:', error)
     } finally {
@@ -203,8 +234,8 @@ export default function ExportPage() {
                     minWidth: '180px'
                   }}
                 >
-                  <option value="csv">CSV (Excel Compatible)</option>
-                  <option value="xlsx" disabled>XLSX (Coming Soon)</option>
+                  <option value="xlsx">Excel (.xlsx)</option>
+                  <option value="csv">CSV (.csv)</option>
                 </select>
               </div>
 
@@ -229,7 +260,7 @@ export default function ExportPage() {
                   <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                   </svg>
-                  {isExporting ? 'Exporting...' : 'Download CSV'}
+                  {isExporting ? 'Exporting...' : `Download ${exportFormat.toUpperCase()}`}
                 </button>
               </div>
             </div>
@@ -308,7 +339,7 @@ export default function ExportPage() {
                 </table>
                 {sales.length > 10 && (
                   <div style={{ textAlign: 'center', padding: '12px', color: '#64748b', fontSize: '13px' }}>
-                    Showing 10 of {sales.length} records. Download CSV to see all.
+                    Showing 10 of {sales.length} records. Download to see all.
                   </div>
                 )}
               </div>
