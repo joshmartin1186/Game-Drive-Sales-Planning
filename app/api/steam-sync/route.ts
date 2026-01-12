@@ -1,20 +1,53 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 
-// Steam Partner API endpoints
+// Steam Partner API endpoint for financial data
 const STEAM_PARTNER_API = 'https://partner.steam-api.com';
 
-interface SteamSalesData {
+interface SteamDetailedSalesResult {
+  partnerid: string;
   date: string;
-  product_name: string;
+  line_item_type: string;
+  packageid?: number;
+  bundleid?: number;
+  appid?: number;
+  game_item_id?: number;
+  package_sale_type?: string;
+  platform?: string;
   country_code: string;
-  gross_units: number;
-  net_units: number;
-  gross_revenue: number;
-  net_revenue: number;
+  base_price?: string;
+  sale_price?: string;
+  currency?: string;
+  gross_units_sold?: number;
+  gross_units_returned?: number;
+  gross_sales_usd?: string;
+  gross_returns_usd?: string;
+  net_tax_usd?: string;
+  net_units_sold?: number;
+  net_sales_usd?: string;
+  primary_appid?: number;
+  combined_discount_id?: number;
+  total_discount_percentage?: number;
 }
 
-// POST - Sync financial data from Steam for a client
+interface SteamSalesResponse {
+  response: {
+    results?: SteamDetailedSalesResult[];
+    package_info?: Array<{ packageid: number; package_name: string }>;
+    app_info?: Array<{ appid: number; app_name: string }>;
+    country_info?: Array<{ country_code: string; country_name: string; region: string }>;
+    max_id?: string;
+  };
+}
+
+interface ChangedDatesResponse {
+  response: {
+    dates?: string[];
+    result_highwatermark?: string;
+  };
+}
+
+// POST - Sync financial data from Steam using IPartnerFinancialsService
 export async function POST(request: Request) {
   try {
     const body = await request.json();
@@ -27,10 +60,10 @@ export async function POST(request: Request) {
       );
     }
 
-    // Get the client's Steam API key
+    // Get the client's Steam API keys
     const { data: keyData, error: keyError } = await supabase
       .from('steam_api_keys')
-      .select('api_key, publisher_key, app_ids')
+      .select('api_key, publisher_key, app_ids, highwatermark')
       .eq('client_id', client_id)
       .eq('is_active', true)
       .single();
@@ -42,6 +75,16 @@ export async function POST(request: Request) {
       );
     }
 
+    // Financial API requires the publisher key (Financial Web API Key)
+    const financialApiKey = keyData.publisher_key || keyData.api_key;
+    
+    if (!financialApiKey) {
+      return NextResponse.json(
+        { error: 'No Financial Web API Key configured. Create one in Steamworks under Manage Groups > Financial API Group.' },
+        { status: 400 }
+      );
+    }
+
     // Get client name for logging
     const { data: clientData } = await supabase
       .from('clients')
@@ -49,25 +92,71 @@ export async function POST(request: Request) {
       .eq('id', client_id)
       .single();
 
-    // For now, we'll simulate the API call since Steam Partner API 
-    // requires actual publisher credentials and specific endpoint access
-    // In production, this would make real calls to Steam's ISteamEconomy or 
-    // partner reporting endpoints
+    // Step 1: Get changed dates from Steam
+    const changedDates = await getChangedDatesForPartner(
+      financialApiKey, 
+      keyData.highwatermark || '0'
+    );
 
-    const syncResult = await syncSteamData({
-      apiKey: keyData.api_key,
-      publisherKey: keyData.publisher_key,
-      appIds: app_id ? [app_id] : keyData.app_ids || [],
-      startDate: start_date || getDefaultStartDate(),
-      endDate: end_date || new Date().toISOString().split('T')[0],
-      clientId: client_id
-    });
+    if (!changedDates.success) {
+      return NextResponse.json({
+        success: false,
+        message: changedDates.error || 'Failed to get changed dates from Steam',
+        rowsImported: 0,
+        rowsSkipped: 0,
+        clientName: clientData?.name
+      });
+    }
 
-    // Update last sync date
-    await supabase
-      .from('steam_api_keys')
-      .update({ last_sync_date: new Date().toISOString().split('T')[0] })
-      .eq('client_id', client_id);
+    // Filter dates to requested range if provided
+    let datesToSync = changedDates.dates || [];
+    if (start_date || end_date) {
+      datesToSync = datesToSync.filter(date => {
+        const d = date.replace(/\//g, '-');
+        if (start_date && d < start_date) return false;
+        if (end_date && d > end_date) return false;
+        return true;
+      });
+    }
+
+    if (datesToSync.length === 0) {
+      return NextResponse.json({
+        success: true,
+        message: 'No new financial data available for the requested period.',
+        rowsImported: 0,
+        rowsSkipped: 0,
+        clientName: clientData?.name
+      });
+    }
+
+    // Step 2: Get detailed sales for each date
+    let totalImported = 0;
+    let totalSkipped = 0;
+    const errors: string[] = [];
+
+    for (const date of datesToSync) {
+      const salesResult = await getDetailedSalesForDate(financialApiKey, date, app_id);
+      
+      if (salesResult.success && salesResult.results) {
+        // Store the sales data in our database
+        const storeResult = await storeSalesData(client_id, salesResult.results, salesResult.metadata);
+        totalImported += storeResult.imported;
+        totalSkipped += storeResult.skipped;
+      } else if (salesResult.error) {
+        errors.push(`${date}: ${salesResult.error}`);
+      }
+    }
+
+    // Update highwatermark for next sync
+    if (changedDates.highwatermark) {
+      await supabase
+        .from('steam_api_keys')
+        .update({ 
+          highwatermark: changedDates.highwatermark,
+          last_sync_date: new Date().toISOString().split('T')[0]
+        })
+        .eq('client_id', client_id);
+    }
 
     // Log import history
     await supabase
@@ -75,32 +164,34 @@ export async function POST(request: Request) {
       .insert({
         client_id,
         import_type: 'steam_api_sync',
-        date_range_start: start_date || getDefaultStartDate(),
-        date_range_end: end_date || new Date().toISOString().split('T')[0],
-        rows_imported: syncResult.rowsImported,
-        rows_skipped: syncResult.rowsSkipped,
-        status: syncResult.success ? 'completed' : 'failed',
-        error_message: syncResult.error || null
+        date_range_start: start_date || datesToSync[0]?.replace(/\//g, '-'),
+        date_range_end: end_date || datesToSync[datesToSync.length - 1]?.replace(/\//g, '-'),
+        rows_imported: totalImported,
+        rows_skipped: totalSkipped,
+        status: errors.length === 0 ? 'completed' : 'partial',
+        error_message: errors.length > 0 ? errors.join('; ') : null
       });
 
     return NextResponse.json({
-      success: syncResult.success,
-      message: syncResult.message,
-      rowsImported: syncResult.rowsImported,
-      rowsSkipped: syncResult.rowsSkipped,
+      success: true,
+      message: `Synced ${datesToSync.length} date(s) from Steam Financial API.`,
+      rowsImported: totalImported,
+      rowsSkipped: totalSkipped,
+      datesProcessed: datesToSync.length,
+      errors: errors.length > 0 ? errors : undefined,
       clientName: clientData?.name
     });
 
   } catch (error) {
     console.error('Error syncing Steam data:', error);
     return NextResponse.json(
-      { error: 'Failed to sync Steam data' },
+      { error: `Failed to sync Steam data: ${error instanceof Error ? error.message : String(error)}` },
       { status: 500 }
     );
   }
 }
 
-// Test API key validity
+// GET - Test API key validity with actual Financial API
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
@@ -115,7 +206,7 @@ export async function GET(request: Request) {
 
     const { data: keyData, error } = await supabase
       .from('steam_api_keys')
-      .select('api_key, publisher_key, last_sync_date')
+      .select('api_key, publisher_key, last_sync_date, highwatermark')
       .eq('client_id', clientId)
       .eq('is_active', true)
       .single();
@@ -127,13 +218,15 @@ export async function GET(request: Request) {
       });
     }
 
-    // Test the API key with Steam
-    const testResult = await testSteamApiKey(keyData.api_key, keyData.publisher_key);
+    // Test the Financial API key
+    const financialApiKey = keyData.publisher_key || keyData.api_key;
+    const testResult = await testFinancialApiKey(financialApiKey);
 
     return NextResponse.json({
       valid: testResult.valid,
       message: testResult.message,
-      lastSync: keyData.last_sync_date
+      lastSync: keyData.last_sync_date,
+      hasFinancialKey: !!keyData.publisher_key
     });
 
   } catch (error) {
@@ -145,29 +238,213 @@ export async function GET(request: Request) {
   }
 }
 
-// Helper functions
-function getDefaultStartDate(): string {
-  const date = new Date();
-  date.setMonth(date.getMonth() - 3); // Default to 3 months ago
-  return date.toISOString().split('T')[0];
+// Get changed dates from IPartnerFinancialsService
+async function getChangedDatesForPartner(
+  apiKey: string, 
+  highwatermark: string
+): Promise<{ success: boolean; dates?: string[]; highwatermark?: string; error?: string }> {
+  try {
+    const url = `${STEAM_PARTNER_API}/IPartnerFinancialsService/GetChangedDatesForPartner/v001/?key=${apiKey}&highwatermark=${highwatermark}`;
+    
+    const response = await fetch(url);
+    
+    if (!response.ok) {
+      if (response.status === 403) {
+        return { 
+          success: false, 
+          error: 'Access denied. Make sure you are using a Financial Web API Key from a Financial API Group in Steamworks.' 
+        };
+      }
+      return { 
+        success: false, 
+        error: `Steam API returned status ${response.status}` 
+      };
+    }
+
+    const data: ChangedDatesResponse = await response.json();
+    
+    return {
+      success: true,
+      dates: data.response.dates || [],
+      highwatermark: data.response.result_highwatermark
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: `Failed to connect to Steam API: ${error instanceof Error ? error.message : String(error)}`
+    };
+  }
 }
 
-async function testSteamApiKey(apiKey: string, publisherKey: string | null): Promise<{ valid: boolean; message: string }> {
+// Get detailed sales for a specific date
+async function getDetailedSalesForDate(
+  apiKey: string, 
+  date: string,
+  appIdFilter?: string
+): Promise<{ 
+  success: boolean; 
+  results?: SteamDetailedSalesResult[]; 
+  metadata?: {
+    packages: Map<number, string>;
+    apps: Map<number, string>;
+    countries: Map<string, { name: string; region: string }>;
+  };
+  error?: string 
+}> {
   try {
-    // Test with Steam Web API (general endpoint that works with any key)
-    const testUrl = `https://api.steampowered.com/ISteamWebAPIUtil/GetServerInfo/v1/?key=${apiKey}`;
+    const allResults: SteamDetailedSalesResult[] = [];
+    const packages = new Map<number, string>();
+    const apps = new Map<number, string>();
+    const countries = new Map<string, { name: string; region: string }>();
     
-    const response = await fetch(testUrl);
+    let highwatermarkId = '0';
+    let hasMoreData = true;
+
+    // Paginate through all results for this date
+    while (hasMoreData) {
+      const url = `${STEAM_PARTNER_API}/IPartnerFinancialsService/GetDetailedSales/v001/?key=${apiKey}&date=${date}&highwatermark_id=${highwatermarkId}`;
+      
+      const response = await fetch(url);
+      
+      if (!response.ok) {
+        return { 
+          success: false, 
+          error: `Steam API returned status ${response.status}` 
+        };
+      }
+
+      const data: SteamSalesResponse = await response.json();
+      
+      // Add results
+      if (data.response.results) {
+        // Filter by app ID if specified
+        const filtered = appIdFilter 
+          ? data.response.results.filter(r => 
+              r.primary_appid?.toString() === appIdFilter || 
+              r.appid?.toString() === appIdFilter
+            )
+          : data.response.results;
+        allResults.push(...filtered);
+      }
+
+      // Collect metadata
+      data.response.package_info?.forEach(p => packages.set(p.packageid, p.package_name));
+      data.response.app_info?.forEach(a => apps.set(a.appid, a.app_name));
+      data.response.country_info?.forEach(c => countries.set(c.country_code, { 
+        name: c.country_name, 
+        region: c.region 
+      }));
+
+      // Check if there's more data
+      const maxId = data.response.max_id;
+      if (!maxId || maxId === highwatermarkId) {
+        hasMoreData = false;
+      } else {
+        highwatermarkId = maxId;
+      }
+    }
+
+    return {
+      success: true,
+      results: allResults,
+      metadata: { packages, apps, countries }
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: `Failed to get sales data: ${error instanceof Error ? error.message : String(error)}`
+    };
+  }
+}
+
+// Store sales data in our database
+async function storeSalesData(
+  clientId: string,
+  results: SteamDetailedSalesResult[],
+  metadata?: {
+    packages: Map<number, string>;
+    apps: Map<number, string>;
+    countries: Map<string, { name: string; region: string }>;
+  }
+): Promise<{ imported: number; skipped: number }> {
+  let imported = 0;
+  let skipped = 0;
+
+  for (const result of results) {
+    try {
+      // Convert date format from YYYY/MM/DD to YYYY-MM-DD
+      const date = result.date.replace(/\//g, '-');
+      
+      // Get product name from metadata
+      const productName = result.packageid 
+        ? metadata?.packages.get(result.packageid) 
+        : result.appid 
+          ? metadata?.apps.get(result.appid)
+          : 'Unknown';
+
+      // Get country info
+      const countryInfo = metadata?.countries.get(result.country_code);
+
+      // Upsert into performance_metrics table
+      const { error } = await supabase
+        .from('performance_metrics')
+        .upsert({
+          client_id: clientId,
+          date: date,
+          product_name: productName || 'Unknown',
+          platform: result.platform || 'Steam',
+          country_code: result.country_code,
+          region: countryInfo?.region || 'Unknown',
+          gross_units_sold: result.gross_units_sold || 0,
+          net_units_sold: result.net_units_sold || 0,
+          gross_revenue_usd: parseFloat(result.gross_sales_usd || '0'),
+          net_revenue_usd: parseFloat(result.net_sales_usd || '0'),
+          base_price: result.base_price ? parseFloat(result.base_price) / 100 : null,
+          sale_price: result.sale_price ? parseFloat(result.sale_price) / 100 : null,
+          currency: result.currency,
+          discount_percentage: result.total_discount_percentage,
+          steam_package_id: result.packageid?.toString(),
+          steam_app_id: result.primary_appid?.toString() || result.appid?.toString(),
+          line_item_type: result.line_item_type,
+          updated_at: new Date().toISOString()
+        }, {
+          onConflict: 'client_id,date,product_name,platform,country_code'
+        });
+
+      if (error) {
+        console.error('Error storing sales data:', error);
+        skipped++;
+      } else {
+        imported++;
+      }
+    } catch (error) {
+      console.error('Error processing sales result:', error);
+      skipped++;
+    }
+  }
+
+  return { imported, skipped };
+}
+
+// Test if the Financial API key is valid
+async function testFinancialApiKey(apiKey: string): Promise<{ valid: boolean; message: string }> {
+  try {
+    // Try to get changed dates with highwatermark 0 - this will confirm API access
+    const url = `${STEAM_PARTNER_API}/IPartnerFinancialsService/GetChangedDatesForPartner/v001/?key=${apiKey}&highwatermark=0`;
+    
+    const response = await fetch(url);
     
     if (response.ok) {
+      const data: ChangedDatesResponse = await response.json();
+      const dateCount = data.response.dates?.length || 0;
       return {
         valid: true,
-        message: 'API key is valid and connected to Steam'
+        message: `Financial API connected successfully. ${dateCount} date(s) with sales data available.`
       };
     } else if (response.status === 403) {
       return {
         valid: false,
-        message: 'API key is invalid or has been revoked'
+        message: 'Access denied. This key may not have Financial API access. Create a Financial API Group in Steamworks and use that key.'
       };
     } else {
       return {
@@ -178,90 +455,7 @@ async function testSteamApiKey(apiKey: string, publisherKey: string | null): Pro
   } catch (error) {
     return {
       valid: false,
-      message: 'Could not connect to Steam API. Check network connection.'
-    };
-  }
-}
-
-async function syncSteamData(params: {
-  apiKey: string;
-  publisherKey: string | null;
-  appIds: string[];
-  startDate: string;
-  endDate: string;
-  clientId: string;
-}): Promise<{ success: boolean; message: string; rowsImported: number; rowsSkipped: number; error?: string }> {
-  
-  const { apiKey, publisherKey, appIds, startDate, endDate, clientId } = params;
-
-  // Note: Steam Partner API for financial data requires:
-  // 1. Publisher-level access (not just Web API key)
-  // 2. Specific endpoints like ISteamEconomy/GetAssetPrices or partner reporting
-  // 3. Usually accessed via partner.steampowered.com portal
-
-  // For production implementation, you would:
-  // 1. Use the publisher key to authenticate with partner.steam-api.com
-  // 2. Call endpoints like /ISteamEconomy/GetMarketPrices/v1/
-  // 3. Or use the Steamworks Web API with proper publisher credentials
-
-  if (!publisherKey) {
-    // Without publisher key, we can only get limited public data
-    // Try to fetch what we can from public API
-    try {
-      let totalImported = 0;
-      
-      for (const appId of appIds) {
-        // Get app details (public)
-        const appDetailsUrl = `https://store.steampowered.com/api/appdetails?appids=${appId}`;
-        const response = await fetch(appDetailsUrl);
-        
-        if (response.ok) {
-          const data = await response.json();
-          if (data[appId]?.success) {
-            // Store basic app info - actual sales data requires publisher access
-            console.log(`Fetched details for app ${appId}: ${data[appId].data?.name}`);
-          }
-        }
-      }
-
-      return {
-        success: true,
-        message: 'Connected to Steam API. Note: Full financial data requires Publisher Key. Please export CSV from Steam Partner portal for complete sales data.',
-        rowsImported: totalImported,
-        rowsSkipped: 0
-      };
-
-    } catch (error) {
-      return {
-        success: false,
-        message: 'Failed to connect to Steam API',
-        rowsImported: 0,
-        rowsSkipped: 0,
-        error: String(error)
-      };
-    }
-  }
-
-  // With publisher key - attempt full financial data sync
-  try {
-    // This would be the actual partner API call
-    // Steam's partner API is not publicly documented, so this is a placeholder
-    // Real implementation would need actual Steam partner documentation
-
-    return {
-      success: true,
-      message: 'Publisher key detected. For full financial data, please use CSV import from Steam Partner portal. Direct API sync coming soon.',
-      rowsImported: 0,
-      rowsSkipped: 0
-    };
-
-  } catch (error) {
-    return {
-      success: false,
-      message: 'Failed to sync financial data',
-      rowsImported: 0,
-      rowsSkipped: 0,
-      error: String(error)
+      message: 'Could not connect to Steam Partner API. Check network connection.'
     };
   }
 }
