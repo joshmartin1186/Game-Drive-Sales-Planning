@@ -9,6 +9,19 @@ import { normalizeToLocalDate } from '@/lib/dateUtils'
 import SaleBlock from './SaleBlock'
 import styles from './GanttChart.module.css'
 
+// Extended prefill type for direct paste support
+interface SalePrefill {
+  productId: string
+  platformId: string
+  startDate: string
+  endDate: string
+  // Optional fields for direct paste (skip modal)
+  directCreate?: boolean
+  saleName?: string
+  discountPercentage?: number
+  saleType?: string
+}
+
 interface GanttChartProps {
   sales: SaleWithDetails[]
   products: (Product & { game: Game & { client: Client } })[]
@@ -20,7 +33,7 @@ interface GanttChartProps {
   onSaleDelete: (saleId: string) => Promise<void>
   onSaleEdit: (sale: SaleWithDetails) => void
   onSaleDuplicate?: (sale: SaleWithDetails) => void
-  onCreateSale?: (prefill: { productId: string; platformId: string; startDate: string; endDate: string }) => void
+  onCreateSale?: (prefill: SalePrefill) => void
   onGenerateCalendar?: (productId: string, productName: string, launchDate?: string) => void
   onClearSales?: (productId: string, productName: string) => void
   onLaunchDateChange?: (productId: string, newLaunchDate: string) => Promise<void>
@@ -608,18 +621,23 @@ export default function GanttChart(props: GanttChartProps) {
     })
   }, [])
   
-  // Handle paste from context menu
+  // Handle paste from context menu - DIRECT CREATE without modal
   const handlePasteFromContextMenu = useCallback(() => {
     if (!clipboardSale || !onCreateSale || !contextMenu.visible) return
     
     const startDate = format(days[contextMenu.dayIndex], 'yyyy-MM-dd')
     const endDate = format(addDays(days[contextMenu.dayIndex], clipboardSale.duration - 1), 'yyyy-MM-dd')
     
+    // Pass directCreate: true to skip the modal and create immediately
     onCreateSale({
       productId: contextMenu.productId,
       platformId: contextMenu.platformId,
       startDate,
-      endDate
+      endDate,
+      directCreate: true,
+      saleName: clipboardSale.saleName ?? undefined,
+      discountPercentage: clipboardSale.discountPercentage ?? undefined,
+      saleType: clipboardSale.saleType
     })
     
     setCopyFeedback(`Pasted: ${clipboardSale.saleName || 'Sale'} at ${format(days[contextMenu.dayIndex], 'MMM d')}`)
@@ -925,24 +943,14 @@ export default function GanttChart(props: GanttChartProps) {
     const startDate = format(capturedDays[safeStartIdx], 'yyyy-MM-dd')
     const endDate = format(capturedDays[safeEndIdx], 'yyyy-MM-dd')
     
-    // If we have clipboard data and duration is just 1 day click, use clipboard data
-    if (clipboardSale && safeStartIdx === safeEndIdx) {
-      const pasteEndDate = format(addDays(capturedDays[safeStartIdx], clipboardSale.duration - 1), 'yyyy-MM-dd')
-      callback({
-        productId: data.productId,
-        platformId: data.platformId,
-        startDate,
-        endDate: pasteEndDate
-      })
-    } else {
-      callback({
-        productId: data.productId,
-        platformId: data.platformId,
-        startDate,
-        endDate
-      })
-    }
-  }, [clipboardSale])
+    // Normal selection creates sale via modal (no directCreate flag)
+    callback({
+      productId: data.productId,
+      platformId: data.platformId,
+      startDate,
+      endDate
+    })
+  }, [])
   
   const handleSelectionStart = useCallback((productId: string, platformId: string, dayIndex: number, e: React.MouseEvent) => {
     if ((e.target as HTMLElement).closest('[data-sale-block]') || (e.target as HTMLElement).closest('[data-launch-marker]') || (e.target as HTMLElement).closest('[data-launch-sale-block]')) {
