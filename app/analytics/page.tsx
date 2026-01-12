@@ -49,15 +49,15 @@ export default function AnalyticsPage() {
   
   // State
   const [isLoading, setIsLoading] = useState(true)
-  const [performanceData, setPerformanceData] = useState&lt;PerformanceData[]&gt;([])
-  const [summaryStats, setSummaryStats] = useState&lt;SummaryStats | null&gt;(null)
-  const [dateRange, setDateRange] = useState&lt;DateRange&gt;({ start: null, end: null })
-  const [selectedProduct, setSelectedProduct] = useState&lt;string&gt;('all')
-  const [selectedRegion, setSelectedRegion] = useState&lt;string&gt;('all')
-  const [selectedPlatform, setSelectedPlatform] = useState&lt;string&gt;('all')
-  const [products, setProducts] = useState&lt;string[]&gt;([])
-  const [regions, setRegions] = useState&lt;string[]&gt;([])
-  const [platforms, setPlatforms] = useState&lt;string[]&gt;([])
+  const [performanceData, setPerformanceData] = useState<PerformanceData[]>([])
+  const [summaryStats, setSummaryStats] = useState<SummaryStats | null>(null)
+  const [dateRange, setDateRange] = useState<DateRange>({ start: null, end: null })
+  const [selectedProduct, setSelectedProduct] = useState<string>('all')
+  const [selectedRegion, setSelectedRegion] = useState<string>('all')
+  const [selectedPlatform, setSelectedPlatform] = useState<string>('all')
+  const [products, setProducts] = useState<string[]>([])
+  const [regions, setRegions] = useState<string[]>([])
+  const [platforms, setPlatforms] = useState<string[]>([])
   const [showImportModal, setShowImportModal] = useState(false)
   const [dataAvailable, setDataAvailable] = useState(false)
 
@@ -95,7 +95,7 @@ export default function AnalyticsPage() {
       setDataAvailable((data?.length || 0) > 0)
 
       // Calculate summary stats
-      if (data &amp;&amp; data.length > 0) {
+      if (data && data.length > 0) {
         const totalRevenue = data.reduce((sum, row) => sum + (row.net_steam_sales_usd || 0), 0)
         const totalUnits = data.reduce((sum, row) => sum + (row.net_units_sold || 0), 0)
         const totalGrossUnits = data.reduce((sum, row) => sum + (row.gross_units_sold || 0), 0)
@@ -114,7 +114,7 @@ export default function AnalyticsPage() {
           totalDays
         })
 
-        // Extract unique values for filters - use Array.from() for TypeScript compatibility
+        // Extract unique values for filters
         const uniqueProducts = Array.from(new Set(data.map(row => row.product_name).filter(Boolean)))
         const uniqueRegions = Array.from(new Set(data.map(row => row.region).filter(Boolean))) as string[]
         const uniquePlatforms = Array.from(new Set(data.map(row => row.platform).filter(Boolean)))
@@ -183,293 +183,293 @@ export default function AnalyticsPage() {
   }
 
   return (
-    &lt;div className={styles.pageContainer}&gt;
-      &lt;Navbar /&gt;
-      &lt;div className={styles.mainContent}&gt;
-        &lt;Sidebar /&gt;
-        &lt;main className={styles.content}&gt;
-          &lt;div className={styles.header}&gt;
-            &lt;div className={styles.headerLeft}&gt;
-              &lt;h1 className={styles.title}&gt;Steam Analytics&lt;/h1&gt;
-              &lt;p className={styles.subtitle}&gt;Performance metrics and sales analysis&lt;/p&gt;
-            &lt;/div&gt;
-            &lt;div className={styles.headerRight}&gt;
-              &lt;button
+    <div className={styles.pageContainer}>
+      <Navbar />
+      <div className={styles.mainContent}>
+        <Sidebar />
+        <main className={styles.content}>
+          <div className={styles.header}>
+            <div className={styles.headerLeft}>
+              <h1 className={styles.title}>Steam Analytics</h1>
+              <p className={styles.subtitle}>Performance metrics and sales analysis</p>
+            </div>
+            <div className={styles.headerRight}>
+              <button
                 className={styles.importButton}
-                onClick={() =&gt; setShowImportModal(true)}
-              &gt;
-                &lt;svg className={styles.buttonIcon} fill="none" stroke="currentColor" viewBox="0 0 24 24"&gt;
-                  &lt;path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /&gt;
-                &lt;/svg&gt;
+                onClick={() => setShowImportModal(true)}
+              >
+                <svg className={styles.buttonIcon} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                </svg>
                 Import CSV
-              &lt;/button&gt;
-              &lt;button
+              </button>
+              <button
                 className={styles.refreshButton}
                 onClick={fetchPerformanceData}
                 disabled={isLoading}
-              &gt;
-                &lt;svg className={`${styles.buttonIcon} ${isLoading ? styles.spinning : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"&gt;
-                  &lt;path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /&gt;
-                &lt;/svg&gt;
+              >
+                <svg className={`${styles.buttonIcon} ${isLoading ? styles.spinning : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
                 Refresh
-              &lt;/button&gt;
-            &lt;/div&gt;
-          &lt;/div&gt;
+              </button>
+            </div>
+          </div>
 
           {/* Filters */}
-          &lt;div className={styles.filtersBar}&gt;
-            &lt;div className={styles.filterGroup}&gt;
-              &lt;label className={styles.filterLabel}&gt;Date Range&lt;/label&gt;
-              &lt;div className={styles.datePresets}&gt;
-                &lt;button
-                  className={`${styles.presetButton} ${!dateRange.start &amp;&amp; !dateRange.end ? styles.presetActive : ''}`}
-                  onClick={() =&gt; setPresetDateRange('all')}
-                &gt;
+          <div className={styles.filtersBar}>
+            <div className={styles.filterGroup}>
+              <label className={styles.filterLabel}>Date Range</label>
+              <div className={styles.datePresets}>
+                <button
+                  className={`${styles.presetButton} ${!dateRange.start && !dateRange.end ? styles.presetActive : ''}`}
+                  onClick={() => setPresetDateRange('all')}
+                >
                   All Time
-                &lt;/button&gt;
-                &lt;button
+                </button>
+                <button
                   className={styles.presetButton}
-                  onClick={() =&gt; setPresetDateRange('7d')}
-                &gt;
+                  onClick={() => setPresetDateRange('7d')}
+                >
                   7D
-                &lt;/button&gt;
-                &lt;button
+                </button>
+                <button
                   className={styles.presetButton}
-                  onClick={() =&gt; setPresetDateRange('30d')}
-                &gt;
+                  onClick={() => setPresetDateRange('30d')}
+                >
                   30D
-                &lt;/button&gt;
-                &lt;button
+                </button>
+                <button
                   className={styles.presetButton}
-                  onClick={() =&gt; setPresetDateRange('90d')}
-                &gt;
+                  onClick={() => setPresetDateRange('90d')}
+                >
                   90D
-                &lt;/button&gt;
-                &lt;button
+                </button>
+                <button
                   className={styles.presetButton}
-                  onClick={() =&gt; setPresetDateRange('ytd')}
-                &gt;
+                  onClick={() => setPresetDateRange('ytd')}
+                >
                   YTD
-                &lt;/button&gt;
-              &lt;/div&gt;
-            &lt;/div&gt;
+                </button>
+              </div>
+            </div>
 
-            &lt;div className={styles.filterGroup}&gt;
-              &lt;label className={styles.filterLabel}&gt;Product&lt;/label&gt;
-              &lt;select
+            <div className={styles.filterGroup}>
+              <label className={styles.filterLabel}>Product</label>
+              <select
                 className={styles.filterSelect}
                 value={selectedProduct}
-                onChange={(e) =&gt; setSelectedProduct(e.target.value)}
-              &gt;
-                &lt;option value="all"&gt;All Products&lt;/option&gt;
-                {products.map(product =&gt; (
-                  &lt;option key={product} value={product}&gt;{product}&lt;/option&gt;
+                onChange={(e) => setSelectedProduct(e.target.value)}
+              >
+                <option value="all">All Products</option>
+                {products.map(product => (
+                  <option key={product} value={product}>{product}</option>
                 ))}
-              &lt;/select&gt;
-            &lt;/div&gt;
+              </select>
+            </div>
 
-            &lt;div className={styles.filterGroup}&gt;
-              &lt;label className={styles.filterLabel}&gt;Region&lt;/label&gt;
-              &lt;select
+            <div className={styles.filterGroup}>
+              <label className={styles.filterLabel}>Region</label>
+              <select
                 className={styles.filterSelect}
                 value={selectedRegion}
-                onChange={(e) =&gt; setSelectedRegion(e.target.value)}
-              &gt;
-                &lt;option value="all"&gt;All Regions&lt;/option&gt;
-                {regions.map(region =&gt; (
-                  &lt;option key={region} value={region}&gt;{region}&lt;/option&gt;
+                onChange={(e) => setSelectedRegion(e.target.value)}
+              >
+                <option value="all">All Regions</option>
+                {regions.map(region => (
+                  <option key={region} value={region}>{region}</option>
                 ))}
-              &lt;/select&gt;
-            &lt;/div&gt;
+              </select>
+            </div>
 
-            &lt;div className={styles.filterGroup}&gt;
-              &lt;label className={styles.filterLabel}&gt;Platform&lt;/label&gt;
-              &lt;select
+            <div className={styles.filterGroup}>
+              <label className={styles.filterLabel}>Platform</label>
+              <select
                 className={styles.filterSelect}
                 value={selectedPlatform}
-                onChange={(e) =&gt; setSelectedPlatform(e.target.value)}
-              &gt;
-                &lt;option value="all"&gt;All Platforms&lt;/option&gt;
-                {platforms.map(platform =&gt; (
-                  &lt;option key={platform} value={platform}&gt;{platform}&lt;/option&gt;
+                onChange={(e) => setSelectedPlatform(e.target.value)}
+              >
+                <option value="all">All Platforms</option>
+                {platforms.map(platform => (
+                  <option key={platform} value={platform}>{platform}</option>
                 ))}
-              &lt;/select&gt;
-            &lt;/div&gt;
-          &lt;/div&gt;
+              </select>
+            </div>
+          </div>
 
           {/* Summary Stats Cards */}
           {isLoading ? (
-            &lt;div className={styles.statsGrid}&gt;
-              {[1, 2, 3, 4, 5].map(i =&gt; (
-                &lt;div key={i} className={styles.statCardSkeleton}&gt;
-                  &lt;div className={styles.skeletonTitle} /&gt;
-                  &lt;div className={styles.skeletonValue} /&gt;
-                &lt;/div&gt;
+            <div className={styles.statsGrid}>
+              {[1, 2, 3, 4, 5].map(i => (
+                <div key={i} className={styles.statCardSkeleton}>
+                  <div className={styles.skeletonTitle} />
+                  <div className={styles.skeletonValue} />
+                </div>
               ))}
-            &lt;/div&gt;
+            </div>
           ) : !dataAvailable ? (
-            &lt;div className={styles.emptyState}&gt;
-              &lt;div className={styles.emptyIcon}&gt;
-                &lt;svg fill="none" stroke="currentColor" viewBox="0 0 24 24"&gt;
-                  &lt;path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /&gt;
-                &lt;/svg&gt;
-              &lt;/div&gt;
-              &lt;h3 className={styles.emptyTitle}&gt;No Performance Data Yet&lt;/h3&gt;
-              &lt;p className={styles.emptyDescription}&gt;
+            <div className={styles.emptyState}>
+              <div className={styles.emptyIcon}>
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
+              </div>
+              <h3 className={styles.emptyTitle}>No Performance Data Yet</h3>
+              <p className={styles.emptyDescription}>
                 Import your Steam sales data to see analytics and performance metrics.
-              &lt;/p&gt;
-              &lt;button
+              </p>
+              <button
                 className={styles.emptyButton}
-                onClick={() =&gt; setShowImportModal(true)}
-              &gt;
-                &lt;svg className={styles.buttonIcon} fill="none" stroke="currentColor" viewBox="0 0 24 24"&gt;
-                  &lt;path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /&gt;
-                &lt;/svg&gt;
+                onClick={() => setShowImportModal(true)}
+              >
+                <svg className={styles.buttonIcon} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                </svg>
                 Import CSV Data
-              &lt;/button&gt;
-            &lt;/div&gt;
+              </button>
+            </div>
           ) : (
-            &lt;&gt;
-              &lt;div className={styles.statsGrid}&gt;
-                &lt;div className={styles.statCard}&gt;
-                  &lt;div className={styles.statHeader}&gt;
-                    &lt;span className={styles.statTitle}&gt;Total Revenue&lt;/span&gt;
-                    &lt;div className={styles.statIcon} style={{ backgroundColor: '#dcfce7' }}&gt;
-                      &lt;svg fill="none" stroke="#16a34a" viewBox="0 0 24 24"&gt;
-                        &lt;path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /&gt;
-                      &lt;/svg&gt;
-                    &lt;/div&gt;
-                  &lt;/div&gt;
-                  &lt;div className={styles.statValue}&gt;{formatCurrency(summaryStats?.totalRevenue || 0)}&lt;/div&gt;
-                  &lt;div className={styles.statSubtext}&gt;Net Steam sales&lt;/div&gt;
-                &lt;/div&gt;
+            <>
+              <div className={styles.statsGrid}>
+                <div className={styles.statCard}>
+                  <div className={styles.statHeader}>
+                    <span className={styles.statTitle}>Total Revenue</span>
+                    <div className={styles.statIcon} style={{ backgroundColor: '#dcfce7' }}>
+                      <svg fill="none" stroke="#16a34a" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </div>
+                  </div>
+                  <div className={styles.statValue}>{formatCurrency(summaryStats?.totalRevenue || 0)}</div>
+                  <div className={styles.statSubtext}>Net Steam sales</div>
+                </div>
 
-                &lt;div className={styles.statCard}&gt;
-                  &lt;div className={styles.statHeader}&gt;
-                    &lt;span className={styles.statTitle}&gt;Total Units&lt;/span&gt;
-                    &lt;div className={styles.statIcon} style={{ backgroundColor: '#dbeafe' }}&gt;
-                      &lt;svg fill="none" stroke="#2563eb" viewBox="0 0 24 24"&gt;
-                        &lt;path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /&gt;
-                      &lt;/svg&gt;
-                    &lt;/div&gt;
-                  &lt;/div&gt;
-                  &lt;div className={styles.statValue}&gt;{formatNumber(summaryStats?.totalUnits || 0)}&lt;/div&gt;
-                  &lt;div className={styles.statSubtext}&gt;Net units sold&lt;/div&gt;
-                &lt;/div&gt;
+                <div className={styles.statCard}>
+                  <div className={styles.statHeader}>
+                    <span className={styles.statTitle}>Total Units</span>
+                    <div className={styles.statIcon} style={{ backgroundColor: '#dbeafe' }}>
+                      <svg fill="none" stroke="#2563eb" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                      </svg>
+                    </div>
+                  </div>
+                  <div className={styles.statValue}>{formatNumber(summaryStats?.totalUnits || 0)}</div>
+                  <div className={styles.statSubtext}>Net units sold</div>
+                </div>
 
-                &lt;div className={styles.statCard}&gt;
-                  &lt;div className={styles.statHeader}&gt;
-                    &lt;span className={styles.statTitle}&gt;Avg Daily Revenue&lt;/span&gt;
-                    &lt;div className={styles.statIcon} style={{ backgroundColor: '#fef3c7' }}&gt;
-                      &lt;svg fill="none" stroke="#d97706" viewBox="0 0 24 24"&gt;
-                        &lt;path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /&gt;
-                      &lt;/svg&gt;
-                    &lt;/div&gt;
-                  &lt;/div&gt;
-                  &lt;div className={styles.statValue}&gt;{formatCurrency(summaryStats?.avgDailyRevenue || 0)}&lt;/div&gt;
-                  &lt;div className={styles.statSubtext}&gt;Per day average&lt;/div&gt;
-                &lt;/div&gt;
+                <div className={styles.statCard}>
+                  <div className={styles.statHeader}>
+                    <span className={styles.statTitle}>Avg Daily Revenue</span>
+                    <div className={styles.statIcon} style={{ backgroundColor: '#fef3c7' }}>
+                      <svg fill="none" stroke="#d97706" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                      </svg>
+                    </div>
+                  </div>
+                  <div className={styles.statValue}>{formatCurrency(summaryStats?.avgDailyRevenue || 0)}</div>
+                  <div className={styles.statSubtext}>Per day average</div>
+                </div>
 
-                &lt;div className={styles.statCard}&gt;
-                  &lt;div className={styles.statHeader}&gt;
-                    &lt;span className={styles.statTitle}&gt;Avg Daily Units&lt;/span&gt;
-                    &lt;div className={styles.statIcon} style={{ backgroundColor: '#f3e8ff' }}&gt;
-                      &lt;svg fill="none" stroke="#9333ea" viewBox="0 0 24 24"&gt;
-                        &lt;path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /&gt;
-                      &lt;/svg&gt;
-                    &lt;/div&gt;
-                  &lt;/div&gt;
-                  &lt;div className={styles.statValue}&gt;{formatNumber(summaryStats?.avgDailyUnits || 0)}&lt;/div&gt;
-                  &lt;div className={styles.statSubtext}&gt;Per day average&lt;/div&gt;
-                &lt;/div&gt;
+                <div className={styles.statCard}>
+                  <div className={styles.statHeader}>
+                    <span className={styles.statTitle}>Avg Daily Units</span>
+                    <div className={styles.statIcon} style={{ backgroundColor: '#f3e8ff' }}>
+                      <svg fill="none" stroke="#9333ea" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                      </svg>
+                    </div>
+                  </div>
+                  <div className={styles.statValue}>{formatNumber(summaryStats?.avgDailyUnits || 0)}</div>
+                  <div className={styles.statSubtext}>Per day average</div>
+                </div>
 
-                &lt;div className={styles.statCard}&gt;
-                  &lt;div className={styles.statHeader}&gt;
-                    &lt;span className={styles.statTitle}&gt;Refund Rate&lt;/span&gt;
-                    &lt;div className={styles.statIcon} style={{ backgroundColor: '#fee2e2' }}&gt;
-                      &lt;svg fill="none" stroke="#dc2626" viewBox="0 0 24 24"&gt;
-                        &lt;path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 15v-1a4 4 0 00-4-4H8m0 0l3 3m-3-3l3-3m9 14V5a2 2 0 00-2-2H6a2 2 0 00-2 2v16l4-2 4 2 4-2 4 2z" /&gt;
-                      &lt;/svg&gt;
-                    &lt;/div&gt;
-                  &lt;/div&gt;
-                  &lt;div className={styles.statValue}&gt;{(summaryStats?.refundRate || 0).toFixed(1)}%&lt;/div&gt;
-                  &lt;div className={styles.statSubtext}&gt;Chargebacks/returns&lt;/div&gt;
-                &lt;/div&gt;
-              &lt;/div&gt;
+                <div className={styles.statCard}>
+                  <div className={styles.statHeader}>
+                    <span className={styles.statTitle}>Refund Rate</span>
+                    <div className={styles.statIcon} style={{ backgroundColor: '#fee2e2' }}>
+                      <svg fill="none" stroke="#dc2626" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 15v-1a4 4 0 00-4-4H8m0 0l3 3m-3-3l3-3m9 14V5a2 2 0 00-2-2H6a2 2 0 00-2 2v16l4-2 4 2 4-2 4 2z" />
+                      </svg>
+                    </div>
+                  </div>
+                  <div className={styles.statValue}>{(summaryStats?.refundRate || 0).toFixed(1)}%</div>
+                  <div className={styles.statSubtext}>Chargebacks/returns</div>
+                </div>
+              </div>
 
               {/* Charts Section - Placeholder */}
-              &lt;div className={styles.chartsSection}&gt;
-                &lt;div className={styles.chartCard}&gt;
-                  &lt;h3 className={styles.chartTitle}&gt;Revenue Over Time&lt;/h3&gt;
-                  &lt;div className={styles.chartPlaceholder}&gt;
-                    &lt;svg fill="none" stroke="currentColor" viewBox="0 0 24 24"&gt;
-                      &lt;path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" /&gt;
-                    &lt;/svg&gt;
-                    &lt;p&gt;Time series chart coming soon&lt;/p&gt;
-                  &lt;/div&gt;
-                &lt;/div&gt;
+              <div className={styles.chartsSection}>
+                <div className={styles.chartCard}>
+                  <h3 className={styles.chartTitle}>Revenue Over Time</h3>
+                  <div className={styles.chartPlaceholder}>
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
+                    </svg>
+                    <p>Time series chart coming soon</p>
+                  </div>
+                </div>
 
-                &lt;div className={styles.chartCard}&gt;
-                  &lt;h3 className={styles.chartTitle}&gt;Revenue by Region&lt;/h3&gt;
-                  &lt;div className={styles.chartPlaceholder}&gt;
-                    &lt;svg fill="none" stroke="currentColor" viewBox="0 0 24 24"&gt;
-                      &lt;path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z" /&gt;
-                      &lt;path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z" /&gt;
-                    &lt;/svg&gt;
-                    &lt;p&gt;Region breakdown coming soon&lt;/p&gt;
-                  &lt;/div&gt;
-                &lt;/div&gt;
-              &lt;/div&gt;
+                <div className={styles.chartCard}>
+                  <h3 className={styles.chartTitle}>Revenue by Region</h3>
+                  <div className={styles.chartPlaceholder}>
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z" />
+                    </svg>
+                    <p>Region breakdown coming soon</p>
+                  </div>
+                </div>
+              </div>
 
               {/* Period Comparison Section - Placeholder */}
-              &lt;div className={styles.periodSection}&gt;
-                &lt;div className={styles.sectionHeader}&gt;
-                  &lt;h3 className={styles.sectionTitle}&gt;Period Comparison&lt;/h3&gt;
-                  &lt;p className={styles.sectionSubtitle}&gt;Compare sale periods vs regular price performance&lt;/p&gt;
-                &lt;/div&gt;
-                &lt;div className={styles.periodPlaceholder}&gt;
-                  &lt;svg fill="none" stroke="currentColor" viewBox="0 0 24 24"&gt;
-                    &lt;path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /&gt;
-                  &lt;/svg&gt;
-                  &lt;p&gt;Period comparison table will auto-detect sale periods from your planning data&lt;/p&gt;
-                &lt;/div&gt;
-              &lt;/div&gt;
+              <div className={styles.periodSection}>
+                <div className={styles.sectionHeader}>
+                  <h3 className={styles.sectionTitle}>Period Comparison</h3>
+                  <p className={styles.sectionSubtitle}>Compare sale periods vs regular price performance</p>
+                </div>
+                <div className={styles.periodPlaceholder}>
+                  <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                  </svg>
+                  <p>Period comparison table will auto-detect sale periods from your planning data</p>
+                </div>
+              </div>
 
               {/* Data Info */}
-              &lt;div className={styles.dataInfo}&gt;
-                &lt;span className={styles.dataInfoText}&gt;
+              <div className={styles.dataInfo}>
+                <span className={styles.dataInfoText}>
                   Showing {formatNumber(performanceData.length)} records across {summaryStats?.totalDays || 0} days
-                &lt;/span&gt;
-              &lt;/div&gt;
-            &lt;/&gt;
+                </span>
+              </div>
+            </>
           )}
 
           {/* Import Modal */}
-          {showImportModal &amp;&amp; (
-            &lt;ImportPerformanceModal
-              onClose={() =&gt; setShowImportModal(false)}
-              onSuccess={() =&gt; {
+          {showImportModal && (
+            <ImportPerformanceModal
+              onClose={() => setShowImportModal(false)}
+              onSuccess={() => {
                 setShowImportModal(false)
                 fetchPerformanceData()
               }}
-            /&gt;
+            />
           )}
-        &lt;/main&gt;
-      &lt;/div&gt;
-    &lt;/div&gt;
+        </main>
+      </div>
+    </div>
   )
 }
 
 // Import Modal Component
-function ImportPerformanceModal({ onClose, onSuccess }: { onClose: () =&gt; void; onSuccess: () =&gt; void }) {
+function ImportPerformanceModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
   const supabase = createClientComponentClient()
-  const [file, setFile] = useState&lt;File | null&gt;(null)
+  const [file, setFile] = useState<File | null>(null)
   const [isUploading, setIsUploading] = useState(false)
-  const [error, setError] = useState&lt;string | null&gt;(null)
-  const [preview, setPreview] = useState&lt;string[][]&gt;([])
+  const [error, setError] = useState<string | null>(null)
+  const [preview, setPreview] = useState<string[][]>([])
   const [progress, setProgress] = useState({ current: 0, total: 0 })
 
-  const handleFileSelect = async (e: React.ChangeEvent&lt;HTMLInputElement&gt;) =&gt; {
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0]
     if (!selectedFile) return
 
@@ -480,14 +480,14 @@ function ImportPerformanceModal({ onClose, onSuccess }: { onClose: () =&gt; void
     try {
       const text = await selectedFile.text()
       const lines = text.split('\n').slice(0, 6) // Header + 5 rows
-      const rows = lines.map(line =&gt; line.split(',').map(cell =&gt; cell.trim().replace(/^"|"$/g, '')))
+      const rows = lines.map(line => line.split(',').map(cell => cell.trim().replace(/^"|"$/g, '')))
       setPreview(rows)
     } catch (err) {
       setError('Could not read file')
     }
   }
 
-  const handleImport = async () =&gt; {
+  const handleImport = async () => {
     if (!file) return
 
     setIsUploading(true)
@@ -495,11 +495,11 @@ function ImportPerformanceModal({ onClose, onSuccess }: { onClose: () =&gt; void
 
     try {
       const text = await file.text()
-      const lines = text.split('\n').filter(line =&gt; line.trim())
-      const headers = lines[0].split(',').map(h =&gt; h.trim().replace(/^"|"$/g, '').toLowerCase())
+      const lines = text.split('\n').filter(line => line.trim())
+      const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, '').toLowerCase())
       
       // Map CSV columns to database columns
-      const columnMap: Record&lt;string, string&gt; = {
+      const columnMap: Record<string, string> = {
         'date': 'date',
         'bundle name': 'bundle_name',
         'product name': 'product_name',
@@ -542,15 +542,15 @@ function ImportPerformanceModal({ onClose, onSuccess }: { onClose: () =&gt; void
 
       setProgress({ current: 0, total: dataRows.length })
 
-      for (let i = 0; i &lt; dataRows.length; i += batchSize) {
+      for (let i = 0; i < dataRows.length; i += batchSize) {
         const batch = dataRows.slice(i, i + batchSize)
-        const records = batch.map(line =&gt; {
-          const values = line.split(',').map(v =&gt; v.trim().replace(/^"|"$/g, ''))
-          const record: Record&lt;string, unknown&gt; = { client_id: clientId }
+        const records = batch.map(line => {
+          const values = line.split(',').map(v => v.trim().replace(/^"|"$/g, ''))
+          const record: Record<string, unknown> = { client_id: clientId }
 
-          headers.forEach((header, idx) =&gt; {
+          headers.forEach((header, idx) => {
             const dbColumn = columnMap[header]
-            if (dbColumn &amp;&amp; values[idx]) {
+            if (dbColumn && values[idx]) {
               const value = values[idx]
               // Handle numeric columns
               if (['gross_units_sold', 'chargebacks_returns', 'net_units_sold'].includes(dbColumn)) {
@@ -564,9 +564,9 @@ function ImportPerformanceModal({ onClose, onSuccess }: { onClose: () =&gt; void
           })
 
           return record
-        }).filter(r =&gt; r.date &amp;&amp; r.product_name) // Filter out invalid rows
+        }).filter(r => r.date && r.product_name) // Filter out invalid rows
 
-        if (records.length &gt; 0) {
+        if (records.length > 0) {
           const { error: insertError } = await supabase
             .from('steam_performance_data')
             .upsert(records, {
@@ -604,110 +604,110 @@ function ImportPerformanceModal({ onClose, onSuccess }: { onClose: () =&gt; void
   }
 
   return (
-    &lt;div className={styles.modalOverlay} onClick={onClose}&gt;
-      &lt;div className={styles.modal} onClick={e =&gt; e.stopPropagation()}&gt;
-        &lt;div className={styles.modalHeader}&gt;
-          &lt;h2 className={styles.modalTitle}&gt;Import Steam Performance Data&lt;/h2&gt;
-          &lt;button className={styles.modalClose} onClick={onClose}&gt;
-            &lt;svg fill="none" stroke="currentColor" viewBox="0 0 24 24"&gt;
-              &lt;path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /&gt;
-            &lt;/svg&gt;
-          &lt;/button&gt;
-        &lt;/div&gt;
+    <div className={styles.modalOverlay} onClick={onClose}>
+      <div className={styles.modal} onClick={e => e.stopPropagation()}>
+        <div className={styles.modalHeader}>
+          <h2 className={styles.modalTitle}>Import Steam Performance Data</h2>
+          <button className={styles.modalClose} onClick={onClose}>
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
 
-        &lt;div className={styles.modalContent}&gt;
-          &lt;div className={styles.uploadZone}&gt;
-            &lt;input
+        <div className={styles.modalContent}>
+          <div className={styles.uploadZone}>
+            <input
               type="file"
               accept=".csv"
               onChange={handleFileSelect}
               className={styles.fileInput}
               id="csvInput"
-            /&gt;
-            &lt;label htmlFor="csvInput" className={styles.uploadLabel}&gt;
+            />
+            <label htmlFor="csvInput" className={styles.uploadLabel}>
               {file ? (
-                &lt;&gt;
-                  &lt;svg className={styles.uploadIcon} fill="none" stroke="currentColor" viewBox="0 0 24 24"&gt;
-                    &lt;path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /&gt;
-                  &lt;/svg&gt;
-                  &lt;span className={styles.fileName}&gt;{file.name}&lt;/span&gt;
-                  &lt;span className={styles.fileSize}&gt;({(file.size / 1024 / 1024).toFixed(2)} MB)&lt;/span&gt;
-                &lt;/&gt;
+                <>
+                  <svg className={styles.uploadIcon} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span className={styles.fileName}>{file.name}</span>
+                  <span className={styles.fileSize}>({(file.size / 1024 / 1024).toFixed(2)} MB)</span>
+                </>
               ) : (
-                &lt;&gt;
-                  &lt;svg className={styles.uploadIcon} fill="none" stroke="currentColor" viewBox="0 0 24 24"&gt;
-                    &lt;path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /&gt;
-                  &lt;/svg&gt;
-                  &lt;span&gt;Click to select CSV file&lt;/span&gt;
-                  &lt;span className={styles.uploadHint}&gt;or drag and drop&lt;/span&gt;
-                &lt;/&gt;
+                <>
+                  <svg className={styles.uploadIcon} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                  </svg>
+                  <span>Click to select CSV file</span>
+                  <span className={styles.uploadHint}>or drag and drop</span>
+                </>
               )}
-            &lt;/label&gt;
-          &lt;/div&gt;
+            </label>
+          </div>
 
-          {preview.length &gt; 0 &amp;&amp; (
-            &lt;div className={styles.previewSection}&gt;
-              &lt;h4 className={styles.previewTitle}&gt;Preview&lt;/h4&gt;
-              &lt;div className={styles.previewTable}&gt;
-                &lt;table&gt;
-                  &lt;thead&gt;
-                    &lt;tr&gt;
-                      {preview[0]?.map((header: string, i: number) =&gt; (
-                        &lt;th key={i}&gt;{header}&lt;/th&gt;
+          {preview.length > 0 && (
+            <div className={styles.previewSection}>
+              <h4 className={styles.previewTitle}>Preview</h4>
+              <div className={styles.previewTable}>
+                <table>
+                  <thead>
+                    <tr>
+                      {preview[0]?.map((header: string, i: number) => (
+                        <th key={i}>{header}</th>
                       ))}
-                    &lt;/tr&gt;
-                  &lt;/thead&gt;
-                  &lt;tbody&gt;
-                    {preview.slice(1).map((row, i) =&gt; (
-                      &lt;tr key={i}&gt;
-                        {row.map((cell: string, j: number) =&gt; (
-                          &lt;td key={j}&gt;{cell}&lt;/td&gt;
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {preview.slice(1).map((row, i) => (
+                      <tr key={i}>
+                        {row.map((cell: string, j: number) => (
+                          <td key={j}>{cell}</td>
                         ))}
-                      &lt;/tr&gt;
+                      </tr>
                     ))}
-                  &lt;/tbody&gt;
-                &lt;/table&gt;
-              &lt;/div&gt;
-            &lt;/div&gt;
+                  </tbody>
+                </table>
+              </div>
+            </div>
           )}
 
-          {error &amp;&amp; (
-            &lt;div className={styles.errorMessage}&gt;
-              &lt;svg fill="none" stroke="currentColor" viewBox="0 0 24 24"&gt;
-                &lt;path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /&gt;
-              &lt;/svg&gt;
+          {error && (
+            <div className={styles.errorMessage}>
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
               {error}
-            &lt;/div&gt;
+            </div>
           )}
 
-          {isUploading &amp;&amp; progress.total &gt; 0 &amp;&amp; (
-            &lt;div className={styles.progressSection}&gt;
-              &lt;div className={styles.progressBar}&gt;
-                &lt;div
+          {isUploading && progress.total > 0 && (
+            <div className={styles.progressSection}>
+              <div className={styles.progressBar}>
+                <div
                   className={styles.progressFill}
                   style={{ width: `${(progress.current / progress.total) * 100}%` }}
-                /&gt;
-              &lt;/div&gt;
-              &lt;span className={styles.progressText}&gt;
+                />
+              </div>
+              <span className={styles.progressText}>
                 Processing {progress.current.toLocaleString()} of {progress.total.toLocaleString()} rows...
-              &lt;/span&gt;
-            &lt;/div&gt;
+              </span>
+            </div>
           )}
-        &lt;/div&gt;
+        </div>
 
-        &lt;div className={styles.modalFooter}&gt;
-          &lt;button className={styles.cancelButton} onClick={onClose} disabled={isUploading}&gt;
+        <div className={styles.modalFooter}>
+          <button className={styles.cancelButton} onClick={onClose} disabled={isUploading}>
             Cancel
-          &lt;/button&gt;
-          &lt;button
+          </button>
+          <button
             className={styles.importSubmitButton}
             onClick={handleImport}
             disabled={!file || isUploading}
-          &gt;
+          >
             {isUploading ? 'Importing...' : 'Import Data'}
-          &lt;/button&gt;
-        &lt;/div&gt;
-      &lt;/div&gt;
-    &lt;/div&gt;
+          </button>
+        </div>
+      </div>
+    </div>
   )
 }
