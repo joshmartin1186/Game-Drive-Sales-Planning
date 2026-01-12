@@ -1,6 +1,6 @@
 'use client'
 
-// Cache invalidation: 2026-01-09T23:15:00Z - Interactive Stats Cards with Real Conflict Detection
+// Cache invalidation: 2026-01-12T17:30:00Z - Direct paste without modal
 
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { createClient } from '@supabase/supabase-js'
@@ -37,6 +37,11 @@ interface SalePrefill {
   platformId: string
   startDate: string
   endDate: string
+  // Optional fields for direct paste (skip modal)
+  directCreate?: boolean
+  saleName?: string
+  discountPercentage?: number
+  saleType?: string
 }
 
 interface CalendarGenerationState {
@@ -423,10 +428,13 @@ export default function GameDriveDashboard() {
       
       setShowAddModal(false)
       setSalePrefill(null)
+      
+      return data
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to create sale'
       console.error('Error creating sale:', err)
       setError(errorMessage)
+      return null
     }
   }
 
@@ -692,7 +700,26 @@ export default function GameDriveDashboard() {
     setDuplicatingSale(sale)
   }, [])
 
-  const handleTimelineCreate = useCallback((prefill: SalePrefill) => {
+  // Handle timeline create - supports both modal and direct paste
+  const handleTimelineCreate = useCallback(async (prefill: SalePrefill) => {
+    // If directCreate flag is set, create sale immediately without modal
+    if (prefill.directCreate) {
+      const newSale: Omit<Sale, 'id' | 'created_at'> = {
+        product_id: prefill.productId,
+        platform_id: prefill.platformId,
+        start_date: prefill.startDate,
+        end_date: prefill.endDate,
+        sale_name: prefill.saleName,
+        discount_percentage: prefill.discountPercentage,
+        sale_type: (prefill.saleType || 'regular') as Sale['sale_type'],
+        status: 'planned'
+      }
+      
+      await handleSaleCreate(newSale)
+      return
+    }
+    
+    // Otherwise open the modal with prefilled data
     setSalePrefill(prefill)
     setShowAddModal(true)
   }, [])
