@@ -72,6 +72,16 @@ interface ClipboardSale {
   platformName: string
 }
 
+// Context menu state for right-click paste
+interface ContextMenuState {
+  visible: boolean
+  x: number
+  y: number
+  productId: string
+  platformId: string
+  dayIndex: number
+}
+
 const ZOOM_LEVELS = [
   { name: 'Year', monthsVisible: 12, label: 'Y' },
   { name: 'Half Year', monthsVisible: 6, label: 'H' },
@@ -134,6 +144,16 @@ export default function GanttChart(props: GanttChartProps) {
   const [selectedSaleId, setSelectedSaleId] = useState<string | null>(null)
   const [clipboardSale, setClipboardSale] = useState<ClipboardSale | null>(null)
   const [copyFeedback, setCopyFeedback] = useState<string | null>(null)
+  
+  // Context menu state for right-click paste
+  const [contextMenu, setContextMenu] = useState<ContextMenuState>({
+    visible: false,
+    x: 0,
+    y: 0,
+    productId: '',
+    platformId: '',
+    dayIndex: 0
+  })
   
   const dayWidth = useMemo(() => {
     const monthsVisible = ZOOM_LEVELS[zoomIndex].monthsVisible
@@ -571,6 +591,65 @@ export default function GanttChart(props: GanttChartProps) {
     setSelectedSaleId(prev => prev === sale.id ? null : sale.id)
   }, [])
   
+  // Handle right-click context menu on timeline
+  const handleTimelineContextMenu = useCallback((e: React.MouseEvent, productId: string, platformId: string, dayIndex: number) => {
+    // Prevent default browser context menu
+    e.preventDefault()
+    e.stopPropagation()
+    
+    // Show context menu at click position
+    setContextMenu({
+      visible: true,
+      x: e.clientX,
+      y: e.clientY,
+      productId,
+      platformId,
+      dayIndex
+    })
+  }, [])
+  
+  // Handle paste from context menu
+  const handlePasteFromContextMenu = useCallback(() => {
+    if (!clipboardSale || !onCreateSale || !contextMenu.visible) return
+    
+    const startDate = format(days[contextMenu.dayIndex], 'yyyy-MM-dd')
+    const endDate = format(addDays(days[contextMenu.dayIndex], clipboardSale.duration - 1), 'yyyy-MM-dd')
+    
+    onCreateSale({
+      productId: contextMenu.productId,
+      platformId: contextMenu.platformId,
+      startDate,
+      endDate
+    })
+    
+    setCopyFeedback(`Pasted: ${clipboardSale.saleName || 'Sale'} at ${format(days[contextMenu.dayIndex], 'MMM d')}`)
+    setTimeout(() => setCopyFeedback(null), 2000)
+    
+    // Close context menu
+    setContextMenu(prev => ({ ...prev, visible: false }))
+  }, [clipboardSale, onCreateSale, contextMenu, days])
+  
+  // Close context menu when clicking outside
+  useEffect(() => {
+    if (!contextMenu.visible) return
+    
+    const handleClickOutside = () => {
+      setContextMenu(prev => ({ ...prev, visible: false }))
+    }
+    
+    // Small delay to prevent immediate close on right-click
+    const timeoutId = setTimeout(() => {
+      document.addEventListener('click', handleClickOutside)
+      document.addEventListener('contextmenu', handleClickOutside)
+    }, 10)
+    
+    return () => {
+      clearTimeout(timeoutId)
+      document.removeEventListener('click', handleClickOutside)
+      document.removeEventListener('contextmenu', handleClickOutside)
+    }
+  }, [contextMenu.visible])
+  
   // Keyboard shortcuts for zoom and copy/paste
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -597,13 +676,14 @@ export default function GanttChart(props: GanttChartProps) {
         if (clipboardSale && onCreateSale) {
           e.preventDefault()
           // Show feedback that paste requires clicking on timeline
-          setCopyFeedback('Click on timeline to paste sale')
+          setCopyFeedback('Right-click on timeline to paste sale')
           setTimeout(() => setCopyFeedback(null), 3000)
         }
       }
       // Escape to deselect
       else if (e.key === 'Escape') {
         setSelectedSaleId(null)
+        setContextMenu(prev => ({ ...prev, visible: false }))
       }
     }
     
@@ -1472,6 +1552,35 @@ export default function GanttChart(props: GanttChartProps) {
         </div>
       )}
       
+      {/* Timeline Context Menu for Paste */}
+      {contextMenu.visible && (
+        <div 
+          className={styles.timelineContextMenu}
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+        >
+          {clipboardSale ? (
+            <>
+              <div className={styles.contextMenuHeader}>
+                📋 Clipboard: {clipboardSale.saleName || 'Sale'} ({clipboardSale.duration}d)
+              </div>
+              <button 
+                className={styles.contextMenuPaste}
+                onClick={handlePasteFromContextMenu}
+              >
+                📥 Paste Sale Here
+              </button>
+              <div className={styles.contextMenuInfo}>
+                {format(days[contextMenu.dayIndex], 'MMM d, yyyy')}
+              </div>
+            </>
+          ) : (
+            <div className={styles.contextMenuEmpty}>
+              No sale copied. Select a sale and press ⌘C to copy.
+            </div>
+          )}
+        </div>
+      )}
+      
       <div className={`${styles.legend} ${isLegendCollapsed ? styles.legendCollapsed : ''}`}>
         <button 
           className={styles.legendToggle}
@@ -1576,7 +1685,7 @@ export default function GanttChart(props: GanttChartProps) {
           </div>
         </div>
         <span className={styles.scrollGrabHint}>
-          {isGrabbing ? 'Dragging...' : 'Drag to navigate • ⌘C/V to copy/paste sales'}
+          {isGrabbing ? 'Dragging...' : 'Drag to navigate • Right-click to paste sales'}
         </span>
       </div>
       
@@ -1777,6 +1886,7 @@ export default function GanttChart(props: GanttChartProps) {
                                       style={{ left: idx * dayWidth, width: dayWidth }}
                                       onMouseDown={(e) => handleSelectionStart(product.id, platform.id, idx, e)}
                                       onMouseEnter={() => handleSelectionMove(idx)}
+                                      onContextMenu={(e) => handleTimelineContextMenu(e, product.id, platform.id, idx)}
                                     />
                                   )
                                 })}

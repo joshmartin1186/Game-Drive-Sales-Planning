@@ -167,6 +167,70 @@
   gap: 4px;
 }
 
+/* Timeline Context Menu for Paste */
+.timelineContextMenu {
+  position: fixed;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0, 0, 0, 0.05);
+  z-index: 1000;
+  min-width: 200px;
+  padding: 8px 0;
+  animation: contextMenuFadeIn 0.15s ease-out;
+}
+
+@keyframes contextMenuFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.contextMenuHeader {
+  padding: 8px 12px;
+  font-size: 0.75rem;
+  color: #64748b;
+  border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+.contextMenuPaste {
+  display: block;
+  width: 100%;
+  padding: 10px 12px;
+  border: none;
+  background: none;
+  text-align: left;
+  font-size: 0.875rem;
+  color: #1e293b;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.contextMenuPaste:hover {
+  background: #f0fdf4;
+  color: #16a34a;
+}
+
+.contextMenuInfo {
+  padding: 6px 12px;
+  font-size: 0.6875rem;
+  color: #94a3b8;
+  border-top: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+.contextMenuEmpty {
+  padding: 12px;
+  font-size: 0.8125rem;
+  color: #94a3b8;
+  text-align: center;
+}
+
 /* Zoom Controls */
 .zoomControls {
   display: flex;
