@@ -9,6 +9,7 @@ import styles from './settings.module.css';
 interface Client {
   id: string;
   name: string;
+  email?: string;
 }
 
 interface SteamApiKey {
@@ -34,8 +35,8 @@ export default function SettingsPage() {
   const [testResult, setTestResult] = useState<{valid: boolean; message: string} | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<{success: boolean; message: string} | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
-  // Form state
   const [formData, setFormData] = useState({
     client_id: '',
     api_key: '',
@@ -43,7 +44,6 @@ export default function SettingsPage() {
     app_ids: ''
   });
 
-  // Sync options
   const [syncOptions, setSyncOptions] = useState({
     start_date: '',
     end_date: '',
@@ -58,25 +58,18 @@ export default function SettingsPage() {
     setLoading(true);
     try {
       // Fetch clients
-      const clientsRes = await fetch('/api/sales');
+      const clientsRes = await fetch('/api/clients');
       if (clientsRes.ok) {
-        const salesData = await clientsRes.json();
-        // Extract unique clients from sales or fetch separately
+        const clientsData = await clientsRes.json();
+        setClients(clientsData);
       }
 
-      // Fetch clients directly from Supabase via API
-      const clientsResponse = await fetch('/api/platforms'); // We'll use a different approach
-      
-      // For now, fetch API keys which include client data
+      // Fetch API keys
       const keysRes = await fetch('/api/steam-api-keys');
       if (keysRes.ok) {
         const keysData = await keysRes.json();
         setApiKeys(keysData);
       }
-
-      // Fetch all clients
-      const allClientsRes = await fetch('/api/sales?clients_only=true');
-      
     } catch (error) {
       console.error('Error fetching data:', error);
     }
@@ -84,6 +77,7 @@ export default function SettingsPage() {
   };
 
   const handleAddKey = async () => {
+    setSaveError(null);
     try {
       const res = await fetch('/api/steam-api-keys', {
         method: 'POST',
@@ -100,9 +94,13 @@ export default function SettingsPage() {
         setShowAddModal(false);
         setFormData({ client_id: '', api_key: '', publisher_key: '', app_ids: '' });
         fetchData();
+      } else {
+        const err = await res.json();
+        setSaveError(err.error || 'Failed to save API key');
       }
     } catch (error) {
       console.error('Error adding API key:', error);
+      setSaveError('Failed to save API key');
     }
   };
 
@@ -165,12 +163,17 @@ export default function SettingsPage() {
     return key.substring(0, 4) + '••••••••' + key.substring(key.length - 4);
   };
 
+  // Get clients that don't have an API key yet
+  const availableClients = clients.filter(
+    client => !apiKeys.some(key => key.client_id === client.id)
+  );
+
   return (
     <div className={styles.settingsPage}>
       <Navbar />
       <Sidebar collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed(!sidebarCollapsed)} />
       
-      <div className={styles.container} style={{ marginLeft: sidebarCollapsed ? '60px' : '240px', transition: 'margin-left 0.3s' }}>
+      <div className={styles.container} style={{ marginLeft: '0', transition: 'margin-left 0.3s' }}>
         <Link href="/" className={styles.backLink}>
           ← Back to Planning
         </Link>
@@ -291,9 +294,9 @@ export default function SettingsPage() {
           <ol style={{ margin: 0, paddingLeft: '20px', color: '#64748b', lineHeight: '1.8' }}>
             <li>Go to <a href="https://partner.steamgames.com" target="_blank" rel="noopener noreferrer" style={{ color: '#1b2838' }}>partner.steamgames.com</a></li>
             <li>Navigate to Users &amp; Permissions → Manage Groups</li>
-            <li>Select your publisher group and go to "Web API Keys"</li>
+            <li>Select your publisher group and go to &quot;Web API Keys&quot;</li>
             <li>Generate a new key with appropriate permissions</li>
-            <li>For financial data, ensure you have "View financial info" permission</li>
+            <li>For financial data, ensure you have &quot;View financial info&quot; permission</li>
           </ol>
           <p style={{ marginTop: '16px', padding: '12px', background: '#fef3c7', borderRadius: '6px', fontSize: '14px' }}>
             <strong>Note:</strong> Full financial data sync requires Publisher-level API access. For complete sales data, you can also import CSV exports from the Steam Partner portal via the Analytics page.
@@ -315,24 +318,36 @@ export default function SettingsPage() {
               </button>
             </div>
             
+            {saveError && (
+              <div style={{ padding: '12px', background: '#fef2f2', color: '#dc2626', borderRadius: '6px', marginBottom: '16px', fontSize: '14px' }}>
+                {saveError}
+              </div>
+            )}
+
             <div className={styles.formGroup}>
               <label>Client *</label>
-              <input
-                type="text"
-                placeholder="Enter client ID or select from list"
+              <select
                 value={formData.client_id}
                 onChange={e => setFormData({...formData, client_id: e.target.value})}
-              />
-              <small>Enter the client UUID from the database</small>
+              >
+                <option value="">Select a client...</option>
+                {clients.map(client => (
+                  <option key={client.id} value={client.id}>
+                    {client.name}
+                  </option>
+                ))}
+              </select>
+              <small>{availableClients.length} clients without API keys</small>
             </div>
 
             <div className={styles.formGroup}>
               <label>Steam Web API Key *</label>
               <input
-                type="password"
+                type="text"
                 placeholder="Enter your Steam Web API key"
                 value={formData.api_key}
                 onChange={e => setFormData({...formData, api_key: e.target.value})}
+                style={{ fontFamily: 'monospace' }}
               />
               <small>Required for basic Steam API access</small>
             </div>
@@ -340,10 +355,11 @@ export default function SettingsPage() {
             <div className={styles.formGroup}>
               <label>Publisher API Key (Optional)</label>
               <input
-                type="password"
+                type="text"
                 placeholder="Enter your Publisher API key"
                 value={formData.publisher_key}
                 onChange={e => setFormData({...formData, publisher_key: e.target.value})}
+                style={{ fontFamily: 'monospace' }}
               />
               <small>Required for financial data access</small>
             </div>
