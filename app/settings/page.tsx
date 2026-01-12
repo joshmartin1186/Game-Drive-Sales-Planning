@@ -33,7 +33,7 @@ export default function SettingsPage() {
   const [testingKey, setTestingKey] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<{valid: boolean; message: string} | null>(null);
   const [syncing, setSyncing] = useState(false);
-  const [syncResult, setSyncResult] = useState<{success: boolean; message: string} | null>(null);
+  const [syncResult, setSyncResult] = useState<{success: boolean; message: string; rowsImported?: number; datesProcessed?: number} | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
 
   const [formData, setFormData] = useState({
@@ -44,8 +44,8 @@ export default function SettingsPage() {
   });
 
   const [syncOptions, setSyncOptions] = useState({
-    start_date: '',
-    end_date: '',
+    start_date: new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    end_date: new Date().toISOString().split('T')[0],
     app_id: ''
   });
 
@@ -116,7 +116,7 @@ export default function SettingsPage() {
     setTimeout(() => {
       setTestingKey(null);
       setTestResult(null);
-    }, 5000);
+    }, 8000);
   };
 
   const handleSync = async () => {
@@ -135,7 +135,12 @@ export default function SettingsPage() {
         })
       });
       const data = await res.json();
-      setSyncResult({ success: data.success, message: data.message });
+      setSyncResult({ 
+        success: data.success, 
+        message: data.message,
+        rowsImported: data.rowsImported,
+        datesProcessed: data.datesProcessed
+      });
       if (data.success) {
         fetchData();
       }
@@ -229,15 +234,16 @@ export default function SettingsPage() {
                       <div className={styles.keyDetails}>
                         <span className={styles.keyMasked}>{maskApiKey(key.api_key)}</span>
                         <div className={styles.keyMeta}>
-                          <span>{key.publisher_key ? '✓ Publisher Key' : '○ No Publisher Key'}</span>
+                          <span>{key.publisher_key ? '✓ Financial API Key' : '○ No Financial Key'}</span>
                           <span>{key.app_ids?.length || 0} App IDs</span>
                           {key.last_sync_date && <span>Last sync: {key.last_sync_date}</span>}
                         </div>
                       </div>
                       {testingKey === key.client_id && testResult && (
-                        <span className={`${styles.statusBadge} ${testResult.valid ? styles.valid : styles.invalid}`}>
-                          {testResult.valid ? '✓ Valid' : '✗ Invalid'}
-                        </span>
+                        <div className={`${styles.statusBadge} ${testResult.valid ? styles.valid : styles.invalid}`}>
+                          <strong>{testResult.valid ? '✓ Connected' : '✗ Failed'}</strong>
+                          <span style={{ fontSize: '11px', display: 'block', marginTop: '2px' }}>{testResult.message}</span>
+                        </div>
                       )}
                     </div>
                     <div className={styles.keyActions}>
@@ -289,16 +295,16 @@ export default function SettingsPage() {
 
           {/* Info Section */}
           <div className={styles.section}>
-            <h3 style={{ margin: '0 0 12px 0', fontSize: '16px' }}>How to Get Your Steam API Keys</h3>
+            <h3 style={{ margin: '0 0 12px 0', fontSize: '16px' }}>How to Get Your Steam Financial API Key</h3>
             <ol style={{ margin: 0, paddingLeft: '20px', color: '#64748b', lineHeight: '1.8' }}>
-              <li>Go to <a href="https://partner.steamgames.com" target="_blank" rel="noopener noreferrer" style={{ color: '#1b2838' }}>partner.steamgames.com</a></li>
-              <li>Navigate to Users &amp; Permissions → Manage Groups</li>
-              <li>Select your publisher group and go to &quot;Web API Keys&quot;</li>
-              <li>Generate a new key with appropriate permissions</li>
-              <li>For financial data, ensure you have &quot;View financial info&quot; permission</li>
+              <li>Go to <a href="https://partner.steamgames.com/pub/groups/" target="_blank" rel="noopener noreferrer" style={{ color: '#1b2838' }}>partner.steamgames.com/pub/groups/</a></li>
+              <li>Click <strong>&quot;Create Financial API Group&quot;</strong> (or select existing one)</li>
+              <li>The <strong>Financial Web API Key</strong> will be displayed on the group page</li>
+              <li>Copy this key and paste it in the &quot;Financial Web API Key&quot; field above</li>
+              <li>Optional: Add whitelisted IPs for extra security</li>
             </ol>
-            <p style={{ marginTop: '16px', padding: '12px', background: '#fef3c7', borderRadius: '6px', fontSize: '14px' }}>
-              <strong>Note:</strong> Full financial data sync requires Publisher-level API access. For complete sales data, you can also import CSV exports from the Steam Partner portal via the Analytics page.
+            <p style={{ marginTop: '16px', padding: '12px', background: '#dbeafe', borderRadius: '6px', fontSize: '14px' }}>
+              <strong>💡 New in June 2025:</strong> Steam now offers the <a href="https://steamcommunity.com/groups/steamworks/announcements/detail/532096678169150062" target="_blank" rel="noopener noreferrer" style={{ color: '#1b2838' }}>IPartnerFinancialsService API</a> for programmatic access to sales data including revenue, units, and regional breakdown.
             </p>
           </div>
         </main>
@@ -349,19 +355,19 @@ export default function SettingsPage() {
                 onChange={e => setFormData({...formData, api_key: e.target.value})}
                 style={{ fontFamily: 'monospace' }}
               />
-              <small>Required for basic Steam API access</small>
+              <small>Basic API key from steamcommunity.com/dev/apikey</small>
             </div>
 
             <div className={styles.formGroup}>
-              <label>Publisher API Key (Optional)</label>
+              <label>Financial Web API Key (Required for Sales Data)</label>
               <input
                 type="text"
-                placeholder="Enter your Publisher API key"
+                placeholder="Enter your Financial Web API key"
                 value={formData.publisher_key}
                 onChange={e => setFormData({...formData, publisher_key: e.target.value})}
                 style={{ fontFamily: 'monospace' }}
               />
-              <small>Required for financial data access</small>
+              <small>From Steamworks → Manage Groups → Financial API Group</small>
             </div>
 
             <div className={styles.formGroup}>
@@ -406,7 +412,7 @@ export default function SettingsPage() {
             </div>
 
             <p style={{ color: '#64748b', marginBottom: '16px' }}>
-              Sync financial data for <strong>{selectedKey.clients?.name}</strong>
+              Sync financial data for <strong>{selectedKey.clients?.name}</strong> using the IPartnerFinancialsService API.
             </p>
 
             <div className={styles.syncOptions}>
@@ -444,6 +450,20 @@ export default function SettingsPage() {
               <div className={`${styles.syncResult} ${syncResult.success ? styles.success : styles.error}`}>
                 <strong>{syncResult.success ? '✓ Success' : '✗ Error'}</strong>
                 <p style={{ margin: '8px 0 0 0', fontSize: '14px' }}>{syncResult.message}</p>
+                {syncResult.rowsImported !== undefined && (
+                  <p style={{ margin: '4px 0 0 0', fontSize: '13px', opacity: 0.8 }}>
+                    {syncResult.rowsImported} rows imported from {syncResult.datesProcessed} date(s)
+                  </p>
+                )}
+              </div>
+            )}
+
+            {!selectedKey.publisher_key && (
+              <div style={{ padding: '12px', background: '#fef3c7', borderRadius: '6px', fontSize: '14px', marginTop: '12px' }}>
+                <strong>⚠️ No Financial API Key:</strong> Add a Financial Web API Key to sync sales data. 
+                <a href="https://partner.steamgames.com/pub/groups/" target="_blank" rel="noopener noreferrer" style={{ marginLeft: '4px', color: '#1b2838' }}>
+                  Get one here →
+                </a>
               </div>
             )}
 
