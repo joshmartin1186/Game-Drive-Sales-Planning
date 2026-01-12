@@ -4,34 +4,14 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
 interface SidebarProps {
-  collapsed?: boolean;
-  onToggle?: () => void;
+  collapsed?: boolean
 }
 
-export function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
+export function Sidebar({ collapsed = false }: SidebarProps) {
   const pathname = usePathname()
 
+  // Only show settings/management items - Planning/Analytics handled by center toggle
   const navItems = [
-    {
-      name: 'Sales Timeline',
-      href: '/',
-      icon: (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-        </svg>
-      ),
-      description: 'Interactive Gantt chart'
-    },
-    {
-      name: 'Analytics',
-      href: '/analytics',
-      icon: (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 8v8m-4-5v5m-4-2v2m-2 4h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-        </svg>
-      ),
-      description: 'Performance metrics'
-    },
     {
       name: 'Client Management',
       href: '/clients',
@@ -75,62 +55,108 @@ export function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
     }
   ]
 
-  return (
-    <div className="hidden lg:flex lg:flex-shrink-0">
-      <div className="flex flex-col w-64">
-        <div className="flex flex-col flex-grow pt-5 pb-4 bg-white border-r border-gray-200">
-          <div className="flex flex-col flex-grow">
-            <nav className="flex-1 px-4 space-y-1 bg-white">
-              {navItems.map((item) => {
-                const isActive = pathname === item.href
-                return (
-                  <Link
-                    key={item.name}
-                    href={item.href}
-                    className={`group flex items-center px-2 py-2 text-sm font-medium rounded-md transition-colors ${
-                      isActive
-                        ? 'bg-blue-50 border-r-2 border-blue-500 text-blue-700'
-                        : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                    }`}
-                  >
-                    <div className={`mr-3 ${isActive ? 'text-blue-500' : 'text-gray-400 group-hover:text-gray-500'}`}>
-                      {item.icon}
-                    </div>
-                    <div>
-                      <div className="text-sm font-medium">{item.name}</div>
-                      <div className={`text-xs ${isActive ? 'text-blue-500' : 'text-gray-500'}`}>
-                        {item.description}
-                      </div>
-                    </div>
-                  </Link>
-                )
-              })}
-            </nav>
-          </div>
+  const platforms = [
+    { name: 'Steam', color: '#1b2838', cooldown: '30d' },
+    { name: 'PlayStation', color: '#0070d1', cooldown: '42d' },
+    { name: 'Xbox', color: '#107c10', cooldown: '28d' },
+    { name: 'Nintendo', color: '#e60012', cooldown: '56d' },
+    { name: 'Epic', color: '#000000', cooldown: '14d' }
+  ]
 
-          {/* Bottom section */}
-          <div className="flex-shrink-0 px-4 py-4 border-t border-gray-200">
-            <div className="text-xs text-gray-500 mb-2">Active Platforms</div>
-            <div className="space-y-1">
-              {[
-                { name: 'Steam', color: '#1b2838', cooldown: '30d' },
-                { name: 'PlayStation', color: '#0070d1', cooldown: '42d' },
-                { name: 'Xbox', color: '#107c10', cooldown: '28d' },
-                { name: 'Nintendo', color: '#e60012', cooldown: '56d' },
-                { name: 'Epic', color: '#000000', cooldown: '14d' }
-              ].map((platform) => (
-                <div key={platform.name} className="flex items-center justify-between text-xs">
-                  <div className="flex items-center">
-                    <div 
-                      className="w-3 h-3 rounded-full mr-2"
-                      style={{ backgroundColor: platform.color }}
-                    />
-                    <span className="text-gray-600">{platform.name}</span>
+  if (collapsed) {
+    return (
+      <div className="flex flex-col w-16 bg-white border-r border-gray-200">
+        <div className="flex flex-col flex-grow pt-5 pb-4">
+          <nav className="flex-1 px-2 space-y-1">
+            {navItems.map((item) => {
+              const isActive = pathname === item.href
+              return (
+                <Link
+                  key={item.name}
+                  href={item.href}
+                  className={`group flex items-center justify-center p-3 rounded-md transition-colors ${
+                    isActive
+                      ? 'bg-blue-50 text-blue-700'
+                      : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                  }`}
+                  title={item.name}
+                >
+                  <div className={isActive ? 'text-blue-500' : 'text-gray-400 group-hover:text-gray-500'}>
+                    {item.icon}
                   </div>
-                  <span className="text-gray-500">{platform.cooldown}</span>
+                </Link>
+              )
+            })}
+          </nav>
+
+          {/* Collapsed platform indicators */}
+          <div className="flex-shrink-0 px-2 py-4 border-t border-gray-200">
+            <div className="space-y-2">
+              {platforms.map((platform) => (
+                <div 
+                  key={platform.name} 
+                  className="flex justify-center"
+                  title={`${platform.name}: ${platform.cooldown} cooldown`}
+                >
+                  <div 
+                    className="w-3 h-3 rounded-full"
+                    style={{ backgroundColor: platform.color }}
+                  />
                 </div>
               ))}
             </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex flex-col w-64 bg-white border-r border-gray-200">
+      <div className="flex flex-col flex-grow pt-5 pb-4">
+        <nav className="flex-1 px-4 space-y-1">
+          {navItems.map((item) => {
+            const isActive = pathname === item.href
+            return (
+              <Link
+                key={item.name}
+                href={item.href}
+                className={`group flex items-center px-2 py-2 text-sm font-medium rounded-md transition-colors ${
+                  isActive
+                    ? 'bg-blue-50 border-r-2 border-blue-500 text-blue-700'
+                    : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                }`}
+              >
+                <div className={`mr-3 ${isActive ? 'text-blue-500' : 'text-gray-400 group-hover:text-gray-500'}`}>
+                  {item.icon}
+                </div>
+                <div>
+                  <div className="text-sm font-medium">{item.name}</div>
+                  <div className={`text-xs ${isActive ? 'text-blue-500' : 'text-gray-500'}`}>
+                    {item.description}
+                  </div>
+                </div>
+              </Link>
+            )
+          })}
+        </nav>
+
+        {/* Bottom section - Platform overview */}
+        <div className="flex-shrink-0 px-4 py-4 border-t border-gray-200">
+          <div className="text-xs text-gray-500 mb-2 font-medium">Platform Cooldowns</div>
+          <div className="space-y-1">
+            {platforms.map((platform) => (
+              <div key={platform.name} className="flex items-center justify-between text-xs">
+                <div className="flex items-center">
+                  <div 
+                    className="w-3 h-3 rounded-full mr-2"
+                    style={{ backgroundColor: platform.color }}
+                  />
+                  <span className="text-gray-600">{platform.name}</span>
+                </div>
+                <span className="text-gray-500">{platform.cooldown}</span>
+              </div>
+            ))}
           </div>
         </div>
       </div>
