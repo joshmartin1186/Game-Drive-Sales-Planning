@@ -1,10 +1,10 @@
 /* GameDrive Sales Planning - Clean & Bold Design */
 
-.container {
+/* Page content wrapper - works with AppLayout */
+.pageContent {
   padding: 24px;
   background-color: #f8fafc;
-  min-height: 100vh;
-  /* Removed max-width to allow full-width Gantt chart */
+  min-height: calc(100vh - 64px); /* Account for navbar height */
 }
 
 /* Constrained content wrapper for header/stats/filters */
@@ -35,27 +35,6 @@
 
 @keyframes spin {
   to { transform: rotate(360deg); }
-}
-
-/* Header */
-.header {
-  margin-bottom: 24px;
-  max-width: 1400px;
-  margin-left: auto;
-  margin-right: auto;
-}
-
-.header h1 {
-  margin: 0 0 8px 0;
-  font-size: 28px;
-  font-weight: 700;
-  color: #1e293b;
-}
-
-.header p {
-  margin: 0;
-  font-size: 16px;
-  color: #64748b;
 }
 
 /* Error Banner */
@@ -355,7 +334,7 @@
 
 /* Responsive Design */
 @media (max-width: 768px) {
-  .container {
+  .pageContent {
     padding: 16px;
   }
   
@@ -390,9 +369,5 @@
 @media (max-width: 480px) {
   .statsGrid {
     grid-template-columns: 1fr;
-  }
-  
-  .header h1 {
-    font-size: 24px;
   }
 }
