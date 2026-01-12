@@ -5,6 +5,7 @@ import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import styles from './page.module.css'
 import { Sidebar } from '../components/Sidebar'
 import { Navbar } from '../components/Navbar'
+import PageToggle from '../components/PageToggle'
 
 // Types
 interface PerformanceData {
@@ -70,7 +71,6 @@ export default function AnalyticsPage() {
         .select('*')
         .order('date', { ascending: false })
 
-      // Apply filters
       if (dateRange.start) {
         query = query.gte('date', dateRange.start.toISOString().split('T')[0])
       }
@@ -94,14 +94,12 @@ export default function AnalyticsPage() {
       setPerformanceData(data || [])
       setDataAvailable((data?.length || 0) > 0)
 
-      // Calculate summary stats
       if (data && data.length > 0) {
         const totalRevenue = data.reduce((sum, row) => sum + (row.net_steam_sales_usd || 0), 0)
         const totalUnits = data.reduce((sum, row) => sum + (row.net_units_sold || 0), 0)
         const totalGrossUnits = data.reduce((sum, row) => sum + (row.gross_units_sold || 0), 0)
         const totalChargebacks = data.reduce((sum, row) => sum + (row.chargebacks_returns || 0), 0)
         
-        // Get unique dates for day count
         const uniqueDates = new Set(data.map(row => row.date))
         const totalDays = uniqueDates.size || 1
 
@@ -114,7 +112,6 @@ export default function AnalyticsPage() {
           totalDays
         })
 
-        // Extract unique values for filters
         const uniqueProducts = Array.from(new Set(data.map(row => row.product_name).filter(Boolean)))
         const uniqueRegions = Array.from(new Set(data.map(row => row.region).filter(Boolean))) as string[]
         const uniquePlatforms = Array.from(new Set(data.map(row => row.platform).filter(Boolean)))
@@ -136,7 +133,6 @@ export default function AnalyticsPage() {
     fetchPerformanceData()
   }, [fetchPerformanceData])
 
-  // Format currency
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
@@ -146,12 +142,10 @@ export default function AnalyticsPage() {
     }).format(value)
   }
 
-  // Format number with commas
   const formatNumber = (value: number) => {
     return new Intl.NumberFormat('en-US').format(Math.round(value))
   }
 
-  // Quick date range presets
   const setPresetDateRange = (preset: string) => {
     const today = new Date()
     let start: Date | null = null
@@ -188,26 +182,21 @@ export default function AnalyticsPage() {
       <div className={styles.mainContent}>
         <Sidebar />
         <main className={styles.content}>
+          <PageToggle />
+          
           <div className={styles.header}>
             <div className={styles.headerLeft}>
               <h1 className={styles.title}>Steam Analytics</h1>
               <p className={styles.subtitle}>Performance metrics and sales analysis</p>
             </div>
             <div className={styles.headerRight}>
-              <button
-                className={styles.importButton}
-                onClick={() => setShowImportModal(true)}
-              >
+              <button className={styles.importButton} onClick={() => setShowImportModal(true)}>
                 <svg className={styles.buttonIcon} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
                 </svg>
                 Import CSV
               </button>
-              <button
-                className={styles.refreshButton}
-                onClick={fetchPerformanceData}
-                disabled={isLoading}
-              >
+              <button className={styles.refreshButton} onClick={fetchPerformanceData} disabled={isLoading}>
                 <svg className={`${styles.buttonIcon} ${isLoading ? styles.spinning : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                 </svg>
@@ -216,88 +205,43 @@ export default function AnalyticsPage() {
             </div>
           </div>
 
-          {/* Filters */}
           <div className={styles.filtersBar}>
             <div className={styles.filterGroup}>
               <label className={styles.filterLabel}>Date Range</label>
               <div className={styles.datePresets}>
-                <button
-                  className={`${styles.presetButton} ${!dateRange.start && !dateRange.end ? styles.presetActive : ''}`}
-                  onClick={() => setPresetDateRange('all')}
-                >
-                  All Time
-                </button>
-                <button
-                  className={styles.presetButton}
-                  onClick={() => setPresetDateRange('7d')}
-                >
-                  7D
-                </button>
-                <button
-                  className={styles.presetButton}
-                  onClick={() => setPresetDateRange('30d')}
-                >
-                  30D
-                </button>
-                <button
-                  className={styles.presetButton}
-                  onClick={() => setPresetDateRange('90d')}
-                >
-                  90D
-                </button>
-                <button
-                  className={styles.presetButton}
-                  onClick={() => setPresetDateRange('ytd')}
-                >
-                  YTD
-                </button>
+                <button className={`${styles.presetButton} ${!dateRange.start && !dateRange.end ? styles.presetActive : ''}`} onClick={() => setPresetDateRange('all')}>All Time</button>
+                <button className={styles.presetButton} onClick={() => setPresetDateRange('7d')}>7D</button>
+                <button className={styles.presetButton} onClick={() => setPresetDateRange('30d')}>30D</button>
+                <button className={styles.presetButton} onClick={() => setPresetDateRange('90d')}>90D</button>
+                <button className={styles.presetButton} onClick={() => setPresetDateRange('ytd')}>YTD</button>
               </div>
             </div>
 
             <div className={styles.filterGroup}>
               <label className={styles.filterLabel}>Product</label>
-              <select
-                className={styles.filterSelect}
-                value={selectedProduct}
-                onChange={(e) => setSelectedProduct(e.target.value)}
-              >
+              <select className={styles.filterSelect} value={selectedProduct} onChange={(e) => setSelectedProduct(e.target.value)}>
                 <option value="all">All Products</option>
-                {products.map(product => (
-                  <option key={product} value={product}>{product}</option>
-                ))}
+                {products.map(product => (<option key={product} value={product}>{product}</option>))}
               </select>
             </div>
 
             <div className={styles.filterGroup}>
               <label className={styles.filterLabel}>Region</label>
-              <select
-                className={styles.filterSelect}
-                value={selectedRegion}
-                onChange={(e) => setSelectedRegion(e.target.value)}
-              >
+              <select className={styles.filterSelect} value={selectedRegion} onChange={(e) => setSelectedRegion(e.target.value)}>
                 <option value="all">All Regions</option>
-                {regions.map(region => (
-                  <option key={region} value={region}>{region}</option>
-                ))}
+                {regions.map(region => (<option key={region} value={region}>{region}</option>))}
               </select>
             </div>
 
             <div className={styles.filterGroup}>
               <label className={styles.filterLabel}>Platform</label>
-              <select
-                className={styles.filterSelect}
-                value={selectedPlatform}
-                onChange={(e) => setSelectedPlatform(e.target.value)}
-              >
+              <select className={styles.filterSelect} value={selectedPlatform} onChange={(e) => setSelectedPlatform(e.target.value)}>
                 <option value="all">All Platforms</option>
-                {platforms.map(platform => (
-                  <option key={platform} value={platform}>{platform}</option>
-                ))}
+                {platforms.map(platform => (<option key={platform} value={platform}>{platform}</option>))}
               </select>
             </div>
           </div>
 
-          {/* Summary Stats Cards */}
           {isLoading ? (
             <div className={styles.statsGrid}>
               {[1, 2, 3, 4, 5].map(i => (
@@ -315,13 +259,8 @@ export default function AnalyticsPage() {
                 </svg>
               </div>
               <h3 className={styles.emptyTitle}>No Performance Data Yet</h3>
-              <p className={styles.emptyDescription}>
-                Import your Steam sales data to see analytics and performance metrics.
-              </p>
-              <button
-                className={styles.emptyButton}
-                onClick={() => setShowImportModal(true)}
-              >
+              <p className={styles.emptyDescription}>Import your Steam sales data to see analytics and performance metrics.</p>
+              <button className={styles.emptyButton} onClick={() => setShowImportModal(true)}>
                 <svg className={styles.buttonIcon} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
                 </svg>
@@ -397,7 +336,6 @@ export default function AnalyticsPage() {
                 </div>
               </div>
 
-              {/* Charts Section - Placeholder */}
               <div className={styles.chartsSection}>
                 <div className={styles.chartCard}>
                   <h3 className={styles.chartTitle}>Revenue Over Time</h3>
@@ -421,7 +359,6 @@ export default function AnalyticsPage() {
                 </div>
               </div>
 
-              {/* Period Comparison Section - Placeholder */}
               <div className={styles.periodSection}>
                 <div className={styles.sectionHeader}>
                   <h3 className={styles.sectionTitle}>Period Comparison</h3>
@@ -435,16 +372,12 @@ export default function AnalyticsPage() {
                 </div>
               </div>
 
-              {/* Data Info */}
               <div className={styles.dataInfo}>
-                <span className={styles.dataInfoText}>
-                  Showing {formatNumber(performanceData.length)} records across {summaryStats?.totalDays || 0} days
-                </span>
+                <span className={styles.dataInfoText}>Showing {formatNumber(performanceData.length)} records across {summaryStats?.totalDays || 0} days</span>
               </div>
             </>
           )}
 
-          {/* Import Modal */}
           {showImportModal && (
             <ImportPerformanceModal
               onClose={() => setShowImportModal(false)}
@@ -460,7 +393,6 @@ export default function AnalyticsPage() {
   )
 }
 
-// Import Modal Component
 function ImportPerformanceModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
   const supabase = createClientComponentClient()
   const [file, setFile] = useState<File | null>(null)
@@ -476,13 +408,13 @@ function ImportPerformanceModal({ onClose, onSuccess }: { onClose: () => void; o
     setFile(selectedFile)
     setError(null)
 
-    // Preview first few rows
     try {
       const text = await selectedFile.text()
-      const lines = text.split('\n').slice(0, 6) // Header + 5 rows
+      const lines = text.split('\n').slice(0, 6)
       const rows = lines.map(line => line.split(',').map(cell => cell.trim().replace(/^"|"$/g, '')))
       setPreview(rows)
     } catch (err) {
+      console.error(err)
       setError('Could not read file')
     }
   }
@@ -498,7 +430,6 @@ function ImportPerformanceModal({ onClose, onSuccess }: { onClose: () => void; o
       const lines = text.split('\n').filter(line => line.trim())
       const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, '').toLowerCase())
       
-      // Map CSV columns to database columns
       const columnMap: Record<string, string> = {
         'date': 'date',
         'bundle name': 'bundle_name',
@@ -521,7 +452,6 @@ function ImportPerformanceModal({ onClose, onSuccess }: { onClose: () => void; o
         'net steam sales (usd)': 'net_steam_sales_usd'
       }
 
-      // Get first client ID (or create default)
       const { data: clients } = await supabase.from('clients').select('id').limit(1)
       let clientId = clients?.[0]?.id
 
@@ -534,7 +464,6 @@ function ImportPerformanceModal({ onClose, onSuccess }: { onClose: () => void; o
         clientId = newClient?.id
       }
 
-      // Process rows in batches
       const dataRows = lines.slice(1)
       const batchSize = 500
       let imported = 0
@@ -552,7 +481,6 @@ function ImportPerformanceModal({ onClose, onSuccess }: { onClose: () => void; o
             const dbColumn = columnMap[header]
             if (dbColumn && values[idx]) {
               const value = values[idx]
-              // Handle numeric columns
               if (['gross_units_sold', 'chargebacks_returns', 'net_units_sold'].includes(dbColumn)) {
                 record[dbColumn] = parseInt(value) || 0
               } else if (dbColumn.includes('usd') || dbColumn.includes('price')) {
@@ -564,7 +492,7 @@ function ImportPerformanceModal({ onClose, onSuccess }: { onClose: () => void; o
           })
 
           return record
-        }).filter(r => r.date && r.product_name) // Filter out invalid rows
+        }).filter(r => r.date && r.product_name)
 
         if (records.length > 0) {
           const { error: insertError } = await supabase
@@ -584,7 +512,6 @@ function ImportPerformanceModal({ onClose, onSuccess }: { onClose: () => void; o
         setProgress({ current: Math.min(i + batchSize, dataRows.length), total: dataRows.length })
       }
 
-      // Log import
       await supabase.from('performance_import_history').insert({
         client_id: clientId,
         import_type: 'csv',
@@ -617,13 +544,7 @@ function ImportPerformanceModal({ onClose, onSuccess }: { onClose: () => void; o
 
         <div className={styles.modalContent}>
           <div className={styles.uploadZone}>
-            <input
-              type="file"
-              accept=".csv"
-              onChange={handleFileSelect}
-              className={styles.fileInput}
-              id="csvInput"
-            />
+            <input type="file" accept=".csv" onChange={handleFileSelect} className={styles.fileInput} id="csvInput" />
             <label htmlFor="csvInput" className={styles.uploadLabel}>
               {file ? (
                 <>
@@ -652,17 +573,13 @@ function ImportPerformanceModal({ onClose, onSuccess }: { onClose: () => void; o
                 <table>
                   <thead>
                     <tr>
-                      {preview[0]?.map((header: string, i: number) => (
-                        <th key={i}>{header}</th>
-                      ))}
+                      {preview[0]?.map((header: string, i: number) => (<th key={i}>{header}</th>))}
                     </tr>
                   </thead>
                   <tbody>
                     {preview.slice(1).map((row, i) => (
                       <tr key={i}>
-                        {row.map((cell: string, j: number) => (
-                          <td key={j}>{cell}</td>
-                        ))}
+                        {row.map((cell: string, j: number) => (<td key={j}>{cell}</td>))}
                       </tr>
                     ))}
                   </tbody>
@@ -683,27 +600,16 @@ function ImportPerformanceModal({ onClose, onSuccess }: { onClose: () => void; o
           {isUploading && progress.total > 0 && (
             <div className={styles.progressSection}>
               <div className={styles.progressBar}>
-                <div
-                  className={styles.progressFill}
-                  style={{ width: `${(progress.current / progress.total) * 100}%` }}
-                />
+                <div className={styles.progressFill} style={{ width: `${(progress.current / progress.total) * 100}%` }} />
               </div>
-              <span className={styles.progressText}>
-                Processing {progress.current.toLocaleString()} of {progress.total.toLocaleString()} rows...
-              </span>
+              <span className={styles.progressText}>Processing {progress.current.toLocaleString()} of {progress.total.toLocaleString()} rows...</span>
             </div>
           )}
         </div>
 
         <div className={styles.modalFooter}>
-          <button className={styles.cancelButton} onClick={onClose} disabled={isUploading}>
-            Cancel
-          </button>
-          <button
-            className={styles.importSubmitButton}
-            onClick={handleImport}
-            disabled={!file || isUploading}
-          >
+          <button className={styles.cancelButton} onClick={onClose} disabled={isUploading}>Cancel</button>
+          <button className={styles.importSubmitButton} onClick={handleImport} disabled={!file || isUploading}>
             {isUploading ? 'Importing...' : 'Import Data'}
           </button>
         </div>
