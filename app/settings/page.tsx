@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Navbar } from '../components/Navbar';
-import Sidebar from '../components/Sidebar';
+import { Sidebar } from '../components/Sidebar';
 import styles from './settings.module.css';
 
 interface Client {
@@ -24,7 +24,6 @@ interface SteamApiKey {
 }
 
 export default function SettingsPage() {
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [clients, setClients] = useState<Client[]>([]);
   const [apiKeys, setApiKeys] = useState<SteamApiKey[]>([]);
   const [loading, setLoading] = useState(true);
@@ -169,139 +168,140 @@ export default function SettingsPage() {
   );
 
   return (
-    <div className={styles.settingsPage}>
+    <div className={styles.pageWrapper}>
       <Navbar />
-      <Sidebar collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed(!sidebarCollapsed)} />
-      
-      <div className={styles.container} style={{ marginLeft: '0', transition: 'margin-left 0.3s' }}>
-        <Link href="/" className={styles.backLink}>
-          ← Back to Planning
-        </Link>
+      <div className={styles.layoutContainer}>
+        <Sidebar />
+        <main className={styles.mainContent}>
+          <Link href="/" className={styles.backLink}>
+            ← Back to Planning
+          </Link>
 
-        <div className={styles.header}>
-          <h1>Settings</h1>
-          <p>Manage Steam API keys and data synchronization</p>
-        </div>
-
-        {/* Steam API Keys Section */}
-        <div className={styles.section}>
-          <div className={styles.sectionHeader}>
-            <div className={styles.sectionTitle}>
-              <div className={styles.sectionIcon}>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M12 2L2 7l10 5 10-5-10-5z"/>
-                  <path d="M2 17l10 5 10-5"/>
-                  <path d="M2 12l10 5 10-5"/>
-                </svg>
-              </div>
-              <h2>Steam API Keys</h2>
-            </div>
-            <button className={styles.addButton} onClick={() => setShowAddModal(true)}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <line x1="12" y1="5" x2="12" y2="19"/>
-                <line x1="5" y1="12" x2="19" y2="12"/>
-              </svg>
-              Add API Key
-            </button>
+          <div className={styles.header}>
+            <h1>Settings</h1>
+            <p>Manage Steam API keys and data synchronization</p>
           </div>
 
-          {loading ? (
-            <div className={styles.emptyState}>
-              <div className={styles.spinner}></div>
-              <p>Loading...</p>
-            </div>
-          ) : apiKeys.length === 0 ? (
-            <div className={styles.emptyState}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                <rect x="3" y="11" width="18" height="11" rx="2"/>
-                <path d="M7 11V7a5 5 0 0110 0v4"/>
-              </svg>
-              <p>No Steam API keys configured yet</p>
+          {/* Steam API Keys Section */}
+          <div className={styles.section}>
+            <div className={styles.sectionHeader}>
+              <div className={styles.sectionTitle}>
+                <div className={styles.sectionIcon}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                    <path d="M2 17l10 5 10-5"/>
+                    <path d="M2 12l10 5 10-5"/>
+                  </svg>
+                </div>
+                <h2>Steam API Keys</h2>
+              </div>
               <button className={styles.addButton} onClick={() => setShowAddModal(true)}>
-                Add Your First API Key
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <line x1="12" y1="5" x2="12" y2="19"/>
+                  <line x1="5" y1="12" x2="19" y2="12"/>
+                </svg>
+                Add API Key
               </button>
             </div>
-          ) : (
-            <div className={styles.keysList}>
-              {apiKeys.map((key) => (
-                <div key={key.id} className={styles.keyCard}>
-                  <div className={styles.keyInfo}>
-                    <span className={styles.clientBadge}>{key.clients?.name || 'Unknown Client'}</span>
-                    <div className={styles.keyDetails}>
-                      <span className={styles.keyMasked}>{maskApiKey(key.api_key)}</span>
-                      <div className={styles.keyMeta}>
-                        <span>{key.publisher_key ? '✓ Publisher Key' : '○ No Publisher Key'}</span>
-                        <span>{key.app_ids?.length || 0} App IDs</span>
-                        {key.last_sync_date && <span>Last sync: {key.last_sync_date}</span>}
-                      </div>
-                    </div>
-                    {testingKey === key.client_id && testResult && (
-                      <span className={`${styles.statusBadge} ${testResult.valid ? styles.valid : styles.invalid}`}>
-                        {testResult.valid ? '✓ Valid' : '✗ Invalid'}
-                      </span>
-                    )}
-                  </div>
-                  <div className={styles.keyActions}>
-                    <button 
-                      className={`${styles.actionButton} ${styles.test}`}
-                      onClick={() => handleTestKey(key.client_id)}
-                      disabled={testingKey === key.client_id}
-                    >
-                      {testingKey === key.client_id ? (
-                        <span className={styles.spinner}></span>
-                      ) : (
-                        <>
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <polyline points="20 6 9 17 4 12"/>
-                          </svg>
-                          Test
-                        </>
-                      )}
-                    </button>
-                    <button 
-                      className={`${styles.actionButton} ${styles.sync}`}
-                      onClick={() => { setSelectedKey(key); setShowSyncModal(true); }}
-                    >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="M23 4v6h-6"/>
-                        <path d="M1 20v-6h6"/>
-                        <path d="M3.51 9a9 9 0 0114.85-3.36L23 10"/>
-                        <path d="M20.49 15a9 9 0 01-14.85 3.36L1 14"/>
-                      </svg>
-                      Sync
-                    </button>
-                    <button 
-                      className={`${styles.actionButton} ${styles.delete}`}
-                      onClick={() => handleDeleteKey(key.id)}
-                    >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <polyline points="3 6 5 6 21 6"/>
-                        <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/>
-                        <path d="M10 11v6"/>
-                        <path d="M14 11v6"/>
-                      </svg>
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
 
-        {/* Info Section */}
-        <div className={styles.section}>
-          <h3 style={{ margin: '0 0 12px 0', fontSize: '16px' }}>How to Get Your Steam API Keys</h3>
-          <ol style={{ margin: 0, paddingLeft: '20px', color: '#64748b', lineHeight: '1.8' }}>
-            <li>Go to <a href="https://partner.steamgames.com" target="_blank" rel="noopener noreferrer" style={{ color: '#1b2838' }}>partner.steamgames.com</a></li>
-            <li>Navigate to Users &amp; Permissions → Manage Groups</li>
-            <li>Select your publisher group and go to &quot;Web API Keys&quot;</li>
-            <li>Generate a new key with appropriate permissions</li>
-            <li>For financial data, ensure you have &quot;View financial info&quot; permission</li>
-          </ol>
-          <p style={{ marginTop: '16px', padding: '12px', background: '#fef3c7', borderRadius: '6px', fontSize: '14px' }}>
-            <strong>Note:</strong> Full financial data sync requires Publisher-level API access. For complete sales data, you can also import CSV exports from the Steam Partner portal via the Analytics page.
-          </p>
-        </div>
+            {loading ? (
+              <div className={styles.emptyState}>
+                <div className={styles.spinner}></div>
+                <p>Loading...</p>
+              </div>
+            ) : apiKeys.length === 0 ? (
+              <div className={styles.emptyState}>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <rect x="3" y="11" width="18" height="11" rx="2"/>
+                  <path d="M7 11V7a5 5 0 0110 0v4"/>
+                </svg>
+                <p>No Steam API keys configured yet</p>
+                <button className={styles.addButton} onClick={() => setShowAddModal(true)}>
+                  Add Your First API Key
+                </button>
+              </div>
+            ) : (
+              <div className={styles.keysList}>
+                {apiKeys.map((key) => (
+                  <div key={key.id} className={styles.keyCard}>
+                    <div className={styles.keyInfo}>
+                      <span className={styles.clientBadge}>{key.clients?.name || 'Unknown Client'}</span>
+                      <div className={styles.keyDetails}>
+                        <span className={styles.keyMasked}>{maskApiKey(key.api_key)}</span>
+                        <div className={styles.keyMeta}>
+                          <span>{key.publisher_key ? '✓ Publisher Key' : '○ No Publisher Key'}</span>
+                          <span>{key.app_ids?.length || 0} App IDs</span>
+                          {key.last_sync_date && <span>Last sync: {key.last_sync_date}</span>}
+                        </div>
+                      </div>
+                      {testingKey === key.client_id && testResult && (
+                        <span className={`${styles.statusBadge} ${testResult.valid ? styles.valid : styles.invalid}`}>
+                          {testResult.valid ? '✓ Valid' : '✗ Invalid'}
+                        </span>
+                      )}
+                    </div>
+                    <div className={styles.keyActions}>
+                      <button 
+                        className={`${styles.actionButton} ${styles.test}`}
+                        onClick={() => handleTestKey(key.client_id)}
+                        disabled={testingKey === key.client_id}
+                      >
+                        {testingKey === key.client_id ? (
+                          <span className={styles.spinner}></span>
+                        ) : (
+                          <>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <polyline points="20 6 9 17 4 12"/>
+                            </svg>
+                            Test
+                          </>
+                        )}
+                      </button>
+                      <button 
+                        className={`${styles.actionButton} ${styles.sync}`}
+                        onClick={() => { setSelectedKey(key); setShowSyncModal(true); }}
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M23 4v6h-6"/>
+                          <path d="M1 20v-6h6"/>
+                          <path d="M3.51 9a9 9 0 0114.85-3.36L23 10"/>
+                          <path d="M20.49 15a9 9 0 01-14.85 3.36L1 14"/>
+                        </svg>
+                        Sync
+                      </button>
+                      <button 
+                        className={`${styles.actionButton} ${styles.delete}`}
+                        onClick={() => handleDeleteKey(key.id)}
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <polyline points="3 6 5 6 21 6"/>
+                          <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/>
+                          <path d="M10 11v6"/>
+                          <path d="M14 11v6"/>
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Info Section */}
+          <div className={styles.section}>
+            <h3 style={{ margin: '0 0 12px 0', fontSize: '16px' }}>How to Get Your Steam API Keys</h3>
+            <ol style={{ margin: 0, paddingLeft: '20px', color: '#64748b', lineHeight: '1.8' }}>
+              <li>Go to <a href="https://partner.steamgames.com" target="_blank" rel="noopener noreferrer" style={{ color: '#1b2838' }}>partner.steamgames.com</a></li>
+              <li>Navigate to Users &amp; Permissions → Manage Groups</li>
+              <li>Select your publisher group and go to &quot;Web API Keys&quot;</li>
+              <li>Generate a new key with appropriate permissions</li>
+              <li>For financial data, ensure you have &quot;View financial info&quot; permission</li>
+            </ol>
+            <p style={{ marginTop: '16px', padding: '12px', background: '#fef3c7', borderRadius: '6px', fontSize: '14px' }}>
+              <strong>Note:</strong> Full financial data sync requires Publisher-level API access. For complete sales data, you can also import CSV exports from the Steam Partner portal via the Analytics page.
+            </p>
+          </div>
+        </main>
       </div>
 
       {/* Add API Key Modal */}
