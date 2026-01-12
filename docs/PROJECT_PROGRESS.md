@@ -26,162 +26,152 @@
 - **Testing:** Always request screenshot verification after UI changes - deployment success doesn't guarantee visual correctness
 - **GitHub API Encoding:** Use `push_files` NOT `create_or_update_file` for complex TypeScript files - prevents HTML entity corruption
 - **TypeScript Types:** `undefined` is NOT assignable to `null` - use `value ?? null` for conversion
+- **Supabase Numeric Fields:** Returns strings, not numbers - use `toNumber()` helper for calculations
 
 ### Key Files
-- `app/page.tsx` - Main application component
-- `app/page.module.css` - Main page styling (full-width container for Gantt)
-- `app/components/GanttChart.tsx` - Timeline component (responsive width)
-- `app/components/GanttChart.module.css` - Timeline styling
+- `app/page.tsx` - Main Gantt timeline page
+- `app/analytics/page.tsx` - Steam Analytics Dashboard
+- `app/settings/page.tsx` - API Key Management
+- `app/clients/page.tsx` - Client Management
+- `app/platforms/page.tsx` - Platform Settings
+- `app/export/page.tsx` - Excel Export
+- `app/page.module.css` - Main page styling
+- `app/analytics/page.module.css` - Analytics styling
+- `app/components/GanttChart.tsx` - Timeline component
 
 ---
 
 ## Current Status: January 12, 2025
 
-### Latest Session Summary
-**Focus:** Steam Analytics Dashboard specification based on Alisa's Excel workflow  
-**Result:** Created 10 GitHub issues (#18-27) for systematic implementation
+### 🎉 Latest Session Summary - MAJOR MILESTONE
+**Focus:** Complete Steam Analytics Dashboard + Supporting Pages  
+**Result:** Full analytics system built and deployed with calculation audit
 
 ### Completion Summary
 | Phase | Status | Completion |
 |-------|--------|------------|
-| Infrastructure & Setup | Complete | 100% |
-| Database & Schema | Complete | 100% |
-| Gantt Chart UI | Complete | 100% |
-| CRUD Operations | Complete | 100% |
-| Drag & Drop | Complete | 100% |
-| Edit/Delete Sales | Complete | 100% |
-| Filtering System | Complete | 100% |
-| UI/UX Polish | Complete | 100% |
-| Platform Sub-Rows | Complete | 100% |
-| Platform Events System | Complete | 100% |
-| Click-Drag Sale Creation | Complete | 100% |
-| Auto Sale Calendar | Complete | 100% |
-| Client Feedback Issues #1-11 | Complete | 100% |
-| Responsive Timeline | Complete | 100% |
-| Jan 6 Feedback Items | Complete | 100% |
-| Copy/Paste Sales | Complete | 100% |
-| **Steam Analytics Dashboard** | **Spec Complete** | **0% built** |
-| Excel Export | Pending | 0% |
+| Infrastructure & Setup | ✅ Complete | 100% |
+| Database & Schema | ✅ Complete | 100% |
+| Gantt Chart UI | ✅ Complete | 100% |
+| CRUD Operations | ✅ Complete | 100% |
+| Drag & Drop | ✅ Complete | 100% |
+| Edit/Delete Sales | ✅ Complete | 100% |
+| Filtering System | ✅ Complete | 100% |
+| UI/UX Polish | ✅ Complete | 100% |
+| Platform Sub-Rows | ✅ Complete | 100% |
+| Platform Events System | ✅ Complete | 100% |
+| Click-Drag Sale Creation | ✅ Complete | 100% |
+| Auto Sale Calendar | ✅ Complete | 100% |
+| Client Feedback Issues #1-11 | ✅ Complete | 100% |
+| Responsive Timeline | ✅ Complete | 100% |
+| Jan 6 Feedback Items | ✅ Complete | 100% |
+| Copy/Paste Sales | ✅ Complete | 100% |
+| **Steam Analytics Dashboard** | ✅ **Complete** | **100%** |
+| **Settings/API Management** | ✅ **Complete** | **100%** |
+| **Client Management Page** | ✅ **Complete** | **100%** |
+| **Platform Settings Page** | ✅ **Complete** | **100%** |
+| **Excel Export** | ✅ **Complete** | **100%** |
 
 ---
 
-## Steam Analytics Dashboard Specification
+## January 12, 2025 - Major Build Session
 
-### Overview
-Dashboard design based on analysis of Alisa's actual Excel workflow (shapez_2_new__analysis.xlsx - 93,872 rows).
+### ✅ Steam Analytics Dashboard (COMPLETE)
+Full implementation of analytics dashboard based on Alisa's Excel workflow:
 
-### Data Source Analysis
-- **Date Range:** 2024-05-22 to 2025-12-11
-- **Products:** 17 (shapez 2 base + Supporter Edition + regional variants)
-- **Regions:** 11 (Western Europe 36%, Asia 16%, North America 12%, etc.)
-- **Platforms:** 4 (Windows 78%, Mac 12%, Linux 8%, Unknown 2%)
-- **Total:** 696,607 gross units, $8,797,548 net revenue
+**Features Built:**
+- **Summary Stat Cards:** Total Revenue, Total Units, Avg Daily Revenue, Avg Daily Units, Refund Rate
+- **Revenue Over Time Chart:** Bar chart with sale period highlighting (green = sale, gray = regular)
+- **Revenue by Region Chart:** Horizontal bar chart with percentages
+- **Period Comparison Table:** Shows sale vs regular price periods with % change calculations
+- **Filter System:** Date range presets (All Time, 7D, 30D, 90D, YTD), Product, Region, Platform dropdowns
+- **CSV Import Modal:** Drag-and-drop Steam CSV import with preview, progress bar, batch processing
+- **Sample Data Loaded:** shapez 2 Winter Sale (Dec 19, 2024 - Jan 2, 2025) with 10 countries
 
-### Alisa's Primary Analysis Pattern
-She creates **period comparison tables** tracking:
-- Date ranges (start/end)
-- Period type (Regular Price, Custom Sale, Autumn Sale, etc.)
-- Units sold / Units per day
-- Revenue / Revenue per day
-- **% change vs previous period**
+**Database Tables:**
+- `steam_performance_data` - Main performance metrics table
+- `performance_import_history` - Track import history
 
-She does this **separately by product** (base game vs Supporter Edition).
+### ✅ Calculation Logic Audit (COMPLETE)
+Identified and fixed critical issues for real data import:
 
-### GitHub Issues Created
+| Issue | Problem | Solution |
+|-------|---------|----------|
+| Type Conversion | Supabase returns `"19.99"` not `19.99` | Added `toNumber()` helper |
+| Division by Zero | `totalRevenue / 0` = NaN | Added `safeDivide()` helper |
+| Sale Detection | String comparison `"9.99" < "10.00"` fails | Added `isSalePrice()` helper |
+| Discount Calculation | Could fail if base_price is 0 | Added `calculateDiscountPct()` helper |
 
-| Issue | Title | Priority |
-|-------|-------|----------|
-| [#18](https://github.com/joshmartin1186/Game-Drive-Sales-Planning/issues/18) | Data Infrastructure & API Client | High |
-| [#19](https://github.com/joshmartin1186/Game-Drive-Sales-Planning/issues/19) | Overview Summary Cards | Medium |
-| [#20](https://github.com/joshmartin1186/Game-Drive-Sales-Planning/issues/20) | Period Comparison Table (Core Feature) | **High** |
-| [#21](https://github.com/joshmartin1186/Game-Drive-Sales-Planning/issues/21) | Revenue by Region Chart | Medium |
-| [#22](https://github.com/joshmartin1186/Game-Drive-Sales-Planning/issues/22) | Revenue by Platform Chart | Medium |
-| [#23](https://github.com/joshmartin1186/Game-Drive-Sales-Planning/issues/23) | Revenue by Product Chart | Medium |
-| [#24](https://github.com/joshmartin1186/Game-Drive-Sales-Planning/issues/24) | Time Series Chart with Sale Highlights | Medium |
-| [#25](https://github.com/joshmartin1186/Game-Drive-Sales-Planning/issues/25) | Dashboard Filter Controls | High |
-| [#26](https://github.com/joshmartin1186/Game-Drive-Sales-Planning/issues/26) | CSV Import for Performance Data | High |
-| [#27](https://github.com/joshmartin1186/Game-Drive-Sales-Planning/issues/27) | Dashboard Page Layout & Navigation | High |
+### ✅ Settings Page (COMPLETE)
+- Steam API Key management with masked display
+- Test connection functionality
+- Last sync timestamp tracking
+- Import history display
 
-### Dashboard Layout
+### ✅ Client Management Page (COMPLETE)
+- CRUD operations for clients
+- Client listing with API key status
+- Add/Edit client modal
+- Delete confirmation
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│  [Filters: Client | Date Range | Product | Region | Platform] │
-├─────────────────────────────────────────────────────────────┤
-│  ┌───────┐ ┌───────┐ ┌───────┐ ┌───────┐ ┌───────┐         │
-│  │Revenue│ │ Units │ │Rev/Day│ │Unit/Day│ │Refund%│         │
-│  └───────┘ └───────┘ └───────┘ └───────┘ └───────┘         │
-├─────────────────────────────────────────────────────────────┤
-│  [Time Series Chart with Sale Period Highlights]            │
-├─────────────────────────────────────────────────────────────┤
-│  ┌─────────────────────┐  ┌─────────────────────┐          │
-│  │ Period Comparison   │  │ Revenue by Region   │          │
-│  │ Table (PRIMARY)     │  │ Pie/Bar Chart       │          │
-│  └─────────────────────┘  └─────────────────────┘          │
-├─────────────────────────────────────────────────────────────┤
-│  ┌─────────────────────┐  ┌─────────────────────┐          │
-│  │ Revenue by Platform │  │ Revenue by Product  │          │
-│  └─────────────────────┘  └─────────────────────┘          │
-└─────────────────────────────────────────────────────────────┘
-```
+### ✅ Platform Settings Page (COMPLETE)
+- Platform cooldown configuration
+- Color customization
+- Approval requirements toggle
+- Add/Edit/Delete platforms
 
-### Steam API Context
-- **Authentication:** Each client needs own Financial API Key from Steamworks
-- **API workflow:** GetChangedDatesForPartner → GetDetailedSales with incremental sync
-- **Available data:** 22 fields per row (units, revenue, country, platform, pricing)
-- **Fallback:** CSV import for clients without API keys
+### ✅ Excel Export Page (COMPLETE)
+- XLSX export using xlsx library
+- Sales data export with all fields
+- Client-ready formatting
+- Download functionality
 
-### Scope Decisions
-- ✅ API Key Management: Manual collection per client (no automation)
-- ✅ Data Refresh: Fresh on load, on-demand refresh, daily automatic sync
-- ✅ CSV Import: Supported as fallback
-- ❌ Intelligence Features: OUT OF SCOPE (planning tool integration deferred)
+### ✅ Navigation System
+- Sidebar with all page links
+- PageToggle component for Sales Timeline ↔ Analytics switching
+- Active state highlighting
+- Platform legend in sidebar
 
 ---
 
-## January 6, 2025 Feedback - ALL COMPLETE ✅
+## Application Pages
 
-### Sale Creation
-| Item | Description | Status |
-|------|-------------|--------|
-| Duration Input Flexibility | Removed hard limit, allows flexible start/end dates | ✅ Complete |
-| Days Missing Per Quarter | Gap badges showing "45d gap Q1" next to platform names | ✅ Complete |
-| Launch Date + Launch Sale | Full implementation with Steam Seasonal conflict detection | ✅ Complete |
-| Bulk Editing | Edit multiple products/sales at once | ⏸ Deferred |
+| Page | URL | Purpose | Status |
+|------|-----|---------|--------|
+| Sales Timeline | `/` | Interactive Gantt chart | ✅ Complete |
+| Analytics | `/analytics` | Steam performance dashboard | ✅ Complete |
+| Client Management | `/clients` | Manage clients | ✅ Complete |
+| Platform Settings | `/platforms` | Configure platform rules | ✅ Complete |
+| Excel Export | `/export` | Export sales data | ✅ Complete |
+| API Settings | `/settings` | Steam API key management | ✅ Complete |
 
-### Sale Tool
-| Item | Description | Status |
-|------|-------------|--------|
-| Cooldown Calculation | Fixed to "end date + cooldown days" | ✅ Complete |
-| Today Date Visibility | Scroll-to-today works on initial load | ✅ Complete |
-| Statistics/Events Hover | Platform events show details on hover | ✅ Complete |
-| Copy Sales | ⌘C to copy selected sale | ✅ Complete |
-| Paste Sales | Right-click paste creates sale directly | ✅ Complete |
-| Collapsible Platform Legend | Toggle button to hide/show | ✅ Complete |
-| Timeline/Edit Modal Sync | Fixed date display inconsistencies | ✅ Complete |
-| Import Historical Sales | CSV/Excel import of past sales | ⏸ Deferred |
+---
 
-### Drag And Drop
-| Item | Description | Status |
-|------|-------------|--------|
-| Resize in Calendar | Drag edges to change duration | ✅ Complete |
-| Zoom Out Calendar | 5 zoom levels (Year to 2-Week) | ✅ Complete |
+## Next Steps: Real Client Data
 
-### Auto-Generate
-| Item | Description | Status |
-|------|-------------|--------|
-| Platform Selection | Choose which platforms to include | ✅ Complete |
+### Immediate Priority
+1. **Add Client API Key** - Get real Steam Financial API key from Alisa/client
+2. **Import Real Data** - Test CSV import with actual Steam export
+3. **Verify Calculations** - Confirm metrics match Alisa's Excel analysis
+4. **Client Demo** - Show dashboard with their actual data
 
-### Export
-| Item | Description | Status |
-|------|-------------|--------|
-| PowerPoint Export | Implementation complete | 🧪 Test in Meeting |
+### API Key Requirements
+To connect real Steam data:
+1. Client needs Steam Partner account access
+2. Generate Financial Web API Key at partner.steamgames.com
+3. Add key to Settings page
+4. Import CSV or enable API sync
 
-### Deferred to Future Sprint
-1. Historical Discount Tracking
-2. Analytical Prediction
-3. Bulk Editing
-4. Import Historical Sales
+### Data Import Options
+1. **CSV Import** (Recommended for testing)
+   - Go to Analytics → Import CSV
+   - Drag Steam financial CSV export
+   - Preview and import
+
+2. **API Sync** (Future)
+   - Add API key in Settings
+   - Click "Test Connection"
+   - Enable daily sync
 
 ---
 
@@ -197,6 +187,8 @@ She does this **separately by product** (base game vs Supporter Edition).
 | CSS not compiling | Tailwind silent failures on Vercel | Use CSS Modules architecture |
 | File updates failing | GitHub API requires exact SHA | Fetch fresh file contents before edits |
 | Paste opening modal | `directCreate` flag not passed | Pass full prefill data with `directCreate: true` |
+| Analytics calculations wrong | Supabase returns numeric as strings | Use `toNumber()` for all numeric fields |
+| Sale detection inconsistent | String comparison for prices | Use `isSalePrice()` helper with number conversion |
 
 ### Deployment Patterns
 - Vercel auto-deploys from GitHub in ~2-3 minutes
@@ -208,67 +200,71 @@ She does this **separately by product** (base game vs Supporter Edition).
 
 ## Components Overview
 
+### Main Application
+| Component | Purpose |
+|-----------|--------|
+| GanttChart | Main timeline with drag-drop (responsive) |
+| SaleBlock | Draggable/resizable sale blocks |
+| SalesTable | List view of sales |
+| GapAnalysis | Sales coverage gap analysis |
+| ProductManager | Client/Game/Product CRUD |
+| PlatformSettings | Platform rules & events |
+| PageToggle | Switch between Timeline/Analytics |
+
+### Modals
 | Component | Purpose |
 |-----------|--------|
 | AddSaleModal | Create new sales |
 | EditSaleModal | Edit existing sales |
 | DuplicateSaleModal | Duplicate sales to new dates/platforms |
-| GanttChart | Main timeline with drag-drop (responsive) |
-| SaleBlock | Draggable/resizable sale blocks |
-| SalesTable | List view of sales |
-| GapAnalysis | Sales coverage gap analysis |
 | ImportSalesModal | Bulk CSV/Excel import |
-| VersionManager | Calendar version snapshots |
-| ProductManager | Client/Game/Product CRUD |
-| PlatformSettings | Platform rules & events |
 | SaleCalendarPreviewModal | Auto-generate calendar wizard |
 | TimelineExportModal | Export functionality |
+| ImportPerformanceModal | Steam CSV import for analytics |
+
+### Analytics Components (Inline)
+- Summary stat cards
+- Bar charts (vertical & horizontal)
+- Period comparison table
+- Filter controls
 
 ---
 
-## Next Session Priorities
+## Database Schema
 
-### Immediate (MVP Completion)
-1. **Excel export** - Must match existing column structure
-2. **Steam Analytics Dashboard** - Start with issues #27, #18, #25, #20
+### Core Tables
+- `clients` - Client management
+- `games` - Games per client
+- `products` - Products per game (base, DLC, edition)
+- `platforms` - Platform configuration
+- `sales` - Sale records
 
-### Build Order for Analytics
-1. #27 - Dashboard Layout & Navigation (page structure)
-2. #18 - Data Infrastructure (database + API client)
-3. #26 - CSV Import (get data in without API)
-4. #25 - Filter Controls (global filters)
-5. #19 - Summary Cards (quick wins)
-6. #20 - Period Comparison Table (Alisa's primary workflow)
-7. #24 - Time Series Chart
-8. #21-23 - Breakdown Charts
+### Analytics Tables
+- `steam_performance_data` - Daily performance metrics
+- `performance_import_history` - Import tracking
+- `steam_api_credentials` - API key storage
 
 ---
 
-## Remaining MVP Features
+## Deferred Features (Post-MVP)
 
-1. **Excel export** - Must match existing column structure for Alisa's formulas
-2. **Steam Analytics Dashboard** - 10 issues tracked (#18-27)
-
----
-
-## Future Enhancements (Post-MVP)
-
-- Authentication - User login/data isolation
-- Historical discount tracking
-- Analytical prediction based on historical data
-- Bulk editing capabilities
-- Multi-client support with data isolation
-- Planning tool ↔ Analytics integration
+1. **Authentication** - User login/data isolation
+2. **Historical Discount Tracking** - Track discount changes over time
+3. **Analytical Prediction** - AI-based forecasting
+4. **Bulk Editing** - Edit multiple sales at once
+5. **Import Historical Sales** - CSV/Excel import of past sales
+6. **Planning ↔ Analytics Integration** - Link sales to performance
 
 ---
 
 ## Repository Info
 - **GitHub:** https://github.com/joshmartin1186/Game-Drive-Sales-Planning
 - **Live Site:** https://gamedrivesalesplanning.vercel.app/
+- **Analytics:** https://gamedrivesalesplanning.vercel.app/analytics
 - **Supabase Project:** znueqcmlqfdhetnierno (eu-west-1)
 - **Vercel Team ID:** team_6piiLSU3y16pH8Kt0uAlDFUu
 - **Vercel Project ID:** prj_G1cbQAX5nL5VDKO37D73HnHNHnnR
 
 ---
 
-*Last Updated: January 12, 2025 - Steam Analytics Dashboard spec complete with 10 GitHub issues (#18-27)*
+*Last Updated: January 12, 2025 - Analytics Dashboard COMPLETE, calculation audit COMPLETE, ready for real client data import*
