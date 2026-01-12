@@ -1,6 +1,6 @@
 'use client'
 
-// Cache invalidation: 2026-01-12T22:50:00Z - Added sidebar navigation
+// Cache invalidation: 2026-01-12T23:10:00Z - Fixed calculation logic for Steam data
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
@@ -22,15 +22,15 @@ interface PerformanceData {
   country_code: string | null
   country: string | null
   region: string | null
-  gross_units_sold: number
-  chargebacks_returns: number
-  net_units_sold: number
-  base_price_usd: number | null
-  sale_price_usd: number | null
-  gross_steam_sales_usd: number
-  chargeback_returns_usd: number
-  vat_tax_usd: number
-  net_steam_sales_usd: number
+  gross_units_sold: number | string
+  chargebacks_returns: number | string
+  net_units_sold: number | string
+  base_price_usd: number | string | null
+  sale_price_usd: number | string | null
+  gross_steam_sales_usd: number | string
+  chargeback_returns_usd: number | string
+  vat_tax_usd: number | string
+  net_steam_sales_usd: number | string
 }
 
 interface SummaryStats {
@@ -82,6 +82,52 @@ interface CurrentPeriodState {
   discountPct: number | null
 }
 
+// ============================================
+// UTILITY FUNCTIONS FOR SAFE NUMBER CONVERSION
+// ============================================
+// Supabase returns numeric columns as strings, so we must convert them
+
+/**
+ * Safely convert a value to a number
+ * Handles: strings, numbers, null, undefined
+ */
+function toNumber(value: number | string | null | undefined): number {
+  if (value === null || value === undefined || value === '') return 0
+  if (typeof value === 'number') return isNaN(value) ? 0 : value
+  const parsed = parseFloat(String(value).replace(/[$,]/g, ''))
+  return isNaN(parsed) ? 0 : parsed
+}
+
+/**
+ * Safely divide two numbers, returning 0 if divisor is 0
+ */
+function safeDivide(numerator: number, denominator: number): number {
+  if (denominator === 0 || isNaN(denominator)) return 0
+  const result = numerator / denominator
+  return isNaN(result) ? 0 : result
+}
+
+/**
+ * Detect if a row represents a sale period
+ * Sale = sale_price exists AND is less than base_price
+ */
+function isSalePrice(basePrice: number | string | null | undefined, salePrice: number | string | null | undefined): boolean {
+  const base = toNumber(basePrice)
+  const sale = toNumber(salePrice)
+  // Must have both prices, and sale price must be lower than base
+  return base > 0 && sale > 0 && sale < base
+}
+
+/**
+ * Calculate discount percentage from base and sale price
+ */
+function calculateDiscountPct(basePrice: number | string | null | undefined, salePrice: number | string | null | undefined): number | null {
+  const base = toNumber(basePrice)
+  const sale = toNumber(salePrice)
+  if (base <= 0 || sale <= 0 || sale >= base) return null
+  return Math.round((1 - sale / base) * 100)
+}
+
 // Sidebar component
 function AnalyticsSidebar() {
   const pathname = usePathname()
@@ -89,6 +135,9 @@ function AnalyticsSidebar() {
   const navItems = [
     { name: 'Sales Timeline', href: '/', icon: 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z' },
     { name: 'Analytics', href: '/analytics', icon: 'M16 8v8m-4-5v5m-4-2v2m-2 4h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z' },
+    { name: 'Client Management', href: '/clients', icon: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z' },
+    { name: 'Platform Settings', href: '/platforms', icon: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z' },
+    { name: 'Excel Export', href: '/export', icon: 'M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' },
     { name: 'API Settings', href: '/settings', icon: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z' },
   ]
   
@@ -195,10 +244,11 @@ export default function AnalyticsPage() {
       setDataAvailable((data?.length || 0) > 0)
 
       if (data && data.length > 0) {
-        const totalRevenue = data.reduce((sum, row) => sum + (row.net_steam_sales_usd || 0), 0)
-        const totalUnits = data.reduce((sum, row) => sum + (row.net_units_sold || 0), 0)
-        const totalGrossUnits = data.reduce((sum, row) => sum + (row.gross_units_sold || 0), 0)
-        const totalChargebacks = data.reduce((sum, row) => sum + (row.chargebacks_returns || 0), 0)
+        // FIXED: Use toNumber() for all numeric fields from Supabase
+        const totalRevenue = data.reduce((sum, row) => sum + toNumber(row.net_steam_sales_usd), 0)
+        const totalUnits = data.reduce((sum, row) => sum + toNumber(row.net_units_sold), 0)
+        const totalGrossUnits = data.reduce((sum, row) => sum + toNumber(row.gross_units_sold), 0)
+        const totalChargebacks = data.reduce((sum, row) => sum + toNumber(row.chargebacks_returns), 0)
         
         const uniqueDates = new Set(data.map(row => row.date))
         const totalDays = uniqueDates.size || 1
@@ -206,9 +256,11 @@ export default function AnalyticsPage() {
         setSummaryStats({
           totalRevenue,
           totalUnits,
-          avgDailyRevenue: totalRevenue / totalDays,
-          avgDailyUnits: totalUnits / totalDays,
-          refundRate: totalGrossUnits > 0 ? (totalChargebacks / totalGrossUnits) * 100 : 0,
+          // FIXED: Use safeDivide to prevent NaN
+          avgDailyRevenue: safeDivide(totalRevenue, totalDays),
+          avgDailyUnits: safeDivide(totalUnits, totalDays),
+          // FIXED: Refund rate calculation with safe division
+          refundRate: safeDivide(totalChargebacks, totalGrossUnits) * 100,
           totalDays
         })
 
@@ -241,11 +293,12 @@ export default function AnalyticsPage() {
     
     performanceData.forEach(row => {
       const existing = byDate.get(row.date) || { revenue: 0, units: 0, hasSale: false }
-      const isSale = row.sale_price_usd !== null && row.sale_price_usd !== row.base_price_usd
+      // FIXED: Use isSalePrice helper with proper number conversion
+      const rowIsSale = isSalePrice(row.base_price_usd, row.sale_price_usd)
       byDate.set(row.date, {
-        revenue: existing.revenue + (row.net_steam_sales_usd || 0),
-        units: existing.units + (row.net_units_sold || 0),
-        hasSale: existing.hasSale || isSale
+        revenue: existing.revenue + toNumber(row.net_steam_sales_usd),
+        units: existing.units + toNumber(row.net_units_sold),
+        hasSale: existing.hasSale || rowIsSale
       })
     })
     
@@ -269,11 +322,12 @@ export default function AnalyticsPage() {
     performanceData.forEach(row => {
       const region = row.region || 'Unknown'
       const existing = byRegion.get(region) || { revenue: 0, units: 0 }
+      const rowRevenue = toNumber(row.net_steam_sales_usd)
       byRegion.set(region, {
-        revenue: existing.revenue + (row.net_steam_sales_usd || 0),
-        units: existing.units + (row.net_units_sold || 0)
+        revenue: existing.revenue + rowRevenue,
+        units: existing.units + toNumber(row.net_units_sold)
       })
-      totalRevenue += row.net_steam_sales_usd || 0
+      totalRevenue += rowRevenue
     })
     
     return Array.from(byRegion.entries())
@@ -281,7 +335,8 @@ export default function AnalyticsPage() {
         region,
         revenue: data.revenue,
         units: data.units,
-        percentage: totalRevenue > 0 ? (data.revenue / totalRevenue) * 100 : 0
+        // FIXED: Use safeDivide
+        percentage: safeDivide(data.revenue, totalRevenue) * 100
       }))
       .sort((a, b) => b.revenue - a.revenue)
   }, [performanceData])
@@ -299,8 +354,9 @@ export default function AnalyticsPage() {
         days,
         totalRevenue: period.revenue,
         totalUnits: period.units,
-        avgDailyRevenue: period.revenue / days,
-        avgDailyUnits: period.units / days,
+        // FIXED: Use safeDivide
+        avgDailyRevenue: safeDivide(period.revenue, days),
+        avgDailyUnits: safeDivide(period.units, days),
         isSale: period.isSale,
         discountPct: period.discountPct
       })
@@ -323,25 +379,22 @@ export default function AnalyticsPage() {
     
     performanceData.forEach(row => {
       const existing = dailyAgg.get(row.date)
-      const isSale = row.sale_price_usd !== null && 
-                     row.base_price_usd !== null && 
-                     row.sale_price_usd < row.base_price_usd
-      const discountPct = isSale && row.base_price_usd && row.sale_price_usd
-        ? Math.round((1 - row.sale_price_usd / row.base_price_usd) * 100)
-        : null
+      // FIXED: Use helper functions for sale detection and discount calculation
+      const rowIsSale = isSalePrice(row.base_price_usd, row.sale_price_usd)
+      const discountPct = calculateDiscountPct(row.base_price_usd, row.sale_price_usd)
       
       if (existing) {
         dailyAgg.set(row.date, {
-          revenue: existing.revenue + (row.net_steam_sales_usd || 0),
-          units: existing.units + (row.net_units_sold || 0),
-          isSale: existing.isSale || isSale,
-          discountPct: discountPct || existing.discountPct
+          revenue: existing.revenue + toNumber(row.net_steam_sales_usd),
+          units: existing.units + toNumber(row.net_units_sold),
+          isSale: existing.isSale || rowIsSale,
+          discountPct: discountPct ?? existing.discountPct
         })
       } else {
         dailyAgg.set(row.date, {
-          revenue: row.net_steam_sales_usd || 0,
-          units: row.net_units_sold || 0,
-          isSale,
+          revenue: toNumber(row.net_steam_sales_usd),
+          units: toNumber(row.net_units_sold),
+          isSale: rowIsSale,
           discountPct
         })
       }
