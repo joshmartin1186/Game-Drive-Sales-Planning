@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import Navbar from '../components/Navbar';
+import { Navbar } from '../components/Navbar';
 import Sidebar from '../components/Sidebar';
 import styles from './settings.module.css';
 
