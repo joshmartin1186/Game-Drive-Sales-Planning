@@ -51,7 +51,7 @@ interface ChangedDatesResponse {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { client_id, start_date, end_date, app_id } = body;
+    const { client_id, start_date, end_date, app_id, force_full_sync } = body;
 
     if (!client_id) {
       return NextResponse.json(
@@ -92,16 +92,34 @@ export async function POST(request: Request) {
       .eq('id', client_id)
       .single();
 
+    // Use highwatermark 0 to get ALL dates (for debugging/full sync)
+    // In production, you'd use the stored highwatermark for incremental sync
+    const useHighwatermark = force_full_sync ? '0' : (keyData.highwatermark || '0');
+    
+    console.log(`[Steam Sync] Starting sync for ${clientData?.name}`);
+    console.log(`[Steam Sync] Using highwatermark: ${useHighwatermark}`);
+    console.log(`[Steam Sync] API Key (masked): ${financialApiKey.substring(0, 8)}...`);
+
     // Step 1: Get changed dates from Steam
-    const changedDates = await getChangedDatesForPartner(
-      financialApiKey, 
-      keyData.highwatermark || '0'
-    );
+    const changedDates = await getChangedDatesForPartner(financialApiKey, useHighwatermark);
+
+    console.log(`[Steam Sync] GetChangedDatesForPartner result:`, {
+      success: changedDates.success,
+      datesCount: changedDates.dates?.length || 0,
+      error: changedDates.error,
+      rawResponse: changedDates.rawResponse
+    });
 
     if (!changedDates.success) {
       return NextResponse.json({
         success: false,
         message: changedDates.error || 'Failed to get changed dates from Steam',
+        debug: {
+          apiCalled: true,
+          endpoint: 'GetChangedDatesForPartner',
+          highwatermarkUsed: useHighwatermark,
+          rawResponse: changedDates.rawResponse
+        },
         rowsImported: 0,
         rowsSkipped: 0,
         clientName: clientData?.name
@@ -110,6 +128,8 @@ export async function POST(request: Request) {
 
     // Filter dates to requested range if provided
     let datesToSync = changedDates.dates || [];
+    const totalDatesFromApi = datesToSync.length;
+    
     if (start_date || end_date) {
       datesToSync = datesToSync.filter(date => {
         const d = date.replace(/\//g, '-');
@@ -119,12 +139,26 @@ export async function POST(request: Request) {
       });
     }
 
+    console.log(`[Steam Sync] Dates from API: ${totalDatesFromApi}, After filter: ${datesToSync.length}`);
+
     if (datesToSync.length === 0) {
       return NextResponse.json({
         success: true,
-        message: 'No new financial data available for the requested period.',
+        message: totalDatesFromApi === 0 
+          ? 'Steam API returned no dates with financial data. This could mean: (1) No sales data exists for this partner account, (2) The API key doesn\'t have access to financial data, or (3) All data was already synced.'
+          : `Steam returned ${totalDatesFromApi} date(s), but none matched your date filter (${start_date} to ${end_date}).`,
+        debug: {
+          apiCalled: true,
+          endpoint: 'GetChangedDatesForPartner',
+          highwatermarkUsed: useHighwatermark,
+          totalDatesFromApi,
+          datesAfterFilter: datesToSync.length,
+          sampleDates: changedDates.dates?.slice(0, 5),
+          newHighwatermark: changedDates.highwatermark
+        },
         rowsImported: 0,
         rowsSkipped: 0,
+        datesProcessed: 0,
         clientName: clientData?.name
       });
     }
@@ -179,7 +213,12 @@ export async function POST(request: Request) {
       rowsSkipped: totalSkipped,
       datesProcessed: datesToSync.length,
       errors: errors.length > 0 ? errors : undefined,
-      clientName: clientData?.name
+      clientName: clientData?.name,
+      debug: {
+        apiCalled: true,
+        totalDatesFromApi,
+        datesProcessed: datesToSync.length
+      }
     });
 
   } catch (error) {
@@ -226,7 +265,8 @@ export async function GET(request: Request) {
       valid: testResult.valid,
       message: testResult.message,
       lastSync: keyData.last_sync_date,
-      hasFinancialKey: !!keyData.publisher_key
+      hasFinancialKey: !!keyData.publisher_key,
+      debug: testResult.debug
     });
 
   } catch (error) {
@@ -242,31 +282,49 @@ export async function GET(request: Request) {
 async function getChangedDatesForPartner(
   apiKey: string, 
   highwatermark: string
-): Promise<{ success: boolean; dates?: string[]; highwatermark?: string; error?: string }> {
+): Promise<{ success: boolean; dates?: string[]; highwatermark?: string; error?: string; rawResponse?: unknown }> {
   try {
     const url = `${STEAM_PARTNER_API}/IPartnerFinancialsService/GetChangedDatesForPartner/v001/?key=${apiKey}&highwatermark=${highwatermark}`;
     
+    console.log(`[Steam API] Calling: ${url.replace(apiKey, 'REDACTED')}`);
+    
     const response = await fetch(url);
+    const responseText = await response.text();
+    
+    console.log(`[Steam API] Response status: ${response.status}`);
+    console.log(`[Steam API] Response body: ${responseText.substring(0, 500)}`);
     
     if (!response.ok) {
       if (response.status === 403) {
         return { 
           success: false, 
-          error: 'Access denied. Make sure you are using a Financial Web API Key from a Financial API Group in Steamworks.' 
+          error: 'Access denied (403). Make sure you are using a Financial Web API Key from a Financial API Group in Steamworks.',
+          rawResponse: responseText
         };
       }
       return { 
         success: false, 
-        error: `Steam API returned status ${response.status}` 
+        error: `Steam API returned status ${response.status}: ${responseText}`,
+        rawResponse: responseText
       };
     }
 
-    const data: ChangedDatesResponse = await response.json();
+    let data: ChangedDatesResponse;
+    try {
+      data = JSON.parse(responseText);
+    } catch (e) {
+      return {
+        success: false,
+        error: `Failed to parse Steam API response as JSON`,
+        rawResponse: responseText
+      };
+    }
     
     return {
       success: true,
-      dates: data.response.dates || [],
-      highwatermark: data.response.result_highwatermark
+      dates: data.response?.dates || [],
+      highwatermark: data.response?.result_highwatermark,
+      rawResponse: data
     };
   } catch (error) {
     return {
@@ -427,35 +485,59 @@ async function storeSalesData(
 }
 
 // Test if the Financial API key is valid
-async function testFinancialApiKey(apiKey: string): Promise<{ valid: boolean; message: string }> {
+async function testFinancialApiKey(apiKey: string): Promise<{ valid: boolean; message: string; debug?: unknown }> {
   try {
     // Try to get changed dates with highwatermark 0 - this will confirm API access
     const url = `${STEAM_PARTNER_API}/IPartnerFinancialsService/GetChangedDatesForPartner/v001/?key=${apiKey}&highwatermark=0`;
     
+    console.log(`[Steam API Test] Calling: ${url.replace(apiKey, 'REDACTED')}`);
+    
     const response = await fetch(url);
+    const responseText = await response.text();
+    
+    console.log(`[Steam API Test] Status: ${response.status}, Body: ${responseText.substring(0, 200)}`);
     
     if (response.ok) {
-      const data: ChangedDatesResponse = await response.json();
-      const dateCount = data.response.dates?.length || 0;
+      let data: ChangedDatesResponse;
+      try {
+        data = JSON.parse(responseText);
+      } catch (e) {
+        return {
+          valid: false,
+          message: `Steam API returned invalid JSON: ${responseText.substring(0, 100)}`,
+          debug: { status: response.status, body: responseText }
+        };
+      }
+      
+      const dateCount = data.response?.dates?.length || 0;
       return {
         valid: true,
-        message: `Financial API connected successfully. ${dateCount} date(s) with sales data available.`
+        message: `Financial API connected! ${dateCount} date(s) with sales data available.`,
+        debug: {
+          status: response.status,
+          dateCount,
+          sampleDates: data.response?.dates?.slice(0, 3),
+          highwatermark: data.response?.result_highwatermark
+        }
       };
     } else if (response.status === 403) {
       return {
         valid: false,
-        message: 'Access denied. This key may not have Financial API access. Create a Financial API Group in Steamworks and use that key.'
+        message: 'Access denied (403). This key may not have Financial API access. Create a Financial API Group in Steamworks and use that key.',
+        debug: { status: response.status, body: responseText }
       };
     } else {
       return {
         valid: false,
-        message: `Steam API returned status ${response.status}`
+        message: `Steam API returned status ${response.status}`,
+        debug: { status: response.status, body: responseText }
       };
     }
   } catch (error) {
     return {
       valid: false,
-      message: 'Could not connect to Steam Partner API. Check network connection.'
+      message: `Could not connect to Steam Partner API: ${error instanceof Error ? error.message : String(error)}`,
+      debug: { error: String(error) }
     };
   }
 }
