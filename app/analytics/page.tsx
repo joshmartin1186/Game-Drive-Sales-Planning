@@ -1,7 +1,11 @@
 'use client'
 
+// Cache invalidation: 2026-01-12T22:50:00Z - Added sidebar navigation
+
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 import styles from './page.module.css'
 import PageToggle from '../components/PageToggle'
 
@@ -76,6 +80,69 @@ interface CurrentPeriodState {
   units: number
   isSale: boolean
   discountPct: number | null
+}
+
+// Sidebar component
+function AnalyticsSidebar() {
+  const pathname = usePathname()
+  
+  const navItems = [
+    { name: 'Sales Timeline', href: '/', icon: 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z' },
+    { name: 'Analytics', href: '/analytics', icon: 'M16 8v8m-4-5v5m-4-2v2m-2 4h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z' },
+    { name: 'API Settings', href: '/settings', icon: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z' },
+  ]
+  
+  const platforms = [
+    { name: 'Steam', color: '#1b2838', cooldown: '30d' },
+    { name: 'PlayStation', color: '#0070d1', cooldown: '42d' },
+    { name: 'Xbox', color: '#107c10', cooldown: '28d' },
+    { name: 'Nintendo', color: '#e60012', cooldown: '56d' },
+    { name: 'Epic', color: '#000000', cooldown: '14d' },
+  ]
+
+  return (
+    <aside className={styles.sidebar}>
+      <div className={styles.sidebarHeader}>
+        <div className={styles.sidebarLogo}>
+          <div className={styles.logoIcon}>GD</div>
+          <div className={styles.logoText}>Game<span>Drive</span></div>
+        </div>
+      </div>
+      
+      <nav className={styles.sidebarNav}>
+        <div className={styles.navSection}>
+          <div className={styles.navSectionTitle}>Navigation</div>
+          {navItems.map((item) => (
+            <Link
+              key={item.name}
+              href={item.href}
+              className={`${styles.navLink} ${pathname === item.href ? styles.navLinkActive : ''}`}
+            >
+              <svg className={styles.navIcon} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={item.icon} />
+              </svg>
+              {item.name}
+            </Link>
+          ))}
+        </div>
+      </nav>
+      
+      <div className={styles.sidebarFooter}>
+        <div className={styles.navSectionTitle}>Active Platforms</div>
+        <div className={styles.platformList}>
+          {platforms.map((platform) => (
+            <div key={platform.name} className={styles.platformItem}>
+              <div className={styles.platformName}>
+                <div className={styles.platformDot} style={{ backgroundColor: platform.color }} />
+                {platform.name}
+              </div>
+              <span className={styles.platformCooldown}>{platform.cooldown}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </aside>
+  )
 }
 
 export default function AnalyticsPage() {
@@ -244,11 +311,9 @@ export default function AnalyticsPage() {
   const periodData = useMemo((): PeriodData[] => {
     if (!performanceData.length) return []
     
-    // Group consecutive days with same sale status
     const periods: PeriodData[] = []
     let currentPeriod: CurrentPeriodState | null = null
     
-    // Sort by date and aggregate
     const dailyAgg = new Map<string, {
       revenue: number
       units: number
@@ -288,11 +353,9 @@ export default function AnalyticsPage() {
       const dayData = dailyAgg.get(date)!
       
       if (!currentPeriod || currentPeriod.isSale !== dayData.isSale) {
-        // Save previous period
         if (currentPeriod) {
           pushPeriod(periods, currentPeriod)
         }
-        // Start new period
         currentPeriod = {
           dates: [date],
           revenue: dayData.revenue,
@@ -301,14 +364,12 @@ export default function AnalyticsPage() {
           discountPct: dayData.discountPct
         }
       } else {
-        // Continue current period
         currentPeriod.dates.push(date)
         currentPeriod.revenue += dayData.revenue
         currentPeriod.units += dayData.units
       }
     }
     
-    // Don't forget the last period
     if (currentPeriod) {
       pushPeriod(periods, currentPeriod)
     }
@@ -364,292 +425,292 @@ export default function AnalyticsPage() {
     setDateRange({ start, end })
   }
 
-  // Get max values for chart scaling
   const maxDailyRevenue = useMemo(() => 
     Math.max(...dailyData.map(d => d.revenue), 1), [dailyData])
   const maxRegionRevenue = useMemo(() => 
     Math.max(...regionData.map(d => d.revenue), 1), [regionData])
 
   return (
-    <div className={styles.pageContent}>
-      <PageToggle />
+    <div className={styles.pageContainer}>
+      <AnalyticsSidebar />
       
-      <div className={styles.header}>
-        <div className={styles.headerLeft}>
-          <h1 className={styles.title}>Steam Analytics</h1>
-          <p className={styles.subtitle}>Performance metrics and sales analysis</p>
-        </div>
-        <div className={styles.headerRight}>
-          <button className={styles.importButton} onClick={() => setShowImportModal(true)}>
-            <svg className={styles.buttonIcon} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-            </svg>
-            Import CSV
-          </button>
-          <button className={styles.refreshButton} onClick={fetchPerformanceData} disabled={isLoading}>
-            <svg className={`${styles.buttonIcon} ${isLoading ? styles.spinning : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-            Refresh
-          </button>
-        </div>
-      </div>
-
-      <div className={styles.filtersBar}>
-        <div className={styles.filterGroup}>
-          <label className={styles.filterLabel}>Date Range</label>
-          <div className={styles.datePresets}>
-            <button className={`${styles.presetButton} ${!dateRange.start && !dateRange.end ? styles.presetActive : ''}`} onClick={() => setPresetDateRange('all')}>All Time</button>
-            <button className={styles.presetButton} onClick={() => setPresetDateRange('7d')}>7D</button>
-            <button className={styles.presetButton} onClick={() => setPresetDateRange('30d')}>30D</button>
-            <button className={styles.presetButton} onClick={() => setPresetDateRange('90d')}>90D</button>
-            <button className={styles.presetButton} onClick={() => setPresetDateRange('ytd')}>YTD</button>
+      <div className={styles.pageContent}>
+        <PageToggle />
+        
+        <div className={styles.header}>
+          <div className={styles.headerLeft}>
+            <h1 className={styles.title}>Steam Analytics</h1>
+            <p className={styles.subtitle}>Performance metrics and sales analysis</p>
+          </div>
+          <div className={styles.headerRight}>
+            <button className={styles.importButton} onClick={() => setShowImportModal(true)}>
+              <svg className={styles.buttonIcon} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+              </svg>
+              Import CSV
+            </button>
+            <button className={styles.refreshButton} onClick={fetchPerformanceData} disabled={isLoading}>
+              <svg className={`${styles.buttonIcon} ${isLoading ? styles.spinning : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              Refresh
+            </button>
           </div>
         </div>
 
-        <div className={styles.filterGroup}>
-          <label className={styles.filterLabel}>Product</label>
-          <select className={styles.filterSelect} value={selectedProduct} onChange={(e) => setSelectedProduct(e.target.value)}>
-            <option value="all">All Products</option>
-            {products.map(product => (<option key={product} value={product}>{product}</option>))}
-          </select>
-        </div>
-
-        <div className={styles.filterGroup}>
-          <label className={styles.filterLabel}>Region</label>
-          <select className={styles.filterSelect} value={selectedRegion} onChange={(e) => setSelectedRegion(e.target.value)}>
-            <option value="all">All Regions</option>
-            {regions.map(region => (<option key={region} value={region}>{region}</option>))}
-          </select>
-        </div>
-
-        <div className={styles.filterGroup}>
-          <label className={styles.filterLabel}>Platform</label>
-          <select className={styles.filterSelect} value={selectedPlatform} onChange={(e) => setSelectedPlatform(e.target.value)}>
-            <option value="all">All Platforms</option>
-            {platforms.map(platform => (<option key={platform} value={platform}>{platform}</option>))}
-          </select>
-        </div>
-      </div>
-
-      {isLoading ? (
-        <div className={styles.statsGrid}>
-          {[1, 2, 3, 4, 5].map(i => (
-            <div key={i} className={styles.statCardSkeleton}>
-              <div className={styles.skeletonTitle} />
-              <div className={styles.skeletonValue} />
+        <div className={styles.filtersBar}>
+          <div className={styles.filterGroup}>
+            <label className={styles.filterLabel}>Date Range</label>
+            <div className={styles.datePresets}>
+              <button className={`${styles.presetButton} ${!dateRange.start && !dateRange.end ? styles.presetActive : ''}`} onClick={() => setPresetDateRange('all')}>All Time</button>
+              <button className={styles.presetButton} onClick={() => setPresetDateRange('7d')}>7D</button>
+              <button className={styles.presetButton} onClick={() => setPresetDateRange('30d')}>30D</button>
+              <button className={styles.presetButton} onClick={() => setPresetDateRange('90d')}>90D</button>
+              <button className={styles.presetButton} onClick={() => setPresetDateRange('ytd')}>YTD</button>
             </div>
-          ))}
-        </div>
-      ) : !dataAvailable ? (
-        <div className={styles.emptyState}>
-          <div className={styles.emptyIcon}>
-            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-            </svg>
           </div>
-          <h3 className={styles.emptyTitle}>No Performance Data Yet</h3>
-          <p className={styles.emptyDescription}>Import your Steam sales data to see analytics and performance metrics.</p>
-          <button className={styles.emptyButton} onClick={() => setShowImportModal(true)}>
-            <svg className={styles.buttonIcon} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-            </svg>
-            Import CSV Data
-          </button>
+
+          <div className={styles.filterGroup}>
+            <label className={styles.filterLabel}>Product</label>
+            <select className={styles.filterSelect} value={selectedProduct} onChange={(e) => setSelectedProduct(e.target.value)}>
+              <option value="all">All Products</option>
+              {products.map(product => (<option key={product} value={product}>{product}</option>))}
+            </select>
+          </div>
+
+          <div className={styles.filterGroup}>
+            <label className={styles.filterLabel}>Region</label>
+            <select className={styles.filterSelect} value={selectedRegion} onChange={(e) => setSelectedRegion(e.target.value)}>
+              <option value="all">All Regions</option>
+              {regions.map(region => (<option key={region} value={region}>{region}</option>))}
+            </select>
+          </div>
+
+          <div className={styles.filterGroup}>
+            <label className={styles.filterLabel}>Platform</label>
+            <select className={styles.filterSelect} value={selectedPlatform} onChange={(e) => setSelectedPlatform(e.target.value)}>
+              <option value="all">All Platforms</option>
+              {platforms.map(platform => (<option key={platform} value={platform}>{platform}</option>))}
+            </select>
+          </div>
         </div>
-      ) : (
-        <>
+
+        {isLoading ? (
           <div className={styles.statsGrid}>
-            <div className={styles.statCard}>
-              <div className={styles.statHeader}>
-                <span className={styles.statTitle}>Total Revenue</span>
-                <div className={styles.statIcon} style={{ backgroundColor: '#dcfce7' }}>
-                  <svg fill="none" stroke="#16a34a" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                </div>
+            {[1, 2, 3, 4, 5].map(i => (
+              <div key={i} className={styles.statCardSkeleton}>
+                <div className={styles.skeletonTitle} />
+                <div className={styles.skeletonValue} />
               </div>
-              <div className={styles.statValue}>{formatCurrency(summaryStats?.totalRevenue || 0)}</div>
-              <div className={styles.statSubtext}>Net Steam sales</div>
-            </div>
-
-            <div className={styles.statCard}>
-              <div className={styles.statHeader}>
-                <span className={styles.statTitle}>Total Units</span>
-                <div className={styles.statIcon} style={{ backgroundColor: '#dbeafe' }}>
-                  <svg fill="none" stroke="#2563eb" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-                  </svg>
-                </div>
-              </div>
-              <div className={styles.statValue}>{formatNumber(summaryStats?.totalUnits || 0)}</div>
-              <div className={styles.statSubtext}>Net units sold</div>
-            </div>
-
-            <div className={styles.statCard}>
-              <div className={styles.statHeader}>
-                <span className={styles.statTitle}>Avg Daily Revenue</span>
-                <div className={styles.statIcon} style={{ backgroundColor: '#fef3c7' }}>
-                  <svg fill="none" stroke="#d97706" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-                  </svg>
-                </div>
-              </div>
-              <div className={styles.statValue}>{formatCurrency(summaryStats?.avgDailyRevenue || 0)}</div>
-              <div className={styles.statSubtext}>Per day average</div>
-            </div>
-
-            <div className={styles.statCard}>
-              <div className={styles.statHeader}>
-                <span className={styles.statTitle}>Avg Daily Units</span>
-                <div className={styles.statIcon} style={{ backgroundColor: '#f3e8ff' }}>
-                  <svg fill="none" stroke="#9333ea" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                  </svg>
-                </div>
-              </div>
-              <div className={styles.statValue}>{formatNumber(summaryStats?.avgDailyUnits || 0)}</div>
-              <div className={styles.statSubtext}>Per day average</div>
-            </div>
-
-            <div className={styles.statCard}>
-              <div className={styles.statHeader}>
-                <span className={styles.statTitle}>Refund Rate</span>
-                <div className={styles.statIcon} style={{ backgroundColor: '#fee2e2' }}>
-                  <svg fill="none" stroke="#dc2626" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 15v-1a4 4 0 00-4-4H8m0 0l3 3m-3-3l3-3m9 14V5a2 2 0 00-2-2H6a2 2 0 00-2 2v16l4-2 4 2 4-2 4 2z" />
-                  </svg>
-                </div>
-              </div>
-              <div className={styles.statValue}>{(summaryStats?.refundRate || 0).toFixed(1)}%</div>
-              <div className={styles.statSubtext}>Chargebacks/returns</div>
-            </div>
+            ))}
           </div>
-
-          {/* Time Series Chart */}
-          <div className={styles.chartsSection}>
-            <div className={styles.chartCard}>
-              <h3 className={styles.chartTitle}>Revenue Over Time</h3>
-              <div className={styles.chartLegend}>
-                <span className={styles.legendItem}>
-                  <span className={styles.legendDot} style={{ backgroundColor: '#16a34a' }} />
-                  Sale Period
-                </span>
-                <span className={styles.legendItem}>
-                  <span className={styles.legendDot} style={{ backgroundColor: '#94a3b8' }} />
-                  Regular Price
-                </span>
-              </div>
-              <div className={styles.barChart}>
-                {dailyData.map((day, idx) => (
-                  <div key={idx} className={styles.barColumn}>
-                    <div className={styles.barWrapper}>
-                      <div 
-                        className={styles.bar}
-                        style={{ 
-                          height: `${(day.revenue / maxDailyRevenue) * 100}%`,
-                          backgroundColor: day.isSale ? '#16a34a' : '#94a3b8'
-                        }}
-                      />
-                    </div>
-                    <span className={styles.barLabel}>{formatDate(day.date)}</span>
-                  </div>
-                ))}
-              </div>
-              {dailyData.length === 0 && (
-                <div className={styles.noChartData}>No time series data available</div>
-              )}
+        ) : !dataAvailable ? (
+          <div className={styles.emptyState}>
+            <div className={styles.emptyIcon}>
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              </svg>
             </div>
-
-            {/* Regional Breakdown */}
-            <div className={styles.chartCard}>
-              <h3 className={styles.chartTitle}>Revenue by Region</h3>
-              <div className={styles.horizontalBarChart}>
-                {regionData.map((region, idx) => (
-                  <div key={idx} className={styles.horizontalBarRow}>
-                    <span className={styles.horizontalBarLabel}>{region.region}</span>
-                    <div className={styles.horizontalBarWrapper}>
-                      <div 
-                        className={styles.horizontalBar}
-                        style={{ width: `${(region.revenue / maxRegionRevenue) * 100}%` }}
-                      />
-                      <span className={styles.horizontalBarValue}>
-                        {formatCurrency(region.revenue)} ({region.percentage.toFixed(1)}%)
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              {regionData.length === 0 && (
-                <div className={styles.noChartData}>No regional data available</div>
-              )}
-            </div>
+            <h3 className={styles.emptyTitle}>No Performance Data Yet</h3>
+            <p className={styles.emptyDescription}>Import your Steam sales data to see analytics and performance metrics.</p>
+            <button className={styles.emptyButton} onClick={() => setShowImportModal(true)}>
+              <svg className={styles.buttonIcon} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+              </svg>
+              Import CSV Data
+            </button>
           </div>
+        ) : (
+          <>
+            <div className={styles.statsGrid}>
+              <div className={styles.statCard}>
+                <div className={styles.statHeader}>
+                  <span className={styles.statTitle}>Total Revenue</span>
+                  <div className={styles.statIcon} style={{ backgroundColor: '#dcfce7' }}>
+                    <svg fill="none" stroke="#16a34a" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                </div>
+                <div className={styles.statValue}>{formatCurrency(summaryStats?.totalRevenue || 0)}</div>
+                <div className={styles.statSubtext}>Net Steam sales</div>
+              </div>
 
-          {/* Period Comparison Table */}
-          <div className={styles.periodSection}>
-            <div className={styles.sectionHeader}>
-              <h3 className={styles.sectionTitle}>Period Comparison</h3>
-              <p className={styles.sectionSubtitle}>Compare sale periods vs regular price performance</p>
+              <div className={styles.statCard}>
+                <div className={styles.statHeader}>
+                  <span className={styles.statTitle}>Total Units</span>
+                  <div className={styles.statIcon} style={{ backgroundColor: '#dbeafe' }}>
+                    <svg fill="none" stroke="#2563eb" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                    </svg>
+                  </div>
+                </div>
+                <div className={styles.statValue}>{formatNumber(summaryStats?.totalUnits || 0)}</div>
+                <div className={styles.statSubtext}>Net units sold</div>
+              </div>
+
+              <div className={styles.statCard}>
+                <div className={styles.statHeader}>
+                  <span className={styles.statTitle}>Avg Daily Revenue</span>
+                  <div className={styles.statIcon} style={{ backgroundColor: '#fef3c7' }}>
+                    <svg fill="none" stroke="#d97706" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                    </svg>
+                  </div>
+                </div>
+                <div className={styles.statValue}>{formatCurrency(summaryStats?.avgDailyRevenue || 0)}</div>
+                <div className={styles.statSubtext}>Per day average</div>
+              </div>
+
+              <div className={styles.statCard}>
+                <div className={styles.statHeader}>
+                  <span className={styles.statTitle}>Avg Daily Units</span>
+                  <div className={styles.statIcon} style={{ backgroundColor: '#f3e8ff' }}>
+                    <svg fill="none" stroke="#9333ea" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                    </svg>
+                  </div>
+                </div>
+                <div className={styles.statValue}>{formatNumber(summaryStats?.avgDailyUnits || 0)}</div>
+                <div className={styles.statSubtext}>Per day average</div>
+              </div>
+
+              <div className={styles.statCard}>
+                <div className={styles.statHeader}>
+                  <span className={styles.statTitle}>Refund Rate</span>
+                  <div className={styles.statIcon} style={{ backgroundColor: '#fee2e2' }}>
+                    <svg fill="none" stroke="#dc2626" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 15v-1a4 4 0 00-4-4H8m0 0l3 3m-3-3l3-3m9 14V5a2 2 0 00-2-2H6a2 2 0 00-2 2v16l4-2 4 2 4-2 4 2z" />
+                    </svg>
+                  </div>
+                </div>
+                <div className={styles.statValue}>{(summaryStats?.refundRate || 0).toFixed(1)}%</div>
+                <div className={styles.statSubtext}>Chargebacks/returns</div>
+              </div>
             </div>
-            {periodData.length > 0 ? (
-              <div className={styles.periodTable}>
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Period</th>
-                      <th>Dates</th>
-                      <th>Days</th>
-                      <th>Total Revenue</th>
-                      <th>Total Units</th>
-                      <th>Avg Daily Revenue</th>
-                      <th>Avg Daily Units</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {periodData.map((period, idx) => (
-                      <tr key={idx} className={period.isSale ? styles.salePeriodRow : ''}>
-                        <td>
-                          <span className={`${styles.periodBadge} ${period.isSale ? styles.saleBadge : styles.regularBadge}`}>
-                            {period.isSale ? '🏷️ ' : ''}{period.name}
-                          </span>
-                        </td>
-                        <td>{formatDate(period.startDate)} - {formatDate(period.endDate)}</td>
-                        <td>{period.days}</td>
-                        <td className={styles.revenueCell}>{formatCurrency(period.totalRevenue)}</td>
-                        <td>{formatNumber(period.totalUnits)}</td>
-                        <td className={styles.revenueCell}>{formatCurrency(period.avgDailyRevenue)}</td>
-                        <td>{formatNumber(period.avgDailyUnits)}</td>
+
+            <div className={styles.chartsSection}>
+              <div className={styles.chartCard}>
+                <h3 className={styles.chartTitle}>Revenue Over Time</h3>
+                <div className={styles.chartLegend}>
+                  <span className={styles.legendItem}>
+                    <span className={styles.legendDot} style={{ backgroundColor: '#16a34a' }} />
+                    Sale Period
+                  </span>
+                  <span className={styles.legendItem}>
+                    <span className={styles.legendDot} style={{ backgroundColor: '#94a3b8' }} />
+                    Regular Price
+                  </span>
+                </div>
+                <div className={styles.barChart}>
+                  {dailyData.map((day, idx) => (
+                    <div key={idx} className={styles.barColumn}>
+                      <div className={styles.barWrapper}>
+                        <div 
+                          className={styles.bar}
+                          style={{ 
+                            height: `${(day.revenue / maxDailyRevenue) * 100}%`,
+                            backgroundColor: day.isSale ? '#16a34a' : '#94a3b8'
+                          }}
+                        />
+                      </div>
+                      <span className={styles.barLabel}>{formatDate(day.date)}</span>
+                    </div>
+                  ))}
+                </div>
+                {dailyData.length === 0 && (
+                  <div className={styles.noChartData}>No time series data available</div>
+                )}
+              </div>
+
+              <div className={styles.chartCard}>
+                <h3 className={styles.chartTitle}>Revenue by Region</h3>
+                <div className={styles.horizontalBarChart}>
+                  {regionData.map((region, idx) => (
+                    <div key={idx} className={styles.horizontalBarRow}>
+                      <span className={styles.horizontalBarLabel}>{region.region}</span>
+                      <div className={styles.horizontalBarWrapper}>
+                        <div 
+                          className={styles.horizontalBar}
+                          style={{ width: `${(region.revenue / maxRegionRevenue) * 100}%` }}
+                        />
+                        <span className={styles.horizontalBarValue}>
+                          {formatCurrency(region.revenue)} ({region.percentage.toFixed(1)}%)
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                {regionData.length === 0 && (
+                  <div className={styles.noChartData}>No regional data available</div>
+                )}
+              </div>
+            </div>
+
+            <div className={styles.periodSection}>
+              <div className={styles.sectionHeader}>
+                <h3 className={styles.sectionTitle}>Period Comparison</h3>
+                <p className={styles.sectionSubtitle}>Compare sale periods vs regular price performance</p>
+              </div>
+              {periodData.length > 0 ? (
+                <div className={styles.periodTable}>
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Period</th>
+                        <th>Dates</th>
+                        <th>Days</th>
+                        <th>Total Revenue</th>
+                        <th>Total Units</th>
+                        <th>Avg Daily Revenue</th>
+                        <th>Avg Daily Units</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <div className={styles.periodPlaceholder}>
-                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                </svg>
-                <p>Period comparison requires data with sale price information</p>
-              </div>
-            )}
-          </div>
+                    </thead>
+                    <tbody>
+                      {periodData.map((period, idx) => (
+                        <tr key={idx} className={period.isSale ? styles.salePeriodRow : ''}>
+                          <td>
+                            <span className={`${styles.periodBadge} ${period.isSale ? styles.saleBadge : styles.regularBadge}`}>
+                              {period.isSale ? '🏷️ ' : ''}{period.name}
+                            </span>
+                          </td>
+                          <td>{formatDate(period.startDate)} - {formatDate(period.endDate)}</td>
+                          <td>{period.days}</td>
+                          <td className={styles.revenueCell}>{formatCurrency(period.totalRevenue)}</td>
+                          <td>{formatNumber(period.totalUnits)}</td>
+                          <td className={styles.revenueCell}>{formatCurrency(period.avgDailyRevenue)}</td>
+                          <td>{formatNumber(period.avgDailyUnits)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className={styles.periodPlaceholder}>
+                  <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                  </svg>
+                  <p>Period comparison requires data with sale price information</p>
+                </div>
+              )}
+            </div>
 
-          <div className={styles.dataInfo}>
-            <span className={styles.dataInfoText}>Showing {formatNumber(performanceData.length)} records across {summaryStats?.totalDays || 0} days</span>
-          </div>
-        </>
-      )}
+            <div className={styles.dataInfo}>
+              <span className={styles.dataInfoText}>Showing {formatNumber(performanceData.length)} records across {summaryStats?.totalDays || 0} days</span>
+            </div>
+          </>
+        )}
 
-      {showImportModal && (
-        <ImportPerformanceModal
-          onClose={() => setShowImportModal(false)}
-          onSuccess={() => {
-            setShowImportModal(false)
-            fetchPerformanceData()
-          }}
-        />
-      )}
+        {showImportModal && (
+          <ImportPerformanceModal
+            onClose={() => setShowImportModal(false)}
+            onSuccess={() => {
+              setShowImportModal(false)
+              fetchPerformanceData()
+            }}
+          />
+        )}
+      </div>
     </div>
   )
 }
