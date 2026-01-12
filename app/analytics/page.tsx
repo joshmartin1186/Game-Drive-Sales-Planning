@@ -72,6 +72,14 @@ interface PeriodData {
   discountPct: number | null
 }
 
+interface CurrentPeriodState {
+  dates: string[]
+  revenue: number
+  units: number
+  isSale: boolean
+  discountPct: number | null
+}
+
 export default function AnalyticsPage() {
   const supabase = createClientComponentClient()
   
@@ -213,19 +221,34 @@ export default function AnalyticsPage() {
       .sort((a, b) => b.revenue - a.revenue)
   }, [performanceData])
 
+  // Helper function to push a period to the periods array
+  const pushPeriod = (periods: PeriodData[], period: CurrentPeriodState): void => {
+    if (period.dates.length > 0) {
+      const days = period.dates.length
+      periods.push({
+        name: period.isSale 
+          ? `Sale Period (${period.discountPct || '??'}% off)`
+          : 'Regular Price',
+        startDate: period.dates[0],
+        endDate: period.dates[period.dates.length - 1],
+        days,
+        totalRevenue: period.revenue,
+        totalUnits: period.units,
+        avgDailyRevenue: period.revenue / days,
+        avgDailyUnits: period.units / days,
+        isSale: period.isSale,
+        discountPct: period.discountPct
+      })
+    }
+  }
+
   // Compute period comparison (sale periods vs regular)
   const periodData = useMemo((): PeriodData[] => {
     if (!performanceData.length) return []
     
     // Group consecutive days with same sale status
     const periods: PeriodData[] = []
-    let currentPeriod: {
-      dates: string[]
-      revenue: number
-      units: number
-      isSale: boolean
-      discountPct: number | null
-    } | null = null
+    let currentPeriod: CurrentPeriodState | null = null
     
     // Sort by date and aggregate
     const dailyAgg = new Map<string, {
@@ -263,27 +286,13 @@ export default function AnalyticsPage() {
     
     const sortedDates = Array.from(dailyAgg.keys()).sort()
     
-    sortedDates.forEach(date => {
+    for (const date of sortedDates) {
       const dayData = dailyAgg.get(date)!
       
       if (!currentPeriod || currentPeriod.isSale !== dayData.isSale) {
         // Save previous period
-        if (currentPeriod && currentPeriod.dates.length > 0) {
-          const days = currentPeriod.dates.length
-          periods.push({
-            name: currentPeriod.isSale 
-              ? `Sale Period (${currentPeriod.discountPct || '??'}% off)`
-              : 'Regular Price',
-            startDate: currentPeriod.dates[0],
-            endDate: currentPeriod.dates[currentPeriod.dates.length - 1],
-            days,
-            totalRevenue: currentPeriod.revenue,
-            totalUnits: currentPeriod.units,
-            avgDailyRevenue: currentPeriod.revenue / days,
-            avgDailyUnits: currentPeriod.units / days,
-            isSale: currentPeriod.isSale,
-            discountPct: currentPeriod.discountPct
-          })
+        if (currentPeriod) {
+          pushPeriod(periods, currentPeriod)
         }
         // Start new period
         currentPeriod = {
@@ -299,25 +308,11 @@ export default function AnalyticsPage() {
         currentPeriod.revenue += dayData.revenue
         currentPeriod.units += dayData.units
       }
-    })
+    }
     
     // Don't forget the last period
-    if (currentPeriod && currentPeriod.dates.length > 0) {
-      const days = currentPeriod.dates.length
-      periods.push({
-        name: currentPeriod.isSale 
-          ? `Sale Period (${currentPeriod.discountPct || '??'}% off)`
-          : 'Regular Price',
-        startDate: currentPeriod.dates[0],
-        endDate: currentPeriod.dates[currentPeriod.dates.length - 1],
-        days,
-        totalRevenue: currentPeriod.revenue,
-        totalUnits: currentPeriod.units,
-        avgDailyRevenue: currentPeriod.revenue / days,
-        avgDailyUnits: currentPeriod.units / days,
-        isSale: currentPeriod.isSale,
-        discountPct: currentPeriod.discountPct
-      })
+    if (currentPeriod) {
+      pushPeriod(periods, currentPeriod)
     }
     
     return periods
