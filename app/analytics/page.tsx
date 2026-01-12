@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import styles from './page.module.css'
 import { Sidebar } from '../components/Sidebar'
@@ -45,6 +45,33 @@ interface DateRange {
   end: Date | null
 }
 
+interface DailyData {
+  date: string
+  revenue: number
+  units: number
+  isSale: boolean
+}
+
+interface RegionData {
+  region: string
+  revenue: number
+  units: number
+  percentage: number
+}
+
+interface PeriodData {
+  name: string
+  startDate: string
+  endDate: string
+  days: number
+  totalRevenue: number
+  totalUnits: number
+  avgDailyRevenue: number
+  avgDailyUnits: number
+  isSale: boolean
+  discountPct: number | null
+}
+
 export default function AnalyticsPage() {
   const supabase = createClientComponentClient()
   
@@ -69,7 +96,7 @@ export default function AnalyticsPage() {
       let query = supabase
         .from('steam_performance_data')
         .select('*')
-        .order('date', { ascending: false })
+        .order('date', { ascending: true })
 
       if (dateRange.start) {
         query = query.gte('date', dateRange.start.toISOString().split('T')[0])
@@ -133,6 +160,169 @@ export default function AnalyticsPage() {
     fetchPerformanceData()
   }, [fetchPerformanceData])
 
+  // Compute daily time series data
+  const dailyData = useMemo((): DailyData[] => {
+    if (!performanceData.length) return []
+    
+    const byDate = new Map<string, { revenue: number; units: number; hasSale: boolean }>()
+    
+    performanceData.forEach(row => {
+      const existing = byDate.get(row.date) || { revenue: 0, units: 0, hasSale: false }
+      const isSale = row.sale_price_usd !== null && row.sale_price_usd !== row.base_price_usd
+      byDate.set(row.date, {
+        revenue: existing.revenue + (row.net_steam_sales_usd || 0),
+        units: existing.units + (row.net_units_sold || 0),
+        hasSale: existing.hasSale || isSale
+      })
+    })
+    
+    return Array.from(byDate.entries())
+      .map(([date, data]) => ({
+        date,
+        revenue: data.revenue,
+        units: data.units,
+        isSale: data.hasSale
+      }))
+      .sort((a, b) => a.date.localeCompare(b.date))
+  }, [performanceData])
+
+  // Compute regional breakdown
+  const regionData = useMemo((): RegionData[] => {
+    if (!performanceData.length) return []
+    
+    const byRegion = new Map<string, { revenue: number; units: number }>()
+    let totalRevenue = 0
+    
+    performanceData.forEach(row => {
+      const region = row.region || 'Unknown'
+      const existing = byRegion.get(region) || { revenue: 0, units: 0 }
+      byRegion.set(region, {
+        revenue: existing.revenue + (row.net_steam_sales_usd || 0),
+        units: existing.units + (row.net_units_sold || 0)
+      })
+      totalRevenue += row.net_steam_sales_usd || 0
+    })
+    
+    return Array.from(byRegion.entries())
+      .map(([region, data]) => ({
+        region,
+        revenue: data.revenue,
+        units: data.units,
+        percentage: totalRevenue > 0 ? (data.revenue / totalRevenue) * 100 : 0
+      }))
+      .sort((a, b) => b.revenue - a.revenue)
+  }, [performanceData])
+
+  // Compute period comparison (sale periods vs regular)
+  const periodData = useMemo((): PeriodData[] => {
+    if (!performanceData.length) return []
+    
+    // Group consecutive days with same sale status
+    const periods: PeriodData[] = []
+    let currentPeriod: {
+      dates: string[]
+      revenue: number
+      units: number
+      isSale: boolean
+      discountPct: number | null
+    } | null = null
+    
+    // Sort by date and aggregate
+    const dailyAgg = new Map<string, {
+      revenue: number
+      units: number
+      isSale: boolean
+      discountPct: number | null
+    }>()
+    
+    performanceData.forEach(row => {
+      const existing = dailyAgg.get(row.date)
+      const isSale = row.sale_price_usd !== null && 
+                     row.base_price_usd !== null && 
+                     row.sale_price_usd < row.base_price_usd
+      const discountPct = isSale && row.base_price_usd && row.sale_price_usd
+        ? Math.round((1 - row.sale_price_usd / row.base_price_usd) * 100)
+        : null
+      
+      if (existing) {
+        dailyAgg.set(row.date, {
+          revenue: existing.revenue + (row.net_steam_sales_usd || 0),
+          units: existing.units + (row.net_units_sold || 0),
+          isSale: existing.isSale || isSale,
+          discountPct: discountPct || existing.discountPct
+        })
+      } else {
+        dailyAgg.set(row.date, {
+          revenue: row.net_steam_sales_usd || 0,
+          units: row.net_units_sold || 0,
+          isSale,
+          discountPct
+        })
+      }
+    })
+    
+    const sortedDates = Array.from(dailyAgg.keys()).sort()
+    
+    sortedDates.forEach(date => {
+      const dayData = dailyAgg.get(date)!
+      
+      if (!currentPeriod || currentPeriod.isSale !== dayData.isSale) {
+        // Save previous period
+        if (currentPeriod && currentPeriod.dates.length > 0) {
+          const days = currentPeriod.dates.length
+          periods.push({
+            name: currentPeriod.isSale 
+              ? `Sale Period (${currentPeriod.discountPct || '??'}% off)`
+              : 'Regular Price',
+            startDate: currentPeriod.dates[0],
+            endDate: currentPeriod.dates[currentPeriod.dates.length - 1],
+            days,
+            totalRevenue: currentPeriod.revenue,
+            totalUnits: currentPeriod.units,
+            avgDailyRevenue: currentPeriod.revenue / days,
+            avgDailyUnits: currentPeriod.units / days,
+            isSale: currentPeriod.isSale,
+            discountPct: currentPeriod.discountPct
+          })
+        }
+        // Start new period
+        currentPeriod = {
+          dates: [date],
+          revenue: dayData.revenue,
+          units: dayData.units,
+          isSale: dayData.isSale,
+          discountPct: dayData.discountPct
+        }
+      } else {
+        // Continue current period
+        currentPeriod.dates.push(date)
+        currentPeriod.revenue += dayData.revenue
+        currentPeriod.units += dayData.units
+      }
+    })
+    
+    // Don't forget the last period
+    if (currentPeriod && currentPeriod.dates.length > 0) {
+      const days = currentPeriod.dates.length
+      periods.push({
+        name: currentPeriod.isSale 
+          ? `Sale Period (${currentPeriod.discountPct || '??'}% off)`
+          : 'Regular Price',
+        startDate: currentPeriod.dates[0],
+        endDate: currentPeriod.dates[currentPeriod.dates.length - 1],
+        days,
+        totalRevenue: currentPeriod.revenue,
+        totalUnits: currentPeriod.units,
+        avgDailyRevenue: currentPeriod.revenue / days,
+        avgDailyUnits: currentPeriod.units / days,
+        isSale: currentPeriod.isSale,
+        discountPct: currentPeriod.discountPct
+      })
+    }
+    
+    return periods
+  }, [performanceData])
+
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
@@ -144,6 +334,11 @@ export default function AnalyticsPage() {
 
   const formatNumber = (value: number) => {
     return new Intl.NumberFormat('en-US').format(Math.round(value))
+  }
+
+  const formatDate = (dateStr: string) => {
+    const date = new Date(dateStr)
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
   }
 
   const setPresetDateRange = (preset: string) => {
@@ -175,6 +370,12 @@ export default function AnalyticsPage() {
 
     setDateRange({ start, end })
   }
+
+  // Get max values for chart scaling
+  const maxDailyRevenue = useMemo(() => 
+    Math.max(...dailyData.map(d => d.revenue), 1), [dailyData])
+  const maxRegionRevenue = useMemo(() => 
+    Math.max(...regionData.map(d => d.revenue), 1), [regionData])
 
   return (
     <div className={styles.pageContainer}>
@@ -336,40 +537,113 @@ export default function AnalyticsPage() {
                 </div>
               </div>
 
+              {/* Time Series Chart */}
               <div className={styles.chartsSection}>
                 <div className={styles.chartCard}>
                   <h3 className={styles.chartTitle}>Revenue Over Time</h3>
-                  <div className={styles.chartPlaceholder}>
-                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
-                    </svg>
-                    <p>Time series chart coming soon</p>
+                  <div className={styles.chartLegend}>
+                    <span className={styles.legendItem}>
+                      <span className={styles.legendDot} style={{ backgroundColor: '#16a34a' }} />
+                      Sale Period
+                    </span>
+                    <span className={styles.legendItem}>
+                      <span className={styles.legendDot} style={{ backgroundColor: '#94a3b8' }} />
+                      Regular Price
+                    </span>
                   </div>
+                  <div className={styles.barChart}>
+                    {dailyData.map((day, idx) => (
+                      <div key={idx} className={styles.barColumn}>
+                        <div className={styles.barWrapper}>
+                          <div 
+                            className={styles.bar}
+                            style={{ 
+                              height: `${(day.revenue / maxDailyRevenue) * 100}%`,
+                              backgroundColor: day.isSale ? '#16a34a' : '#94a3b8'
+                            }}
+                          />
+                        </div>
+                        <span className={styles.barLabel}>{formatDate(day.date)}</span>
+                      </div>
+                    ))}
+                  </div>
+                  {dailyData.length === 0 && (
+                    <div className={styles.noChartData}>No time series data available</div>
+                  )}
                 </div>
 
+                {/* Regional Breakdown */}
                 <div className={styles.chartCard}>
                   <h3 className={styles.chartTitle}>Revenue by Region</h3>
-                  <div className={styles.chartPlaceholder}>
-                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z" />
-                    </svg>
-                    <p>Region breakdown coming soon</p>
+                  <div className={styles.horizontalBarChart}>
+                    {regionData.map((region, idx) => (
+                      <div key={idx} className={styles.horizontalBarRow}>
+                        <span className={styles.horizontalBarLabel}>{region.region}</span>
+                        <div className={styles.horizontalBarWrapper}>
+                          <div 
+                            className={styles.horizontalBar}
+                            style={{ width: `${(region.revenue / maxRegionRevenue) * 100}%` }}
+                          />
+                          <span className={styles.horizontalBarValue}>
+                            {formatCurrency(region.revenue)} ({region.percentage.toFixed(1)}%)
+                          </span>
+                        </div>
+                      </div>
+                    ))}
                   </div>
+                  {regionData.length === 0 && (
+                    <div className={styles.noChartData}>No regional data available</div>
+                  )}
                 </div>
               </div>
 
+              {/* Period Comparison Table */}
               <div className={styles.periodSection}>
                 <div className={styles.sectionHeader}>
                   <h3 className={styles.sectionTitle}>Period Comparison</h3>
                   <p className={styles.sectionSubtitle}>Compare sale periods vs regular price performance</p>
                 </div>
-                <div className={styles.periodPlaceholder}>
-                  <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                  </svg>
-                  <p>Period comparison table will auto-detect sale periods from your planning data</p>
-                </div>
+                {periodData.length > 0 ? (
+                  <div className={styles.periodTable}>
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Period</th>
+                          <th>Dates</th>
+                          <th>Days</th>
+                          <th>Total Revenue</th>
+                          <th>Total Units</th>
+                          <th>Avg Daily Revenue</th>
+                          <th>Avg Daily Units</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {periodData.map((period, idx) => (
+                          <tr key={idx} className={period.isSale ? styles.salePeriodRow : ''}>
+                            <td>
+                              <span className={`${styles.periodBadge} ${period.isSale ? styles.saleBadge : styles.regularBadge}`}>
+                                {period.isSale ? '🏷️ ' : ''}{period.name}
+                              </span>
+                            </td>
+                            <td>{formatDate(period.startDate)} - {formatDate(period.endDate)}</td>
+                            <td>{period.days}</td>
+                            <td className={styles.revenueCell}>{formatCurrency(period.totalRevenue)}</td>
+                            <td>{formatNumber(period.totalUnits)}</td>
+                            <td className={styles.revenueCell}>{formatCurrency(period.avgDailyRevenue)}</td>
+                            <td>{formatNumber(period.avgDailyUnits)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className={styles.periodPlaceholder}>
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    </svg>
+                    <p>Period comparison requires data with sale price information</p>
+                  </div>
+                )}
               </div>
 
               <div className={styles.dataInfo}>
