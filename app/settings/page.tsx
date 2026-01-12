@@ -42,7 +42,7 @@ export default function SettingsPage() {
   const [showSyncModal, setShowSyncModal] = useState(false);
   const [selectedKey, setSelectedKey] = useState<SteamApiKey | null>(null);
   const [testingKey, setTestingKey] = useState<string | null>(null);
-  const [testResult, setTestResult] = useState<{valid: boolean; message: string; debug?: unknown} | null>(null);
+  const [testResult, setTestResult] = useState<{valid: boolean; message: string; debug?: SyncDebugInfo} | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<{
     success: boolean; 
@@ -52,7 +52,6 @@ export default function SettingsPage() {
     debug?: SyncDebugInfo;
   } | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [showDebug, setShowDebug] = useState(false);
 
   const [formData, setFormData] = useState({
     client_id: '',
@@ -128,7 +127,7 @@ export default function SettingsPage() {
     try {
       const res = await fetch(`/api/steam-sync?client_id=${clientId}`);
       const data = await res.json();
-      setTestResult({ valid: data.valid, message: data.message, debug: data.debug });
+      setTestResult({ valid: data.valid, message: data.message, debug: data.debug as SyncDebugInfo });
       console.log('Test result:', data);
     } catch (error) {
       setTestResult({ valid: false, message: 'Failed to test API key' });
@@ -161,7 +160,7 @@ export default function SettingsPage() {
         message: data.message || data.error || 'Unknown result',
         rowsImported: data.rowsImported,
         datesProcessed: data.datesProcessed,
-        debug: data.debug
+        debug: data.debug as SyncDebugInfo
       });
       if (data.success) {
         fetchData();
