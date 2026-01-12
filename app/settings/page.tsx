@@ -34,6 +34,26 @@ interface SyncDebugInfo {
   rawResponse?: unknown;
 }
 
+// Helper function to safely stringify debug info
+function formatDebugInfo(debug: SyncDebugInfo | undefined): string {
+  if (!debug) return '';
+  try {
+    return JSON.stringify(debug, null, 2);
+  } catch {
+    return 'Unable to format debug info';
+  }
+}
+
+// Helper function to safely stringify raw response
+function formatRawResponse(rawResponse: unknown): string {
+  if (!rawResponse) return '';
+  try {
+    return JSON.stringify(rawResponse, null, 2);
+  } catch {
+    return 'Unable to format raw response';
+  }
+}
+
 export default function SettingsPage() {
   const [clients, setClients] = useState<Client[]>([]);
   const [apiKeys, setApiKeys] = useState<SteamApiKey[]>([]);
@@ -269,7 +289,7 @@ export default function SettingsPage() {
                             <details style={{ marginTop: '8px', fontSize: '10px' }}>
                               <summary>Debug Info</summary>
                               <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all', background: '#f1f5f9', padding: '8px', borderRadius: '4px', marginTop: '4px' }}>
-                                {JSON.stringify(testResult.debug, null, 2)}
+                                {formatDebugInfo(testResult.debug)}
                               </pre>
                             </details>
                           )}
@@ -516,12 +536,12 @@ export default function SettingsPage() {
                       <div><strong>API Called:</strong> {syncResult.debug.apiCalled ? 'Yes' : 'No'}</div>
                       <div><strong>Endpoint:</strong> {syncResult.debug.endpoint || 'N/A'}</div>
                       <div><strong>Highwatermark Used:</strong> {syncResult.debug.highwatermarkUsed || 'N/A'}</div>
-                      <div><strong>Total Dates from API:</strong> {syncResult.debug.totalDatesFromApi ?? 'N/A'}</div>
-                      <div><strong>Dates After Filter:</strong> {syncResult.debug.datesAfterFilter ?? 'N/A'}</div>
+                      <div><strong>Total Dates from API:</strong> {String(syncResult.debug.totalDatesFromApi ?? 'N/A')}</div>
+                      <div><strong>Dates After Filter:</strong> {String(syncResult.debug.datesAfterFilter ?? 'N/A')}</div>
                       {syncResult.debug.sampleDates && syncResult.debug.sampleDates.length > 0 && (
                         <div><strong>Sample Dates:</strong> {syncResult.debug.sampleDates.join(', ')}</div>
                       )}
-                      {syncResult.debug.rawResponse && (
+                      {syncResult.debug.rawResponse !== undefined && syncResult.debug.rawResponse !== null && (
                         <details style={{ marginTop: '8px' }}>
                           <summary style={{ cursor: 'pointer' }}>Raw API Response</summary>
                           <pre style={{ 
@@ -534,7 +554,7 @@ export default function SettingsPage() {
                             borderRadius: '4px',
                             marginTop: '4px'
                           }}>
-                            {JSON.stringify(syncResult.debug.rawResponse, null, 2)}
+                            {formatRawResponse(syncResult.debug.rawResponse)}
                           </pre>
                         </details>
                       )}
