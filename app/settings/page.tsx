@@ -23,6 +23,17 @@ interface SteamApiKey {
   clients: Client;
 }
 
+interface SyncDebugInfo {
+  apiCalled?: boolean;
+  endpoint?: string;
+  highwatermarkUsed?: string;
+  totalDatesFromApi?: number;
+  datesAfterFilter?: number;
+  sampleDates?: string[];
+  newHighwatermark?: string;
+  rawResponse?: unknown;
+}
+
 export default function SettingsPage() {
   const [clients, setClients] = useState<Client[]>([]);
   const [apiKeys, setApiKeys] = useState<SteamApiKey[]>([]);
@@ -31,10 +42,17 @@ export default function SettingsPage() {
   const [showSyncModal, setShowSyncModal] = useState(false);
   const [selectedKey, setSelectedKey] = useState<SteamApiKey | null>(null);
   const [testingKey, setTestingKey] = useState<string | null>(null);
-  const [testResult, setTestResult] = useState<{valid: boolean; message: string} | null>(null);
+  const [testResult, setTestResult] = useState<{valid: boolean; message: string; debug?: unknown} | null>(null);
   const [syncing, setSyncing] = useState(false);
-  const [syncResult, setSyncResult] = useState<{success: boolean; message: string; rowsImported?: number; datesProcessed?: number} | null>(null);
+  const [syncResult, setSyncResult] = useState<{
+    success: boolean; 
+    message: string; 
+    rowsImported?: number; 
+    datesProcessed?: number;
+    debug?: SyncDebugInfo;
+  } | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [showDebug, setShowDebug] = useState(false);
 
   const [formData, setFormData] = useState({
     client_id: '',
@@ -46,7 +64,8 @@ export default function SettingsPage() {
   const [syncOptions, setSyncOptions] = useState({
     start_date: new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
     end_date: new Date().toISOString().split('T')[0],
-    app_id: ''
+    app_id: '',
+    force_full_sync: false
   });
 
   useEffect(() => {
@@ -109,14 +128,14 @@ export default function SettingsPage() {
     try {
       const res = await fetch(`/api/steam-sync?client_id=${clientId}`);
       const data = await res.json();
-      setTestResult({ valid: data.valid, message: data.message });
+      setTestResult({ valid: data.valid, message: data.message, debug: data.debug });
+      console.log('Test result:', data);
     } catch (error) {
       setTestResult({ valid: false, message: 'Failed to test API key' });
     }
     setTimeout(() => {
       setTestingKey(null);
-      setTestResult(null);
-    }, 8000);
+    }, 15000);
   };
 
   const handleSync = async () => {
@@ -131,21 +150,25 @@ export default function SettingsPage() {
           client_id: selectedKey.client_id,
           start_date: syncOptions.start_date || undefined,
           end_date: syncOptions.end_date || undefined,
-          app_id: syncOptions.app_id || undefined
+          app_id: syncOptions.app_id || undefined,
+          force_full_sync: syncOptions.force_full_sync
         })
       });
       const data = await res.json();
+      console.log('Sync result:', data);
       setSyncResult({ 
-        success: data.success, 
-        message: data.message,
+        success: data.success !== false, 
+        message: data.message || data.error || 'Unknown result',
         rowsImported: data.rowsImported,
-        datesProcessed: data.datesProcessed
+        datesProcessed: data.datesProcessed,
+        debug: data.debug
       });
       if (data.success) {
         fetchData();
       }
     } catch (error) {
-      setSyncResult({ success: false, message: 'Failed to sync data' });
+      console.error('Sync error:', error);
+      setSyncResult({ success: false, message: 'Failed to sync data: ' + String(error) });
     }
     setSyncing(false);
   };
@@ -243,6 +266,14 @@ export default function SettingsPage() {
                         <div className={`${styles.statusBadge} ${testResult.valid ? styles.valid : styles.invalid}`}>
                           <strong>{testResult.valid ? '✓ Connected' : '✗ Failed'}</strong>
                           <span style={{ fontSize: '11px', display: 'block', marginTop: '2px' }}>{testResult.message}</span>
+                          {testResult.debug && (
+                            <details style={{ marginTop: '8px', fontSize: '10px' }}>
+                              <summary>Debug Info</summary>
+                              <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all', background: '#f1f5f9', padding: '8px', borderRadius: '4px', marginTop: '4px' }}>
+                                {JSON.stringify(testResult.debug, null, 2)}
+                              </pre>
+                            </details>
+                          )}
                         </div>
                       )}
                     </div>
@@ -265,7 +296,7 @@ export default function SettingsPage() {
                       </button>
                       <button 
                         className={`${styles.actionButton} ${styles.sync}`}
-                        onClick={() => { setSelectedKey(key); setShowSyncModal(true); }}
+                        onClick={() => { setSelectedKey(key); setShowSyncModal(true); setSyncResult(null); }}
                       >
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                           <path d="M23 4v6h-6"/>
@@ -400,7 +431,7 @@ export default function SettingsPage() {
       {/* Sync Modal */}
       {showSyncModal && selectedKey && (
         <div className={styles.modalOverlay} onClick={() => { setShowSyncModal(false); setSyncResult(null); }}>
-          <div className={styles.modal} onClick={e => e.stopPropagation()}>
+          <div className={styles.modal} onClick={e => e.stopPropagation()} style={{ maxWidth: '550px' }}>
             <div className={styles.modalHeader}>
               <h3>Sync Steam Data</h3>
               <button className={styles.closeButton} onClick={() => { setShowSyncModal(false); setSyncResult(null); }}>
@@ -444,6 +475,19 @@ export default function SettingsPage() {
                   onChange={e => setSyncOptions({...syncOptions, app_id: e.target.value})}
                 />
               </div>
+
+              <div className={styles.formGroup}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={syncOptions.force_full_sync}
+                    onChange={e => setSyncOptions({...syncOptions, force_full_sync: e.target.checked})}
+                    style={{ width: '16px', height: '16px' }}
+                  />
+                  Force full sync (ignore cached highwatermark)
+                </label>
+                <small>Use this to re-sync all data from scratch</small>
+              </div>
             </div>
 
             {syncResult && (
@@ -452,8 +496,51 @@ export default function SettingsPage() {
                 <p style={{ margin: '8px 0 0 0', fontSize: '14px' }}>{syncResult.message}</p>
                 {syncResult.rowsImported !== undefined && (
                   <p style={{ margin: '4px 0 0 0', fontSize: '13px', opacity: 0.8 }}>
-                    {syncResult.rowsImported} rows imported from {syncResult.datesProcessed} date(s)
+                    {syncResult.rowsImported} rows imported from {syncResult.datesProcessed || 0} date(s)
                   </p>
+                )}
+                
+                {/* Debug Information */}
+                {syncResult.debug && (
+                  <details style={{ marginTop: '12px' }}>
+                    <summary style={{ cursor: 'pointer', fontSize: '12px', color: '#64748b' }}>
+                      🔍 Show API Debug Info
+                    </summary>
+                    <div style={{ 
+                      marginTop: '8px', 
+                      padding: '12px', 
+                      background: '#f8fafc', 
+                      borderRadius: '6px',
+                      fontSize: '12px',
+                      fontFamily: 'monospace'
+                    }}>
+                      <div><strong>API Called:</strong> {syncResult.debug.apiCalled ? 'Yes' : 'No'}</div>
+                      <div><strong>Endpoint:</strong> {syncResult.debug.endpoint || 'N/A'}</div>
+                      <div><strong>Highwatermark Used:</strong> {syncResult.debug.highwatermarkUsed || 'N/A'}</div>
+                      <div><strong>Total Dates from API:</strong> {syncResult.debug.totalDatesFromApi ?? 'N/A'}</div>
+                      <div><strong>Dates After Filter:</strong> {syncResult.debug.datesAfterFilter ?? 'N/A'}</div>
+                      {syncResult.debug.sampleDates && syncResult.debug.sampleDates.length > 0 && (
+                        <div><strong>Sample Dates:</strong> {syncResult.debug.sampleDates.join(', ')}</div>
+                      )}
+                      {syncResult.debug.rawResponse && (
+                        <details style={{ marginTop: '8px' }}>
+                          <summary style={{ cursor: 'pointer' }}>Raw API Response</summary>
+                          <pre style={{ 
+                            whiteSpace: 'pre-wrap', 
+                            wordBreak: 'break-all',
+                            maxHeight: '200px',
+                            overflow: 'auto',
+                            background: '#e2e8f0',
+                            padding: '8px',
+                            borderRadius: '4px',
+                            marginTop: '4px'
+                          }}>
+                            {JSON.stringify(syncResult.debug.rawResponse, null, 2)}
+                          </pre>
+                        </details>
+                      )}
+                    </div>
+                  </details>
                 )}
               </div>
             )}
