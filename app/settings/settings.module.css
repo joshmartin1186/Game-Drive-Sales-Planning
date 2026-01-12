@@ -1,12 +1,26 @@
-.settingsPage {
+/* Page layout */
+.pageWrapper {
   min-height: 100vh;
   background: #f8fafc;
 }
 
-.container {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 24px;
+.layoutContainer {
+  display: flex;
+  min-height: calc(100vh - 64px);
+}
+
+.mainContent {
+  flex: 1;
+  padding: 24px 32px;
+  margin-left: 256px;
+  max-width: calc(100% - 256px);
+}
+
+@media (max-width: 1024px) {
+  .mainContent {
+    margin-left: 0;
+    max-width: 100%;
+  }
 }
 
 .header {
@@ -266,6 +280,7 @@
   border-radius: 6px;
   font-size: 14px;
   transition: border-color 0.2s;
+  box-sizing: border-box;
 }
 
 .formGroup input:focus,
