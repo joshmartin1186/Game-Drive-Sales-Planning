@@ -38,9 +38,8 @@
 ## Current Status: January 12, 2025
 
 ### Latest Session Summary
-**Focus:** Fixing right-click paste to create sales directly (no modal)  
-**Commits:** 1 successful deployment  
-**Result:** All Jan 6 feedback items from Alisa now complete!
+**Focus:** Steam Analytics Dashboard specification based on Alisa's Excel workflow  
+**Result:** Created 10 GitHub issues (#18-27) for systematic implementation
 
 ### Completion Summary
 | Phase | Status | Completion |
@@ -59,27 +58,84 @@
 | Auto Sale Calendar | Complete | 100% |
 | Client Feedback Issues #1-11 | Complete | 100% |
 | Responsive Timeline | Complete | 100% |
-| **Jan 6 Feedback Items** | **Complete** | **100%** |
+| Jan 6 Feedback Items | Complete | 100% |
 | Copy/Paste Sales | Complete | 100% |
-| Steam API Integration | Pending | 0% |
+| **Steam Analytics Dashboard** | **Spec Complete** | **0% built** |
 | Excel Export | Pending | 0% |
 
 ---
 
-## January 12, 2025 Session - Paste Feature Fix
+## Steam Analytics Dashboard Specification
 
-### Fix Completed
-**Issue:** Right-click paste was opening modal instead of creating sale directly  
-**Root Cause:** `handlePasteFromContextMenu` wasn't passing `directCreate: true` flag  
-**Solution:** Updated function to pass complete clipboard data with `directCreate: true`
+### Overview
+Dashboard design based on analysis of Alisa's actual Excel workflow (shapez_2_new__analysis.xlsx - 93,872 rows).
 
-**Commit:** `2c6ebddb` - Fix: Pass directCreate flag and clipboard data when pasting sales
+### Data Source Analysis
+- **Date Range:** 2024-05-22 to 2025-12-11
+- **Products:** 17 (shapez 2 base + Supporter Edition + regional variants)
+- **Regions:** 11 (Western Europe 36%, Asia 16%, North America 12%, etc.)
+- **Platforms:** 4 (Windows 78%, Mac 12%, Linux 8%, Unknown 2%)
+- **Total:** 696,607 gross units, $8,797,548 net revenue
 
-### How Copy/Paste Now Works
-1. **Copy** - Click sale, press ⌘C (or Ctrl+C) - green banner confirms copy
-2. **Right-click** - Click anywhere on timeline row - shows context menu with clipboard preview
-3. **Paste** - Click "Paste Sale Here" - sale created INSTANTLY (no modal)
-4. **Result** - Pasted sale has same name, discount, duration - new date/platform from click location
+### Alisa's Primary Analysis Pattern
+She creates **period comparison tables** tracking:
+- Date ranges (start/end)
+- Period type (Regular Price, Custom Sale, Autumn Sale, etc.)
+- Units sold / Units per day
+- Revenue / Revenue per day
+- **% change vs previous period**
+
+She does this **separately by product** (base game vs Supporter Edition).
+
+### GitHub Issues Created
+
+| Issue | Title | Priority |
+|-------|-------|----------|
+| [#18](https://github.com/joshmartin1186/Game-Drive-Sales-Planning/issues/18) | Data Infrastructure & API Client | High |
+| [#19](https://github.com/joshmartin1186/Game-Drive-Sales-Planning/issues/19) | Overview Summary Cards | Medium |
+| [#20](https://github.com/joshmartin1186/Game-Drive-Sales-Planning/issues/20) | Period Comparison Table (Core Feature) | **High** |
+| [#21](https://github.com/joshmartin1186/Game-Drive-Sales-Planning/issues/21) | Revenue by Region Chart | Medium |
+| [#22](https://github.com/joshmartin1186/Game-Drive-Sales-Planning/issues/22) | Revenue by Platform Chart | Medium |
+| [#23](https://github.com/joshmartin1186/Game-Drive-Sales-Planning/issues/23) | Revenue by Product Chart | Medium |
+| [#24](https://github.com/joshmartin1186/Game-Drive-Sales-Planning/issues/24) | Time Series Chart with Sale Highlights | Medium |
+| [#25](https://github.com/joshmartin1186/Game-Drive-Sales-Planning/issues/25) | Dashboard Filter Controls | High |
+| [#26](https://github.com/joshmartin1186/Game-Drive-Sales-Planning/issues/26) | CSV Import for Performance Data | High |
+| [#27](https://github.com/joshmartin1186/Game-Drive-Sales-Planning/issues/27) | Dashboard Page Layout & Navigation | High |
+
+### Dashboard Layout
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  [Filters: Client | Date Range | Product | Region | Platform] │
+├─────────────────────────────────────────────────────────────┤
+│  ┌───────┐ ┌───────┐ ┌───────┐ ┌───────┐ ┌───────┐         │
+│  │Revenue│ │ Units │ │Rev/Day│ │Unit/Day│ │Refund%│         │
+│  └───────┘ └───────┘ └───────┘ └───────┘ └───────┘         │
+├─────────────────────────────────────────────────────────────┤
+│  [Time Series Chart with Sale Period Highlights]            │
+├─────────────────────────────────────────────────────────────┤
+│  ┌─────────────────────┐  ┌─────────────────────┐          │
+│  │ Period Comparison   │  │ Revenue by Region   │          │
+│  │ Table (PRIMARY)     │  │ Pie/Bar Chart       │          │
+│  └─────────────────────┘  └─────────────────────┘          │
+├─────────────────────────────────────────────────────────────┤
+│  ┌─────────────────────┐  ┌─────────────────────┐          │
+│  │ Revenue by Platform │  │ Revenue by Product  │          │
+│  └─────────────────────┘  └─────────────────────┘          │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Steam API Context
+- **Authentication:** Each client needs own Financial API Key from Steamworks
+- **API workflow:** GetChangedDatesForPartner → GetDetailedSales with incremental sync
+- **Available data:** 22 fields per row (units, revenue, country, platform, pricing)
+- **Fallback:** CSV import for clients without API keys
+
+### Scope Decisions
+- ✅ API Key Management: Manual collection per client (no automation)
+- ✅ Data Refresh: Fresh on load, on-demand refresh, daily automatic sync
+- ✅ CSV Import: Supported as fallback
+- ❌ Intelligence Features: OUT OF SCOPE (planning tool integration deferred)
 
 ---
 
@@ -100,7 +156,7 @@
 | Today Date Visibility | Scroll-to-today works on initial load | ✅ Complete |
 | Statistics/Events Hover | Platform events show details on hover | ✅ Complete |
 | Copy Sales | ⌘C to copy selected sale | ✅ Complete |
-| **Paste Sales** | **Right-click paste creates sale directly** | ✅ **Complete** |
+| Paste Sales | Right-click paste creates sale directly | ✅ Complete |
 | Collapsible Platform Legend | Toggle button to hide/show | ✅ Complete |
 | Timeline/Edit Modal Sync | Fixed date display inconsistencies | ✅ Complete |
 | Import Historical Sales | CSV/Excel import of past sales | ⏸ Deferred |
@@ -121,11 +177,11 @@
 |------|-------------|--------|
 | PowerPoint Export | Implementation complete | 🧪 Test in Meeting |
 
-### Deferred to Future Sprint (Per Agreement)
-1. **Historical Discount Tracking** - Upload historical docs, show "highest discount so far"
-2. **Analytical Prediction** - Revenue forecasting based on historical data
-3. **Bulk Editing** - Edit multiple products/sales at once
-4. **Import Historical Sales** - CSV/Excel import of past sales
+### Deferred to Future Sprint
+1. Historical Discount Tracking
+2. Analytical Prediction
+3. Bulk Editing
+4. Import Historical Sales
 
 ---
 
@@ -135,12 +191,12 @@
 
 | Issue | Root Cause | Solution |
 |-------|------------|----------|
-| Build failures with weird syntax | GitHub MCP corrupts HTML entities (`>` becomes `&gt;`) | Use `push_files` not `create_or_update_file` |
-| Type error `undefined` vs `null` | TypeScript strictness with ClipboardSale interface | Use `value ?? null` nullish coalescing |
+| Build failures with weird syntax | GitHub MCP corrupts HTML entities | Use `push_files` not `create_or_update_file` |
+| Type error `undefined` vs `null` | TypeScript strictness | Use `value ?? null` nullish coalescing |
 | Scroll-to-today not working | Container not measured on initial render | Track `hasReceivedMeasurement` state + RAF timing |
 | CSS not compiling | Tailwind silent failures on Vercel | Use CSS Modules architecture |
 | File updates failing | GitHub API requires exact SHA | Fetch fresh file contents before edits |
-| Paste opening modal | `directCreate` flag not passed from GanttChart | Pass full prefill data with `directCreate: true` |
+| Paste opening modal | `directCreate` flag not passed | Pass full prefill data with `directCreate: true` |
 
 ### Deployment Patterns
 - Vercel auto-deploys from GitHub in ~2-3 minutes
@@ -172,17 +228,26 @@
 
 ## Next Session Priorities
 
-1. **Test PowerPoint export** live in client meeting
-2. **Screenshot verification** of all features
-3. **Excel export** - Must match existing column structure
-4. **Client demo preparation**
+### Immediate (MVP Completion)
+1. **Excel export** - Must match existing column structure
+2. **Steam Analytics Dashboard** - Start with issues #27, #18, #25, #20
+
+### Build Order for Analytics
+1. #27 - Dashboard Layout & Navigation (page structure)
+2. #18 - Data Infrastructure (database + API client)
+3. #26 - CSV Import (get data in without API)
+4. #25 - Filter Controls (global filters)
+5. #19 - Summary Cards (quick wins)
+6. #20 - Period Comparison Table (Alisa's primary workflow)
+7. #24 - Time Series Chart
+8. #21-23 - Breakdown Charts
 
 ---
 
 ## Remaining MVP Features
 
 1. **Excel export** - Must match existing column structure for Alisa's formulas
-2. **Steam API integration** - Performance data correlation
+2. **Steam Analytics Dashboard** - 10 issues tracked (#18-27)
 
 ---
 
@@ -193,6 +258,7 @@
 - Analytical prediction based on historical data
 - Bulk editing capabilities
 - Multi-client support with data isolation
+- Planning tool ↔ Analytics integration
 
 ---
 
@@ -205,4 +271,4 @@
 
 ---
 
-*Last Updated: January 12, 2025 - Right-click paste feature complete - All Jan 6 feedback items done!*
+*Last Updated: January 12, 2025 - Steam Analytics Dashboard spec complete with 10 GitHub issues (#18-27)*
