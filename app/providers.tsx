@@ -1,11 +1,14 @@
 'use client'
 
 import { UndoProvider } from '@/lib/undo-context'
+import { AppLayout } from './components/AppLayout'
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <UndoProvider>
-      {children}
+      <AppLayout>
+        {children}
+      </AppLayout>
     </UndoProvider>
   )
 }
