@@ -1,6 +1,6 @@
 'use client'
 
-// Cache invalidation: 2026-01-12T22:15:00Z - Fixed layout for AppLayout wrapper
+// Cache invalidation: 2026-01-12T19:15:00Z - Added PageToggle navigation
 
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { createClient } from '@supabase/supabase-js'
@@ -316,10 +316,12 @@ export default function GameDriveDashboard() {
 
   useEffect(() => { if (filterClientId && filterGameId) { const game = games.find(g => g.id === filterGameId); if (game && game.client_id !== filterClientId) { setFilterGameId('') } } }, [filterClientId, filterGameId, games])
 
-  if (loading) { return (<div className={styles.pageContent}><div className={styles.loading}><div className={styles.spinner}></div><p>Loading sales data...</p></div></div>) }
+  if (loading) { return (<div className={styles.container}><div className={styles.loading}><div className={styles.spinner}></div><p>Loading sales data...</p></div></div>) }
 
   return (
-    <div className={styles.pageContent}>
+    <div className={styles.container}>
+      <header className={styles.header}><h1>GameDrive Sales Planning</h1><p>Interactive sales timeline with drag-and-drop scheduling</p></header>
+
       <PageToggle />
 
       {error && (<div className={styles.errorBanner}><span>Warning: {error}</span><button onClick={() => setError(null)}>×</button></div>)}
