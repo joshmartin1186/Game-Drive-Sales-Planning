@@ -40,7 +40,7 @@ export default function ChartBuilder({ performanceData, initialCharts = [], onCh
   const [showTemplates, setShowTemplates] = useState(false)
 
   // Convert charts to grid layout format
-  const layout: Layout[] = charts.map(chart => ({
+  const layout = charts.map(chart => ({
     i: chart.id,
     x: chart.position.x,
     y: chart.position.y,
@@ -48,7 +48,7 @@ export default function ChartBuilder({ performanceData, initialCharts = [], onCh
     h: chart.position.h,
     minW: 2,
     minH: 2,
-  }))
+  })) as Layout[]
 
   const handleLayoutChange = useCallback((newLayout: Layout[]) => {
     setCharts(prevCharts => {
