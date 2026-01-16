@@ -51,7 +51,7 @@ interface ChangedDatesResponse {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { client_id, start_date, end_date, app_id, force_full_sync, chunk_size = 5, skip_dates = 0, dates_to_process } = body;
+    const { client_id, start_date, end_date, app_id, force_full_sync, chunk_size = 3, skip_dates = 0, dates_to_process } = body;
 
     if (!client_id) {
       return NextResponse.json(

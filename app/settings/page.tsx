@@ -170,7 +170,7 @@ export default function SettingsPage() {
     setSyncResult(null);
     setSyncProgress(null);
 
-    const CHUNK_SIZE = 5; // Process 5 dates per API call (reduced to avoid timeout)
+    const CHUNK_SIZE = 3; // Process 3 dates per API call (conservative to avoid timeout)
     let skipDates = 0;
     let totalRowsImported = 0;
     let totalDatesProcessed = 0;
