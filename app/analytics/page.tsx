@@ -1,8 +1,8 @@
 'use client'
 
-// Cache invalidation: 2026-01-12T23:10:00Z - Fixed calculation logic for Steam data
+// Cache invalidation: 2026-01-16T12:00:00Z - Editable dashboard with drag-drop widgets
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
@@ -82,15 +82,24 @@ interface CurrentPeriodState {
   discountPct: number | null
 }
 
+// Widget Types for editable dashboard
+interface DashboardWidget {
+  id: string
+  type: 'stat' | 'chart' | 'table' | 'region'
+  title: string
+  config: {
+    statKey?: string
+    chartType?: 'bar' | 'line' | 'pie'
+    dataSource?: string
+  }
+  position: { x: number; y: number }
+  size: { w: number; h: number }
+}
+
 // ============================================
 // UTILITY FUNCTIONS FOR SAFE NUMBER CONVERSION
 // ============================================
-// Supabase returns numeric columns as strings, so we must convert them
 
-/**
- * Safely convert a value to a number
- * Handles: strings, numbers, null, undefined
- */
 function toNumber(value: number | string | null | undefined): number {
   if (value === null || value === undefined || value === '') return 0
   if (typeof value === 'number') return isNaN(value) ? 0 : value
@@ -98,29 +107,18 @@ function toNumber(value: number | string | null | undefined): number {
   return isNaN(parsed) ? 0 : parsed
 }
 
-/**
- * Safely divide two numbers, returning 0 if divisor is 0
- */
 function safeDivide(numerator: number, denominator: number): number {
   if (denominator === 0 || isNaN(denominator)) return 0
   const result = numerator / denominator
   return isNaN(result) ? 0 : result
 }
 
-/**
- * Detect if a row represents a sale period
- * Sale = sale_price exists AND is less than base_price
- */
 function isSalePrice(basePrice: number | string | null | undefined, salePrice: number | string | null | undefined): boolean {
   const base = toNumber(basePrice)
   const sale = toNumber(salePrice)
-  // Must have both prices, and sale price must be lower than base
   return base > 0 && sale > 0 && sale < base
 }
 
-/**
- * Calculate discount percentage from base and sale price
- */
 function calculateDiscountPct(basePrice: number | string | null | undefined, salePrice: number | string | null | undefined): number | null {
   const base = toNumber(basePrice)
   const sale = toNumber(salePrice)
@@ -194,6 +192,18 @@ function AnalyticsSidebar() {
   )
 }
 
+// Default dashboard layout
+const DEFAULT_WIDGETS: DashboardWidget[] = [
+  { id: 'stat-revenue', type: 'stat', title: 'Total Revenue', config: { statKey: 'totalRevenue' }, position: { x: 0, y: 0 }, size: { w: 1, h: 1 } },
+  { id: 'stat-units', type: 'stat', title: 'Total Units', config: { statKey: 'totalUnits' }, position: { x: 1, y: 0 }, size: { w: 1, h: 1 } },
+  { id: 'stat-avg-rev', type: 'stat', title: 'Avg Daily Revenue', config: { statKey: 'avgDailyRevenue' }, position: { x: 2, y: 0 }, size: { w: 1, h: 1 } },
+  { id: 'stat-avg-units', type: 'stat', title: 'Avg Daily Units', config: { statKey: 'avgDailyUnits' }, position: { x: 3, y: 0 }, size: { w: 1, h: 1 } },
+  { id: 'stat-refund', type: 'stat', title: 'Refund Rate', config: { statKey: 'refundRate' }, position: { x: 4, y: 0 }, size: { w: 1, h: 1 } },
+  { id: 'chart-revenue', type: 'chart', title: 'Revenue Over Time', config: { chartType: 'bar', dataSource: 'daily' }, position: { x: 0, y: 1 }, size: { w: 3, h: 2 } },
+  { id: 'chart-region', type: 'region', title: 'Revenue by Region', config: { dataSource: 'region' }, position: { x: 3, y: 1 }, size: { w: 2, h: 2 } },
+  { id: 'table-periods', type: 'table', title: 'Period Comparison', config: { dataSource: 'periods' }, position: { x: 0, y: 3 }, size: { w: 5, h: 2 } },
+]
+
 export default function AnalyticsPage() {
   const supabase = createClientComponentClient()
   
@@ -203,13 +213,31 @@ export default function AnalyticsPage() {
   const [summaryStats, setSummaryStats] = useState<SummaryStats | null>(null)
   const [dateRange, setDateRange] = useState<DateRange>({ start: null, end: null })
   const [selectedProduct, setSelectedProduct] = useState<string>('all')
+  const [selectedClient, setSelectedClient] = useState<string>('all')
   const [selectedRegion, setSelectedRegion] = useState<string>('all')
   const [selectedPlatform, setSelectedPlatform] = useState<string>('all')
   const [products, setProducts] = useState<string[]>([])
+  const [clients, setClients] = useState<{id: string, name: string}[]>([])
   const [regions, setRegions] = useState<string[]>([])
   const [platforms, setPlatforms] = useState<string[]>([])
   const [showImportModal, setShowImportModal] = useState(false)
   const [dataAvailable, setDataAvailable] = useState(false)
+  
+  // Editable dashboard state
+  const [isEditMode, setIsEditMode] = useState(false)
+  const [widgets, setWidgets] = useState<DashboardWidget[]>(DEFAULT_WIDGETS)
+  const [draggedWidget, setDraggedWidget] = useState<string | null>(null)
+  const [showAddWidgetModal, setShowAddWidgetModal] = useState(false)
+  const gridRef = useRef<HTMLDivElement>(null)
+
+  // Fetch clients
+  useEffect(() => {
+    const fetchClients = async () => {
+      const { data } = await supabase.from('clients').select('id, name')
+      if (data) setClients(data)
+    }
+    fetchClients()
+  }, [supabase])
 
   // Fetch performance data
   const fetchPerformanceData = useCallback(async () => {
@@ -229,6 +257,9 @@ export default function AnalyticsPage() {
       if (selectedProduct !== 'all') {
         query = query.eq('product_name', selectedProduct)
       }
+      if (selectedClient !== 'all') {
+        query = query.eq('client_id', selectedClient)
+      }
       if (selectedRegion !== 'all') {
         query = query.eq('region', selectedRegion)
       }
@@ -244,7 +275,6 @@ export default function AnalyticsPage() {
       setDataAvailable((data?.length || 0) > 0)
 
       if (data && data.length > 0) {
-        // FIXED: Use toNumber() for all numeric fields from Supabase
         const totalRevenue = data.reduce((sum, row) => sum + toNumber(row.net_steam_sales_usd), 0)
         const totalUnits = data.reduce((sum, row) => sum + toNumber(row.net_units_sold), 0)
         const totalGrossUnits = data.reduce((sum, row) => sum + toNumber(row.gross_units_sold), 0)
@@ -256,10 +286,8 @@ export default function AnalyticsPage() {
         setSummaryStats({
           totalRevenue,
           totalUnits,
-          // FIXED: Use safeDivide to prevent NaN
           avgDailyRevenue: safeDivide(totalRevenue, totalDays),
           avgDailyUnits: safeDivide(totalUnits, totalDays),
-          // FIXED: Refund rate calculation with safe division
           refundRate: safeDivide(totalChargebacks, totalGrossUnits) * 100,
           totalDays
         })
@@ -279,7 +307,7 @@ export default function AnalyticsPage() {
     } finally {
       setIsLoading(false)
     }
-  }, [supabase, dateRange, selectedProduct, selectedRegion, selectedPlatform])
+  }, [supabase, dateRange, selectedProduct, selectedClient, selectedRegion, selectedPlatform])
 
   useEffect(() => {
     fetchPerformanceData()
@@ -293,7 +321,6 @@ export default function AnalyticsPage() {
     
     performanceData.forEach(row => {
       const existing = byDate.get(row.date) || { revenue: 0, units: 0, hasSale: false }
-      // FIXED: Use isSalePrice helper with proper number conversion
       const rowIsSale = isSalePrice(row.base_price_usd, row.sale_price_usd)
       byDate.set(row.date, {
         revenue: existing.revenue + toNumber(row.net_steam_sales_usd),
@@ -335,13 +362,11 @@ export default function AnalyticsPage() {
         region,
         revenue: data.revenue,
         units: data.units,
-        // FIXED: Use safeDivide
         percentage: safeDivide(data.revenue, totalRevenue) * 100
       }))
       .sort((a, b) => b.revenue - a.revenue)
   }, [performanceData])
 
-  // Helper function to push a period to the periods array
   const pushPeriod = (periods: PeriodData[], period: CurrentPeriodState): void => {
     if (period.dates.length > 0) {
       const days = period.dates.length
@@ -354,7 +379,6 @@ export default function AnalyticsPage() {
         days,
         totalRevenue: period.revenue,
         totalUnits: period.units,
-        // FIXED: Use safeDivide
         avgDailyRevenue: safeDivide(period.revenue, days),
         avgDailyUnits: safeDivide(period.units, days),
         isSale: period.isSale,
@@ -363,7 +387,6 @@ export default function AnalyticsPage() {
     }
   }
 
-  // Compute period comparison (sale periods vs regular)
   const periodData = useMemo((): PeriodData[] => {
     if (!performanceData.length) return []
     
@@ -379,7 +402,6 @@ export default function AnalyticsPage() {
     
     performanceData.forEach(row => {
       const existing = dailyAgg.get(row.date)
-      // FIXED: Use helper functions for sale detection and discount calculation
       const rowIsSale = isSalePrice(row.base_price_usd, row.sale_price_usd)
       const discountPct = calculateDiscountPct(row.base_price_usd, row.sale_price_usd)
       
@@ -483,6 +505,216 @@ export default function AnalyticsPage() {
   const maxRegionRevenue = useMemo(() => 
     Math.max(...regionData.map(d => d.revenue), 1), [regionData])
 
+  // Widget drag and drop handlers
+  const handleDragStart = (widgetId: string) => {
+    if (!isEditMode) return
+    setDraggedWidget(widgetId)
+  }
+
+  const handleDragEnd = () => {
+    setDraggedWidget(null)
+  }
+
+  const handleDeleteWidget = (widgetId: string) => {
+    setWidgets(prev => prev.filter(w => w.id !== widgetId))
+  }
+
+  const handleAddWidget = (type: DashboardWidget['type'], title: string) => {
+    const newWidget: DashboardWidget = {
+      id: `widget-${Date.now()}`,
+      type,
+      title,
+      config: type === 'stat' ? { statKey: 'totalRevenue' } : { chartType: 'bar', dataSource: 'daily' },
+      position: { x: 0, y: widgets.reduce((max, w) => Math.max(max, w.position.y + w.size.h), 0) },
+      size: type === 'stat' ? { w: 1, h: 1 } : { w: 2, h: 2 }
+    }
+    setWidgets(prev => [...prev, newWidget])
+    setShowAddWidgetModal(false)
+  }
+
+  const saveLayout = () => {
+    // Save to localStorage for now (could save to Supabase later)
+    localStorage.setItem('gamedrive-dashboard-layout', JSON.stringify(widgets))
+    setIsEditMode(false)
+  }
+
+  const resetLayout = () => {
+    setWidgets(DEFAULT_WIDGETS)
+  }
+
+  // Load saved layout
+  useEffect(() => {
+    const saved = localStorage.getItem('gamedrive-dashboard-layout')
+    if (saved) {
+      try {
+        setWidgets(JSON.parse(saved))
+      } catch (e) {
+        console.error('Failed to load saved layout', e)
+      }
+    }
+  }, [])
+
+  // Render stat widget
+  const renderStatWidget = (widget: DashboardWidget) => {
+    const statConfig: Record<string, { label: string; format: (v: number) => string; color: string; icon: string }> = {
+      totalRevenue: { label: 'Net Steam sales', format: formatCurrency, color: '#dcfce7', icon: 'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z' },
+      totalUnits: { label: 'Net units sold', format: formatNumber, color: '#dbeafe', icon: 'M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4' },
+      avgDailyRevenue: { label: 'Per day average', format: formatCurrency, color: '#fef3c7', icon: 'M13 7h8m0 0v8m0-8l-8 8-4-4-6 6' },
+      avgDailyUnits: { label: 'Per day average', format: formatNumber, color: '#f3e8ff', icon: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z' },
+      refundRate: { label: 'Chargebacks/returns', format: (v) => `${v.toFixed(1)}%`, color: '#fee2e2', icon: 'M16 15v-1a4 4 0 00-4-4H8m0 0l3 3m-3-3l3-3m9 14V5a2 2 0 00-2-2H6a2 2 0 00-2 2v16l4-2 4 2 4-2 4 2z' }
+    }
+    
+    const config = statConfig[widget.config.statKey || 'totalRevenue']
+    const value = summaryStats?.[widget.config.statKey as keyof SummaryStats] || 0
+
+    return (
+      <div className={styles.statCard}>
+        <div className={styles.statHeader}>
+          <span className={styles.statTitle}>{widget.title}</span>
+          <div className={styles.statIcon} style={{ backgroundColor: config.color }}>
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={config.icon} />
+            </svg>
+          </div>
+        </div>
+        <div className={styles.statValue}>{config.format(value as number)}</div>
+        <div className={styles.statSubtext}>{config.label}</div>
+      </div>
+    )
+  }
+
+  // Render chart widget
+  const renderChartWidget = (widget: DashboardWidget) => {
+    return (
+      <div className={styles.chartCard}>
+        <h3 className={styles.chartTitle}>{widget.title}</h3>
+        <div className={styles.chartLegend}>
+          <span className={styles.legendItem}>
+            <span className={styles.legendDot} style={{ backgroundColor: '#16a34a' }} />
+            Sale Period
+          </span>
+          <span className={styles.legendItem}>
+            <span className={styles.legendDot} style={{ backgroundColor: '#94a3b8' }} />
+            Regular Price
+          </span>
+        </div>
+        <div className={styles.barChartContainer}>
+          {dailyData.length > 0 ? (
+            <div className={styles.barChart}>
+              {dailyData.map((day, idx) => (
+                <div key={idx} className={styles.barColumn} title={`${formatDate(day.date)}: ${formatCurrency(day.revenue)}`}>
+                  <div className={styles.barWrapper}>
+                    <div 
+                      className={styles.bar}
+                      style={{ 
+                        height: `${Math.max((day.revenue / maxDailyRevenue) * 100, 2)}%`,
+                        backgroundColor: day.isSale ? '#16a34a' : '#94a3b8'
+                      }}
+                    />
+                  </div>
+                  <span className={styles.barLabel}>{formatDate(day.date)}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className={styles.noChartData}>No time series data available</div>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  // Render region widget
+  const renderRegionWidget = (widget: DashboardWidget) => {
+    return (
+      <div className={styles.chartCard}>
+        <h3 className={styles.chartTitle}>{widget.title}</h3>
+        <div className={styles.horizontalBarChart}>
+          {regionData.length > 0 ? regionData.map((region, idx) => (
+            <div key={idx} className={styles.horizontalBarRow}>
+              <span className={styles.horizontalBarLabel}>{region.region}</span>
+              <div className={styles.horizontalBarWrapper}>
+                <div 
+                  className={styles.horizontalBar}
+                  style={{ width: `${(region.revenue / maxRegionRevenue) * 100}%` }}
+                />
+                <span className={styles.horizontalBarValue}>
+                  {formatCurrency(region.revenue)} ({region.percentage.toFixed(1)}%)
+                </span>
+              </div>
+            </div>
+          )) : (
+            <div className={styles.noChartData}>No regional data available</div>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  // Render table widget
+  const renderTableWidget = (widget: DashboardWidget) => {
+    return (
+      <div className={styles.periodSection}>
+        <div className={styles.sectionHeader}>
+          <h3 className={styles.sectionTitle}>{widget.title}</h3>
+          <p className={styles.sectionSubtitle}>Compare sale periods vs regular price performance</p>
+        </div>
+        {periodData.length > 0 ? (
+          <div className={styles.periodTable}>
+            <table>
+              <thead>
+                <tr>
+                  <th>Period</th>
+                  <th>Dates</th>
+                  <th>Days</th>
+                  <th>Total Revenue</th>
+                  <th>Total Units</th>
+                  <th>Avg Daily Revenue</th>
+                  <th>Avg Daily Units</th>
+                </tr>
+              </thead>
+              <tbody>
+                {periodData.map((period, idx) => (
+                  <tr key={idx} className={period.isSale ? styles.salePeriodRow : ''}>
+                    <td>
+                      <span className={`${styles.periodBadge} ${period.isSale ? styles.saleBadge : styles.regularBadge}`}>
+                        {period.isSale ? '🏷️ ' : ''}{period.name}
+                      </span>
+                    </td>
+                    <td>{formatDate(period.startDate)} - {formatDate(period.endDate)}</td>
+                    <td>{period.days}</td>
+                    <td className={styles.revenueCell}>{formatCurrency(period.totalRevenue)}</td>
+                    <td>{formatNumber(period.totalUnits)}</td>
+                    <td className={styles.revenueCell}>{formatCurrency(period.avgDailyRevenue)}</td>
+                    <td>{formatNumber(period.avgDailyUnits)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className={styles.periodPlaceholder}>
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+            </svg>
+            <p>Period comparison requires data with sale price information</p>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // Render widget based on type
+  const renderWidget = (widget: DashboardWidget) => {
+    switch (widget.type) {
+      case 'stat': return renderStatWidget(widget)
+      case 'chart': return renderChartWidget(widget)
+      case 'region': return renderRegionWidget(widget)
+      case 'table': return renderTableWidget(widget)
+      default: return null
+    }
+  }
+
   return (
     <div className={styles.pageContainer}>
       <AnalyticsSidebar />
@@ -496,20 +728,62 @@ export default function AnalyticsPage() {
             <p className={styles.subtitle}>Performance metrics and sales analysis</p>
           </div>
           <div className={styles.headerRight}>
-            <button className={styles.importButton} onClick={() => setShowImportModal(true)}>
-              <svg className={styles.buttonIcon} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-              </svg>
-              Import CSV
-            </button>
-            <button className={styles.refreshButton} onClick={fetchPerformanceData} disabled={isLoading}>
-              <svg className={`${styles.buttonIcon} ${isLoading ? styles.spinning : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
-              Refresh
-            </button>
+            {isEditMode ? (
+              <>
+                <button className={styles.addWidgetButton} onClick={() => setShowAddWidgetModal(true)}>
+                  <svg className={styles.buttonIcon} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                  Add Widget
+                </button>
+                <button className={styles.resetButton} onClick={resetLayout}>
+                  <svg className={styles.buttonIcon} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  Reset
+                </button>
+                <button className={styles.saveButton} onClick={saveLayout}>
+                  <svg className={styles.buttonIcon} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  Save Layout
+                </button>
+              </>
+            ) : (
+              <>
+                <button className={styles.editButton} onClick={() => setIsEditMode(true)}>
+                  <svg className={styles.buttonIcon} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  </svg>
+                  Dashboard Builder
+                </button>
+                <button className={styles.importButton} onClick={() => setShowImportModal(true)}>
+                  <svg className={styles.buttonIcon} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                  </svg>
+                  Import CSV
+                </button>
+                <button className={styles.refreshButton} onClick={fetchPerformanceData} disabled={isLoading}>
+                  <svg className={`${styles.buttonIcon} ${isLoading ? styles.spinning : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  Refresh
+                </button>
+              </>
+            )}
           </div>
         </div>
+
+        {isEditMode && (
+          <div className={styles.editModeBar}>
+            <div className={styles.editModeInfo}>
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span>Edit Mode: Click X to remove widgets, or add new ones with the Add Widget button</span>
+            </div>
+          </div>
+        )}
 
         <div className={styles.filtersBar}>
           <div className={styles.filterGroup}>
@@ -521,6 +795,14 @@ export default function AnalyticsPage() {
               <button className={styles.presetButton} onClick={() => setPresetDateRange('90d')}>90D</button>
               <button className={styles.presetButton} onClick={() => setPresetDateRange('ytd')}>YTD</button>
             </div>
+          </div>
+
+          <div className={styles.filterGroup}>
+            <label className={styles.filterLabel}>Client</label>
+            <select className={styles.filterSelect} value={selectedClient} onChange={(e) => setSelectedClient(e.target.value)}>
+              <option value="all">All Clients</option>
+              {clients.map(client => (<option key={client.id} value={client.id}>{client.name}</option>))}
+            </select>
           </div>
 
           <div className={styles.filterGroup}>
@@ -574,184 +856,101 @@ export default function AnalyticsPage() {
             </button>
           </div>
         ) : (
-          <>
+          <div ref={gridRef} className={`${styles.dashboardGrid} ${isEditMode ? styles.editableGrid : ''}`}>
+            {/* Stats Row */}
             <div className={styles.statsGrid}>
-              <div className={styles.statCard}>
-                <div className={styles.statHeader}>
-                  <span className={styles.statTitle}>Total Revenue</span>
-                  <div className={styles.statIcon} style={{ backgroundColor: '#dcfce7' }}>
-                    <svg fill="none" stroke="#16a34a" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                  </div>
+              {widgets.filter(w => w.type === 'stat').map(widget => (
+                <div 
+                  key={widget.id} 
+                  className={`${styles.widgetWrapper} ${isEditMode ? styles.editableWidget : ''} ${draggedWidget === widget.id ? styles.dragging : ''}`}
+                  draggable={isEditMode}
+                  onDragStart={() => handleDragStart(widget.id)}
+                  onDragEnd={handleDragEnd}
+                >
+                  {isEditMode && (
+                    <div className={styles.widgetControls}>
+                      <button className={styles.widgetDeleteBtn} onClick={() => handleDeleteWidget(widget.id)} title="Delete widget">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
+                  )}
+                  {renderWidget(widget)}
                 </div>
-                <div className={styles.statValue}>{formatCurrency(summaryStats?.totalRevenue || 0)}</div>
-                <div className={styles.statSubtext}>Net Steam sales</div>
-              </div>
-
-              <div className={styles.statCard}>
-                <div className={styles.statHeader}>
-                  <span className={styles.statTitle}>Total Units</span>
-                  <div className={styles.statIcon} style={{ backgroundColor: '#dbeafe' }}>
-                    <svg fill="none" stroke="#2563eb" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-                    </svg>
-                  </div>
-                </div>
-                <div className={styles.statValue}>{formatNumber(summaryStats?.totalUnits || 0)}</div>
-                <div className={styles.statSubtext}>Net units sold</div>
-              </div>
-
-              <div className={styles.statCard}>
-                <div className={styles.statHeader}>
-                  <span className={styles.statTitle}>Avg Daily Revenue</span>
-                  <div className={styles.statIcon} style={{ backgroundColor: '#fef3c7' }}>
-                    <svg fill="none" stroke="#d97706" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-                    </svg>
-                  </div>
-                </div>
-                <div className={styles.statValue}>{formatCurrency(summaryStats?.avgDailyRevenue || 0)}</div>
-                <div className={styles.statSubtext}>Per day average</div>
-              </div>
-
-              <div className={styles.statCard}>
-                <div className={styles.statHeader}>
-                  <span className={styles.statTitle}>Avg Daily Units</span>
-                  <div className={styles.statIcon} style={{ backgroundColor: '#f3e8ff' }}>
-                    <svg fill="none" stroke="#9333ea" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                    </svg>
-                  </div>
-                </div>
-                <div className={styles.statValue}>{formatNumber(summaryStats?.avgDailyUnits || 0)}</div>
-                <div className={styles.statSubtext}>Per day average</div>
-              </div>
-
-              <div className={styles.statCard}>
-                <div className={styles.statHeader}>
-                  <span className={styles.statTitle}>Refund Rate</span>
-                  <div className={styles.statIcon} style={{ backgroundColor: '#fee2e2' }}>
-                    <svg fill="none" stroke="#dc2626" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 15v-1a4 4 0 00-4-4H8m0 0l3 3m-3-3l3-3m9 14V5a2 2 0 00-2-2H6a2 2 0 00-2 2v16l4-2 4 2 4-2 4 2z" />
-                    </svg>
-                  </div>
-                </div>
-                <div className={styles.statValue}>{(summaryStats?.refundRate || 0).toFixed(1)}%</div>
-                <div className={styles.statSubtext}>Chargebacks/returns</div>
-              </div>
+              ))}
             </div>
 
+            {/* Charts Row */}
             <div className={styles.chartsSection}>
-              <div className={styles.chartCard}>
-                <h3 className={styles.chartTitle}>Revenue Over Time</h3>
-                <div className={styles.chartLegend}>
-                  <span className={styles.legendItem}>
-                    <span className={styles.legendDot} style={{ backgroundColor: '#16a34a' }} />
-                    Sale Period
-                  </span>
-                  <span className={styles.legendItem}>
-                    <span className={styles.legendDot} style={{ backgroundColor: '#94a3b8' }} />
-                    Regular Price
-                  </span>
-                </div>
-                <div className={styles.barChart}>
-                  {dailyData.map((day, idx) => (
-                    <div key={idx} className={styles.barColumn}>
-                      <div className={styles.barWrapper}>
-                        <div 
-                          className={styles.bar}
-                          style={{ 
-                            height: `${(day.revenue / maxDailyRevenue) * 100}%`,
-                            backgroundColor: day.isSale ? '#16a34a' : '#94a3b8'
-                          }}
-                        />
-                      </div>
-                      <span className={styles.barLabel}>{formatDate(day.date)}</span>
+              {widgets.filter(w => w.type === 'chart').map(widget => (
+                <div 
+                  key={widget.id} 
+                  className={`${styles.widgetWrapper} ${isEditMode ? styles.editableWidget : ''}`}
+                  draggable={isEditMode}
+                  onDragStart={() => handleDragStart(widget.id)}
+                  onDragEnd={handleDragEnd}
+                >
+                  {isEditMode && (
+                    <div className={styles.widgetControls}>
+                      <button className={styles.widgetDeleteBtn} onClick={() => handleDeleteWidget(widget.id)} title="Delete widget">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
                     </div>
-                  ))}
+                  )}
+                  {renderWidget(widget)}
                 </div>
-                {dailyData.length === 0 && (
-                  <div className={styles.noChartData}>No time series data available</div>
-                )}
-              </div>
-
-              <div className={styles.chartCard}>
-                <h3 className={styles.chartTitle}>Revenue by Region</h3>
-                <div className={styles.horizontalBarChart}>
-                  {regionData.map((region, idx) => (
-                    <div key={idx} className={styles.horizontalBarRow}>
-                      <span className={styles.horizontalBarLabel}>{region.region}</span>
-                      <div className={styles.horizontalBarWrapper}>
-                        <div 
-                          className={styles.horizontalBar}
-                          style={{ width: `${(region.revenue / maxRegionRevenue) * 100}%` }}
-                        />
-                        <span className={styles.horizontalBarValue}>
-                          {formatCurrency(region.revenue)} ({region.percentage.toFixed(1)}%)
-                        </span>
-                      </div>
+              ))}
+              {widgets.filter(w => w.type === 'region').map(widget => (
+                <div 
+                  key={widget.id} 
+                  className={`${styles.widgetWrapper} ${isEditMode ? styles.editableWidget : ''}`}
+                  draggable={isEditMode}
+                  onDragStart={() => handleDragStart(widget.id)}
+                  onDragEnd={handleDragEnd}
+                >
+                  {isEditMode && (
+                    <div className={styles.widgetControls}>
+                      <button className={styles.widgetDeleteBtn} onClick={() => handleDeleteWidget(widget.id)} title="Delete widget">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
                     </div>
-                  ))}
+                  )}
+                  {renderWidget(widget)}
                 </div>
-                {regionData.length === 0 && (
-                  <div className={styles.noChartData}>No regional data available</div>
-                )}
-              </div>
+              ))}
             </div>
 
-            <div className={styles.periodSection}>
-              <div className={styles.sectionHeader}>
-                <h3 className={styles.sectionTitle}>Period Comparison</h3>
-                <p className={styles.sectionSubtitle}>Compare sale periods vs regular price performance</p>
+            {/* Table Section */}
+            {widgets.filter(w => w.type === 'table').map(widget => (
+              <div 
+                key={widget.id} 
+                className={`${styles.widgetWrapper} ${isEditMode ? styles.editableWidget : ''}`}
+                draggable={isEditMode}
+                onDragStart={() => handleDragStart(widget.id)}
+                onDragEnd={handleDragEnd}
+              >
+                {isEditMode && (
+                  <div className={styles.widgetControls}>
+                    <button className={styles.widgetDeleteBtn} onClick={() => handleDeleteWidget(widget.id)} title="Delete widget">
+                      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                )}
+                {renderWidget(widget)}
               </div>
-              {periodData.length > 0 ? (
-                <div className={styles.periodTable}>
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Period</th>
-                        <th>Dates</th>
-                        <th>Days</th>
-                        <th>Total Revenue</th>
-                        <th>Total Units</th>
-                        <th>Avg Daily Revenue</th>
-                        <th>Avg Daily Units</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {periodData.map((period, idx) => (
-                        <tr key={idx} className={period.isSale ? styles.salePeriodRow : ''}>
-                          <td>
-                            <span className={`${styles.periodBadge} ${period.isSale ? styles.saleBadge : styles.regularBadge}`}>
-                              {period.isSale ? '🏷️ ' : ''}{period.name}
-                            </span>
-                          </td>
-                          <td>{formatDate(period.startDate)} - {formatDate(period.endDate)}</td>
-                          <td>{period.days}</td>
-                          <td className={styles.revenueCell}>{formatCurrency(period.totalRevenue)}</td>
-                          <td>{formatNumber(period.totalUnits)}</td>
-                          <td className={styles.revenueCell}>{formatCurrency(period.avgDailyRevenue)}</td>
-                          <td>{formatNumber(period.avgDailyUnits)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <div className={styles.periodPlaceholder}>
-                  <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                  </svg>
-                  <p>Period comparison requires data with sale price information</p>
-                </div>
-              )}
-            </div>
+            ))}
 
             <div className={styles.dataInfo}>
               <span className={styles.dataInfoText}>Showing {formatNumber(performanceData.length)} records across {summaryStats?.totalDays || 0} days</span>
             </div>
-          </>
+          </div>
         )}
 
         {showImportModal && (
@@ -763,6 +962,80 @@ export default function AnalyticsPage() {
             }}
           />
         )}
+
+        {showAddWidgetModal && (
+          <AddWidgetModal
+            onClose={() => setShowAddWidgetModal(false)}
+            onAdd={handleAddWidget}
+          />
+        )}
+      </div>
+    </div>
+  )
+}
+
+// Add Widget Modal
+function AddWidgetModal({ onClose, onAdd }: { onClose: () => void; onAdd: (type: DashboardWidget['type'], title: string) => void }) {
+  const [selectedType, setSelectedType] = useState<DashboardWidget['type']>('stat')
+  const [title, setTitle] = useState('')
+
+  const widgetTypes = [
+    { type: 'stat' as const, name: 'Stat Card', description: 'Display a single metric', icon: 'M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z' },
+    { type: 'chart' as const, name: 'Bar Chart', description: 'Revenue or units over time', icon: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z' },
+    { type: 'region' as const, name: 'Region Breakdown', description: 'Revenue by geographic region', icon: 'M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z' },
+    { type: 'table' as const, name: 'Period Table', description: 'Compare sale vs regular periods', icon: 'M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z' },
+  ]
+
+  return (
+    <div className={styles.modalOverlay} onClick={onClose}>
+      <div className={styles.modal} onClick={e => e.stopPropagation()}>
+        <div className={styles.modalHeader}>
+          <h2 className={styles.modalTitle}>Add Widget</h2>
+          <button className={styles.modalClose} onClick={onClose}>
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div className={styles.modalContent}>
+          <div className={styles.widgetTypeGrid}>
+            {widgetTypes.map(wt => (
+              <button
+                key={wt.type}
+                className={`${styles.widgetTypeCard} ${selectedType === wt.type ? styles.widgetTypeSelected : ''}`}
+                onClick={() => setSelectedType(wt.type)}
+              >
+                <svg className={styles.widgetTypeIcon} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={wt.icon} />
+                </svg>
+                <span className={styles.widgetTypeName}>{wt.name}</span>
+                <span className={styles.widgetTypeDesc}>{wt.description}</span>
+              </button>
+            ))}
+          </div>
+
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>Widget Title</label>
+            <input
+              type="text"
+              className={styles.formInput}
+              placeholder="Enter widget title..."
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+            />
+          </div>
+        </div>
+
+        <div className={styles.modalFooter}>
+          <button className={styles.cancelButton} onClick={onClose}>Cancel</button>
+          <button 
+            className={styles.importSubmitButton} 
+            onClick={() => onAdd(selectedType, title || widgetTypes.find(w => w.type === selectedType)?.name || 'Widget')}
+          >
+            Add Widget
+          </button>
+        </div>
       </div>
     </div>
   )
