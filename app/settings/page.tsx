@@ -170,7 +170,7 @@ export default function SettingsPage() {
     setSyncResult(null);
     setSyncProgress(null);
 
-    const CHUNK_SIZE = 3; // Process 3 dates per API call (conservative to avoid timeout)
+    const CHUNK_SIZE = 1; // Process 1 date per API call (maximum safety for Vercel limits)
     let skipDates = 0;
     let totalRowsImported = 0;
     let totalDatesProcessed = 0;

@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 
+// Configure maximum execution time for this API route (Vercel default is 10s for hobby, 60s for pro)
+export const maxDuration = 60; // seconds
+export const dynamic = 'force-dynamic';
+
 // Steam Partner API endpoint for financial data
 const STEAM_PARTNER_API = 'https://partner.steam-api.com';
 
@@ -51,7 +55,7 @@ interface ChangedDatesResponse {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { client_id, start_date, end_date, app_id, force_full_sync, chunk_size = 3, skip_dates = 0, dates_to_process } = body;
+    const { client_id, start_date, end_date, app_id, force_full_sync, chunk_size = 1, skip_dates = 0, dates_to_process } = body;
 
     if (!client_id) {
       return NextResponse.json(
