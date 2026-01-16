@@ -177,10 +177,45 @@ export default function SettingsPage() {
     let allErrors: string[] = [];
     let totalDates = 0;
     let chunkNumber = 0;
-    let allDates: string[] | null = null; // Store dates list from first response
+    let allDates: string[] | null = null;
 
     try {
-      // Keep syncing until no more dates remain
+      // Step 1: Fetch dates list first (separate API call to avoid timeout)
+      console.log('Fetching dates list from Steam...');
+      const datesRes = await fetch(`/api/steam-dates?client_id=${selectedKey.client_id}&force_full_sync=${syncOptions.force_full_sync}`);
+
+      if (!datesRes.ok) {
+        const error = await datesRes.json();
+        throw new Error(error.error || 'Failed to fetch dates');
+      }
+
+      const datesData = await datesRes.json();
+      allDates = datesData.dates || [];
+
+      // Filter by date range if specified
+      if (syncOptions.start_date || syncOptions.end_date) {
+        allDates = allDates.filter(date => {
+          const d = date.replace(/\//g, '-');
+          if (syncOptions.start_date && d < syncOptions.start_date) return false;
+          if (syncOptions.end_date && d > syncOptions.end_date) return false;
+          return true;
+        });
+      }
+
+      totalDates = allDates.length;
+      console.log(`Got ${totalDates} dates to sync`);
+
+      if (totalDates === 0) {
+        setSyncResult({
+          success: true,
+          message: 'No dates to sync',
+          rowsImported: 0,
+          datesProcessed: 0
+        });
+        return;
+      }
+
+      // Step 2: Keep syncing until all dates are processed
       while (true) {
         chunkNumber++;
 
@@ -218,13 +253,6 @@ export default function SettingsPage() {
         }
 
         console.log(`Chunk ${chunkNumber} result:`, data);
-
-        // Update totals from first chunk
-        if (chunkNumber === 1) {
-          totalDates = data.totalDates || 0;
-          allDates = data.allDates || null; // Store dates list for subsequent chunks
-          console.log(`First chunk: got ${allDates?.length || 0} dates to process in total`);
-        }
 
         // Accumulate results
         totalRowsImported += data.rowsImported || 0;
