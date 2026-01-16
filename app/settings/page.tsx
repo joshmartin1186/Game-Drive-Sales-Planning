@@ -202,6 +202,10 @@ export default function SettingsPage() {
         });
       }
 
+      if (!allDates) {
+        throw new Error('Failed to get dates list');
+      }
+
       totalDates = allDates.length;
       console.log(`Got ${totalDates} dates to sync`);
 
