@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useCallback } from 'react'
-import GridLayout, { Layout } from 'react-grid-layout'
+import GridLayout from 'react-grid-layout'
+import type { Layout, LayoutItem } from 'react-grid-layout'
 import { ChartConfig, createChartConfig, CHART_TEMPLATES } from '@/lib/chart-types'
 import ChartRenderer from './ChartRenderer'
 import ChartConfigPanel from './ChartConfigPanel'
@@ -40,7 +41,7 @@ export default function ChartBuilder({ performanceData, initialCharts = [], onCh
   const [showTemplates, setShowTemplates] = useState(false)
 
   // Convert charts to grid layout format
-  const layout = charts.map(chart => ({
+  const layout: LayoutItem[] = charts.map(chart => ({
     i: chart.id,
     x: chart.position.x,
     y: chart.position.y,
@@ -48,9 +49,9 @@ export default function ChartBuilder({ performanceData, initialCharts = [], onCh
     h: chart.position.h,
     minW: 2,
     minH: 2,
-  })) as unknown as Layout[]
+  }))
 
-  const handleLayoutChange = useCallback((newLayout: Layout[]) => {
+  const handleLayoutChange = useCallback((newLayout: Layout) => {
     setCharts(prevCharts => {
       const updatedCharts = prevCharts.map(chart => {
         const layoutItem = newLayout.find(l => l.i === chart.id)
