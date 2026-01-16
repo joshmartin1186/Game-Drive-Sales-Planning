@@ -1,10 +1,12 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-// Use service role key for admin operations (bypasses RLS)
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-const supabase = createClient(supabaseUrl, supabaseServiceKey);
+// Helper to get Supabase client with service role key
+function getSupabaseClient() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+  return createClient(supabaseUrl, supabaseServiceKey);
+}
 
 // Steam Partner API endpoint
 const STEAM_PARTNER_API = 'https://partner.steam-api.com';
@@ -110,8 +112,8 @@ async function fetchWithRetry<T>(
 }
 
 // Progress tracking functions
-async function getSyncProgress(clientId: string): Promise<SyncProgress | null> {
-  const { data, error } = await supabase
+async function getSyncProgress(supabase: ReturnType<typeof getSupabaseClient>, clientId: string): Promise<SyncProgress | null> {
+  const { data, error} = await supabase
     .from('sync_progress')
     .select('*')
     .eq('client_id', clientId)
@@ -126,7 +128,7 @@ async function getSyncProgress(clientId: string): Promise<SyncProgress | null> {
   return data;
 }
 
-async function createSyncProgress(clientId: string, totalDates: number): Promise<string> {
+async function createSyncProgress(supabase: ReturnType<typeof getSupabaseClient>, clientId: string, totalDates: number): Promise<string> {
   // Cancel any existing in-progress syncs
   await supabase
     .from('sync_progress')
@@ -153,6 +155,7 @@ async function createSyncProgress(clientId: string, totalDates: number): Promise
 }
 
 async function updateSyncProgress(
+  supabase: ReturnType<typeof getSupabaseClient>,
   clientId: string,
   lastDate: string,
   completedCount: number,
@@ -171,7 +174,7 @@ async function updateSyncProgress(
     .eq('status', 'in_progress');
 }
 
-async function completeSyncProgress(clientId: string): Promise<void> {
+async function completeSyncProgress(supabase: ReturnType<typeof getSupabaseClient>, clientId: string): Promise<void> {
   await supabase
     .from('sync_progress')
     .update({
@@ -184,7 +187,7 @@ async function completeSyncProgress(clientId: string): Promise<void> {
     .eq('status', 'in_progress');
 }
 
-async function failSyncProgress(clientId: string, errorMessage: string): Promise<void> {
+async function failSyncProgress(supabase: ReturnType<typeof getSupabaseClient>, clientId: string, errorMessage: string): Promise<void> {
   await supabase
     .from('sync_progress')
     .update({
@@ -332,6 +335,7 @@ async function getDetailedSalesForDate(
 
 // Bulk store sales data (much faster than individual upserts)
 async function bulkStoreSalesData(
+  supabase: ReturnType<typeof getSupabaseClient>,
   clientId: string,
   allResults: SteamDetailedSalesResult[],
   metadata?: {
@@ -397,6 +401,8 @@ async function bulkStoreSalesData(
 
 // Main sync handler
 export async function POST(request: Request) {
+  const supabase = getSupabaseClient();
+
   try {
     const body = await request.json();
     const { client_id, start_date, end_date, resume = false } = body;
@@ -435,14 +441,14 @@ export async function POST(request: Request) {
     console.log(`[Steam Sync] Starting sync for ${clientData?.name || client_id}`);
 
     // Check for existing progress
-    const existingProgress = await getSyncProgress(client_id);
+    const existingProgress = await getSyncProgress(supabase, client_id);
 
     // Step 1: Get all changed dates from Steam
     const highwatermark = resume && existingProgress ? '0' : (keyData.highwatermark || '0');
     const changedDates = await getChangedDatesForPartner(financialApiKey, highwatermark);
 
     if (!changedDates.success || !changedDates.dates) {
-      await failSyncProgress(client_id, changedDates.error || 'Failed to get dates');
+      await failSyncProgress(supabase, client_id, changedDates.error || 'Failed to get dates');
       return NextResponse.json(
         { error: changedDates.error || 'Failed to get changed dates' },
         { status: 500 }
@@ -470,7 +476,7 @@ export async function POST(request: Request) {
     console.log(`[Steam Sync] Dates from API: ${totalDatesFromApi}, After filter: ${datesToSync.length}`);
 
     if (datesToSync.length === 0) {
-      await completeSyncProgress(client_id);
+      await completeSyncProgress(supabase, client_id);
       return NextResponse.json({
         success: true,
         message: 'No new dates to sync',
@@ -481,7 +487,7 @@ export async function POST(request: Request) {
 
     // Create or update progress tracking
     if (!resume || !existingProgress) {
-      await createSyncProgress(client_id, datesToSync.length);
+      await createSyncProgress(supabase, client_id, datesToSync.length);
     }
 
     // Step 2: Process dates in optimized batches
@@ -513,7 +519,7 @@ export async function POST(request: Request) {
 
           if (salesResult.success && salesResult.results) {
             try {
-              const storeResult = await bulkStoreSalesData(
+              const storeResult = await bulkStoreSalesData(supabase, 
                 client_id,
                 salesResult.results,
                 salesResult.metadata
@@ -523,7 +529,7 @@ export async function POST(request: Request) {
               completedCount++;
 
               // Update progress after each successful date
-              await updateSyncProgress(client_id, date, completedCount, failedCount);
+              await updateSyncProgress(supabase, client_id, date, completedCount, failedCount);
             } catch (storeError) {
               console.error(`[Steam Sync] Error storing data for ${date}:`, storeError);
               errors.push(`${date}: Failed to store`);
@@ -562,9 +568,9 @@ export async function POST(request: Request) {
 
     // Complete or fail the sync
     if (errors.length === 0) {
-      await completeSyncProgress(client_id);
+      await completeSyncProgress(supabase, client_id);
     } else if (errors.length === datesToSync.length) {
-      await failSyncProgress(client_id, errors.join('; '));
+      await failSyncProgress(supabase, client_id, errors.join('; '));
     }
 
     // Log import history
@@ -603,6 +609,8 @@ export async function POST(request: Request) {
 
 // GET - Check sync progress
 export async function GET(request: Request) {
+  const supabase = getSupabaseClient();
+
   try {
     const { searchParams } = new URL(request.url);
     const clientId = searchParams.get('client_id');
@@ -614,7 +622,7 @@ export async function GET(request: Request) {
       );
     }
 
-    const progress = await getSyncProgress(clientId);
+    const progress = await getSyncProgress(supabase, clientId);
 
     return NextResponse.json({
       hasInProgressSync: !!progress,
