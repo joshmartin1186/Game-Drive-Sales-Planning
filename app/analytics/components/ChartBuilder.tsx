@@ -223,10 +223,10 @@ export default function ChartBuilder({ performanceData, initialCharts = [], onCh
             }}
             dragConfig={{
               handle: `.${styles.dragHandle}`,
-              isDraggable: true,
+              enabled: true,
             }}
             resizeConfig={{
-              isResizable: true,
+              enabled: true,
             }}
             onLayoutChange={handleLayoutChange}
           >
