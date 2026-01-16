@@ -14,23 +14,23 @@ interface PerformanceData {
   id: string
   client_id: string
   date: string
-  bundle_name: string | null
   product_name: string
-  product_type: string | null
-  game: string | null
   platform: string
   country_code: string | null
-  country: string | null
   region: string | null
   gross_units_sold: number | string
-  chargebacks_returns: number | string
   net_units_sold: number | string
-  base_price_usd: number | string | null
-  sale_price_usd: number | string | null
-  gross_steam_sales_usd: number | string
-  chargeback_returns_usd: number | string
-  vat_tax_usd: number | string
-  net_steam_sales_usd: number | string
+  base_price: number | string | null
+  sale_price: number | string | null
+  gross_revenue_usd: number | string
+  net_revenue_usd: number | string
+  currency: string | null
+  discount_percentage: number | string | null
+  line_item_type: string | null
+  steam_app_id: string | null
+  steam_package_id: string | null
+  created_at?: string
+  updated_at?: string
 }
 
 interface SummaryStats {
@@ -225,7 +225,7 @@ export default function AnalyticsPage() {
     setIsLoading(true)
     try {
       let query = supabase
-        .from('steam_performance_data')
+        .from('performance_metrics')
         .select('*')
         .order('date', { ascending: true })
 
@@ -257,11 +257,13 @@ export default function AnalyticsPage() {
 
       if (data && data.length > 0) {
         // FIXED: Use toNumber() for all numeric fields from Supabase
-        const totalRevenue = data.reduce((sum, row) => sum + toNumber(row.net_steam_sales_usd), 0)
+        const totalRevenue = data.reduce((sum, row) => sum + toNumber(row.net_revenue_usd), 0)
         const totalUnits = data.reduce((sum, row) => sum + toNumber(row.net_units_sold), 0)
         const totalGrossUnits = data.reduce((sum, row) => sum + toNumber(row.gross_units_sold), 0)
-        const totalChargebacks = data.reduce((sum, row) => sum + toNumber(row.chargebacks_returns), 0)
-        
+        const totalGrossRevenue = data.reduce((sum, row) => sum + toNumber(row.gross_revenue_usd), 0)
+        // Calculate refunds as difference between gross and net
+        const totalRefunds = totalGrossUnits - totalUnits
+
         const uniqueDates = new Set(data.map(row => row.date))
         const totalDays = uniqueDates.size || 1
 
@@ -272,7 +274,7 @@ export default function AnalyticsPage() {
           avgDailyRevenue: safeDivide(totalRevenue, totalDays),
           avgDailyUnits: safeDivide(totalUnits, totalDays),
           // FIXED: Refund rate calculation with safe division
-          refundRate: safeDivide(totalChargebacks, totalGrossUnits) * 100,
+          refundRate: safeDivide(totalRefunds, totalGrossUnits) * 100,
           totalDays
         })
 
@@ -325,9 +327,9 @@ export default function AnalyticsPage() {
     performanceData.forEach(row => {
       const existing = byDate.get(row.date) || { revenue: 0, units: 0, hasSale: false }
       // FIXED: Use isSalePrice helper with proper number conversion
-      const rowIsSale = isSalePrice(row.base_price_usd, row.sale_price_usd)
+      const rowIsSale = isSalePrice(row.base_price, row.sale_price)
       byDate.set(row.date, {
-        revenue: existing.revenue + toNumber(row.net_steam_sales_usd),
+        revenue: existing.revenue + toNumber(row.net_revenue_usd),
         units: existing.units + toNumber(row.net_units_sold),
         hasSale: existing.hasSale || rowIsSale
       })
@@ -353,7 +355,7 @@ export default function AnalyticsPage() {
     performanceData.forEach(row => {
       const region = row.region || 'Unknown'
       const existing = byRegion.get(region) || { revenue: 0, units: 0 }
-      const rowRevenue = toNumber(row.net_steam_sales_usd)
+      const rowRevenue = toNumber(row.net_revenue_usd)
       byRegion.set(region, {
         revenue: existing.revenue + rowRevenue,
         units: existing.units + toNumber(row.net_units_sold)
@@ -411,19 +413,19 @@ export default function AnalyticsPage() {
     performanceData.forEach(row => {
       const existing = dailyAgg.get(row.date)
       // FIXED: Use helper functions for sale detection and discount calculation
-      const rowIsSale = isSalePrice(row.base_price_usd, row.sale_price_usd)
-      const discountPct = calculateDiscountPct(row.base_price_usd, row.sale_price_usd)
+      const rowIsSale = isSalePrice(row.base_price, row.sale_price)
+      const discountPct = calculateDiscountPct(row.base_price, row.sale_price)
       
       if (existing) {
         dailyAgg.set(row.date, {
-          revenue: existing.revenue + toNumber(row.net_steam_sales_usd),
+          revenue: existing.revenue + toNumber(row.net_revenue_usd),
           units: existing.units + toNumber(row.net_units_sold),
           isSale: existing.isSale || rowIsSale,
           discountPct: discountPct ?? existing.discountPct
         })
       } else {
         dailyAgg.set(row.date, {
-          revenue: toNumber(row.net_steam_sales_usd),
+          revenue: toNumber(row.net_revenue_usd),
           units: toNumber(row.net_units_sold),
           isSale: rowIsSale,
           discountPct
@@ -855,21 +857,17 @@ function ImportPerformanceModal({ onClose, onSuccess }: { onClose: () => void; o
         'bundle name': 'bundle_name',
         'product name': 'product_name',
         'type': 'product_type',
-        'game': 'game',
         'platform': 'platform',
         'country code': 'country_code',
-        'country': 'country',
         'region': 'region',
         'gross units sold': 'gross_units_sold',
-        'chargebacks / returns': 'chargebacks_returns',
         'net units sold': 'net_units_sold',
-        'base price (usd)': 'base_price_usd',
-        'sale price (usd)': 'sale_price_usd',
+        'base price (usd)': 'base_price',
+        'sale price (usd)': 'sale_price',
         'currency': 'currency',
-        'gross steam sales (usd)': 'gross_steam_sales_usd',
-        'chargeback / returns (usd)': 'chargeback_returns_usd',
-        'vat / tax (usd)': 'vat_tax_usd',
-        'net steam sales (usd)': 'net_steam_sales_usd'
+        'gross steam sales (usd)': 'gross_revenue_usd',
+        'net steam sales (usd)': 'net_revenue_usd',
+        'product name': 'product_name'
       }
 
       const { data: clients } = await supabase.from('clients').select('id').limit(1)
@@ -901,7 +899,7 @@ function ImportPerformanceModal({ onClose, onSuccess }: { onClose: () => void; o
             const dbColumn = columnMap[header]
             if (dbColumn && values[idx]) {
               const value = values[idx]
-              if (['gross_units_sold', 'chargebacks_returns', 'net_units_sold'].includes(dbColumn)) {
+              if (['gross_units_sold', 'net_units_sold'].includes(dbColumn)) {
                 record[dbColumn] = parseInt(value) || 0
               } else if (dbColumn.includes('usd') || dbColumn.includes('price')) {
                 record[dbColumn] = parseFloat(value.replace('$', '').replace(',', '')) || 0
