@@ -6,8 +6,19 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-// Steam Partner API endpoint for financial data
+// Steam Partner API endpoint
 const STEAM_PARTNER_API = 'https://partner.steam-api.com';
+
+// Optimized configuration for local AND production
+const SYNC_CONFIG = {
+  BATCH_SIZE: 2,              // Process 2-3 dates in parallel (balanced)
+  TIMEOUT_MS: 90000,          // 90 seconds per API call
+  RETRY_ATTEMPTS: 3,          // Retry failed dates 3 times
+  RETRY_BASE_DELAY: 2000,     // 2 seconds, doubles each retry (2s, 4s, 8s)
+  INTER_BATCH_DELAY: 300,     // 300ms delay between batches
+  DB_BATCH_SIZE: 500,         // Bulk insert 500 records at a time
+  MAX_DATES_PER_REQUEST: 50,  // For chunked syncs (production)
+};
 
 interface SteamDetailedSalesResult {
   partnerid: string;
@@ -16,22 +27,16 @@ interface SteamDetailedSalesResult {
   packageid?: number;
   bundleid?: number;
   appid?: number;
-  game_item_id?: number;
-  package_sale_type?: string;
   platform?: string;
   country_code: string;
   base_price?: string;
   sale_price?: string;
   currency?: string;
   gross_units_sold?: number;
-  gross_units_returned?: number;
-  gross_sales_usd?: string;
-  gross_returns_usd?: string;
-  net_tax_usd?: string;
   net_units_sold?: number;
+  gross_sales_usd?: string;
   net_sales_usd?: string;
   primary_appid?: number;
-  combined_discount_id?: number;
   total_discount_percentage?: number;
 }
 
@@ -52,11 +57,323 @@ interface ChangedDatesResponse {
   };
 }
 
-// POST - Sync financial data from Steam using IPartnerFinancialsService
+interface SyncProgress {
+  id?: string;
+  client_id: string;
+  sync_type: string;
+  last_successful_date?: string;
+  dates_completed: number;
+  dates_total: number;
+  dates_failed: number;
+  status: 'in_progress' | 'completed' | 'failed' | 'cancelled';
+  error_message?: string;
+}
+
+// Helper: Delay execution
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+// Helper: Fetch with retry and exponential backoff
+async function fetchWithRetry<T>(
+  fetchFn: () => Promise<T>,
+  maxAttempts: number = SYNC_CONFIG.RETRY_ATTEMPTS,
+  context: string = 'API call'
+): Promise<T> {
+  let lastError: Error | unknown;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      console.log(`[Retry] ${context} - Attempt ${attempt}/${maxAttempts}`);
+      return await fetchFn();
+    } catch (error) {
+      lastError = error;
+      console.error(`[Retry] ${context} - Attempt ${attempt} failed:`, error);
+
+      if (attempt < maxAttempts) {
+        const delayMs = SYNC_CONFIG.RETRY_BASE_DELAY * Math.pow(2, attempt - 1);
+        console.log(`[Retry] Waiting ${delayMs}ms before retry...`);
+        await delay(delayMs);
+      }
+    }
+  }
+
+  throw lastError;
+}
+
+// Progress tracking functions
+async function getSyncProgress(clientId: string): Promise<SyncProgress | null> {
+  const { data, error } = await supabase
+    .from('sync_progress')
+    .select('*')
+    .eq('client_id', clientId)
+    .eq('sync_type', 'steam_api_sync')
+    .eq('status', 'in_progress')
+    .single();
+
+  if (error && error.code !== 'PGRST116') {
+    console.error('Error fetching sync progress:', error);
+  }
+
+  return data;
+}
+
+async function createSyncProgress(clientId: string, totalDates: number): Promise<string> {
+  // Cancel any existing in-progress syncs
+  await supabase
+    .from('sync_progress')
+    .update({ status: 'cancelled' })
+    .eq('client_id', clientId)
+    .eq('sync_type', 'steam_api_sync')
+    .eq('status', 'in_progress');
+
+  const { data, error } = await supabase
+    .from('sync_progress')
+    .insert({
+      client_id: clientId,
+      sync_type: 'steam_api_sync',
+      dates_total: totalDates,
+      dates_completed: 0,
+      dates_failed: 0,
+      status: 'in_progress'
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data.id;
+}
+
+async function updateSyncProgress(
+  clientId: string,
+  lastDate: string,
+  completedCount: number,
+  failedCount: number
+): Promise<void> {
+  await supabase
+    .from('sync_progress')
+    .update({
+      last_successful_date: lastDate,
+      dates_completed: completedCount,
+      dates_failed: failedCount,
+      updated_at: new Date().toISOString()
+    })
+    .eq('client_id', clientId)
+    .eq('sync_type', 'steam_api_sync')
+    .eq('status', 'in_progress');
+}
+
+async function completeSyncProgress(clientId: string): Promise<void> {
+  await supabase
+    .from('sync_progress')
+    .update({
+      status: 'completed',
+      completed_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    })
+    .eq('client_id', clientId)
+    .eq('sync_type', 'steam_api_sync')
+    .eq('status', 'in_progress');
+}
+
+async function failSyncProgress(clientId: string, errorMessage: string): Promise<void> {
+  await supabase
+    .from('sync_progress')
+    .update({
+      status: 'failed',
+      error_message: errorMessage,
+      updated_at: new Date().toISOString()
+    })
+    .eq('client_id', clientId)
+    .eq('sync_type', 'steam_api_sync')
+    .eq('status', 'in_progress');
+}
+
+// Get changed dates from Steam API
+async function getChangedDatesForPartner(
+  apiKey: string,
+  highwatermark: string
+): Promise<{ success: boolean; dates?: string[]; highwatermark?: string; error?: string }> {
+  return fetchWithRetry(async () => {
+    const url = `${STEAM_PARTNER_API}/IPartnerFinancialsService/GetChangedDatesForPartner/v001/?key=${apiKey}&highwatermark=${highwatermark}`;
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), SYNC_CONFIG.TIMEOUT_MS);
+
+    try {
+      const response = await fetch(url, { signal: controller.signal });
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        return {
+          success: false,
+          error: `Steam API returned status ${response.status}`
+        };
+      }
+
+      const data: ChangedDatesResponse = await response.json();
+      return {
+        success: true,
+        dates: data.response?.dates || [],
+        highwatermark: data.response?.result_highwatermark
+      };
+    } catch (fetchError) {
+      clearTimeout(timeoutId);
+      if (fetchError instanceof Error && fetchError.name === 'AbortError') {
+        throw new Error('Steam API request timed out');
+      }
+      throw fetchError;
+    }
+  }, SYNC_CONFIG.RETRY_ATTEMPTS, 'GetChangedDatesForPartner');
+}
+
+// Get detailed sales for a specific date
+async function getDetailedSalesForDate(
+  apiKey: string,
+  date: string
+): Promise<{
+  success: boolean;
+  results?: SteamDetailedSalesResult[];
+  metadata?: {
+    packages: Map<number, string>;
+    apps: Map<number, string>;
+    countries: Map<string, { name: string; region: string }>;
+  };
+  error?: string;
+}> {
+  return fetchWithRetry(async () => {
+    const allResults: SteamDetailedSalesResult[] = [];
+    const packages = new Map<number, string>();
+    const apps = new Map<number, string>();
+    const countries = new Map<string, { name: string; region: string }>();
+
+    let highwatermarkId = '0';
+    let hasMoreData = true;
+
+    // Paginate through all results for this date
+    while (hasMoreData) {
+      const url = `${STEAM_PARTNER_API}/IPartnerFinancialsService/GetDetailedSales/v001/?key=${apiKey}&date=${date}&highwatermark_id=${highwatermarkId}`;
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), SYNC_CONFIG.TIMEOUT_MS);
+
+      try {
+        const response = await fetch(url, { signal: controller.signal });
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+          throw new Error(`Steam API returned status ${response.status}`);
+        }
+
+        const data: SteamSalesResponse = await response.json();
+
+        // Add results
+        if (data.response.results) {
+          allResults.push(...data.response.results);
+        }
+
+        // Store metadata
+        data.response.package_info?.forEach(pkg => {
+          packages.set(pkg.packageid, pkg.package_name);
+        });
+        data.response.app_info?.forEach(app => {
+          apps.set(app.appid, app.app_name);
+        });
+        data.response.country_info?.forEach(country => {
+          countries.set(country.country_code, {
+            name: country.country_name,
+            region: country.region
+          });
+        });
+
+        // Check if there's more data
+        if (data.response.max_id) {
+          highwatermarkId = data.response.max_id;
+        } else {
+          hasMoreData = false;
+        }
+      } catch (fetchError) {
+        clearTimeout(timeoutId);
+        throw fetchError;
+      }
+    }
+
+    return {
+      success: true,
+      results: allResults,
+      metadata: { packages, apps, countries }
+    };
+  }, SYNC_CONFIG.RETRY_ATTEMPTS, `GetDetailedSales for ${date}`);
+}
+
+// Bulk store sales data (much faster than individual upserts)
+async function bulkStoreSalesData(
+  clientId: string,
+  allResults: SteamDetailedSalesResult[],
+  metadata?: {
+    packages: Map<number, string>;
+    apps: Map<number, string>;
+    countries: Map<string, { name: string; region: string }>;
+  }
+): Promise<{ imported: number; skipped: number }> {
+  const records = allResults.map(result => {
+    const date = result.date.replace(/\//g, '-');
+    const productName = result.packageid
+      ? metadata?.packages.get(result.packageid)
+      : result.appid
+        ? metadata?.apps.get(result.appid)
+        : 'Unknown';
+    const countryInfo = metadata?.countries.get(result.country_code);
+
+    return {
+      client_id: clientId,
+      date: date,
+      product_name: productName || 'Unknown',
+      platform: result.platform || 'Steam',
+      country_code: result.country_code,
+      region: countryInfo?.region || 'Unknown',
+      gross_units_sold: result.gross_units_sold || 0,
+      net_units_sold: result.net_units_sold || 0,
+      gross_revenue_usd: parseFloat(result.gross_sales_usd || '0'),
+      net_revenue_usd: parseFloat(result.net_sales_usd || '0'),
+      base_price: result.base_price ? parseFloat(result.base_price) / 100 : null,
+      sale_price: result.sale_price ? parseFloat(result.sale_price) / 100 : null,
+      currency: result.currency,
+      discount_percentage: result.total_discount_percentage,
+      steam_package_id: result.packageid?.toString(),
+      steam_app_id: result.primary_appid?.toString() || result.appid?.toString(),
+      line_item_type: result.line_item_type,
+      updated_at: new Date().toISOString()
+    };
+  });
+
+  // Insert in batches
+  let imported = 0;
+  let skipped = 0;
+
+  for (let i = 0; i < records.length; i += SYNC_CONFIG.DB_BATCH_SIZE) {
+    const batch = records.slice(i, i + SYNC_CONFIG.DB_BATCH_SIZE);
+
+    const { error } = await supabase
+      .from('performance_metrics')
+      .upsert(batch, {
+        onConflict: 'client_id,date,product_name,platform,country_code'
+      });
+
+    if (error) {
+      console.error('Error bulk storing sales data:', error);
+      skipped += batch.length;
+    } else {
+      imported += batch.length;
+    }
+  }
+
+  return { imported, skipped };
+}
+
+// Main sync handler
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { client_id, start_date, end_date, app_id, force_full_sync } = body;
+    const { client_id, start_date, end_date, resume = false } = body;
 
     if (!client_id) {
       return NextResponse.json(
@@ -65,178 +382,163 @@ export async function POST(request: Request) {
       );
     }
 
-    // Get the client's Steam API keys
+    // Get Steam API key
     const { data: keyData, error: keyError } = await supabase
       .from('steam_api_keys')
-      .select('api_key, publisher_key, app_ids, highwatermark')
+      .select('api_key, publisher_key, highwatermark')
       .eq('client_id', client_id)
       .eq('is_active', true)
       .single();
 
     if (keyError || !keyData) {
       return NextResponse.json(
-        { error: 'No active Steam API key found for this client' },
+        { error: 'No active Steam API key found' },
         { status: 404 }
       );
     }
 
-    // Financial API requires the publisher key (Financial Web API Key)
     const financialApiKey = keyData.publisher_key || keyData.api_key;
-    
-    if (!financialApiKey) {
-      return NextResponse.json(
-        { error: 'No Financial Web API Key configured. Create one in Steamworks under Manage Groups > Financial API Group.' },
-        { status: 400 }
-      );
-    }
 
-    // Get client name for logging
+    // Get client name
     const { data: clientData } = await supabase
       .from('clients')
       .select('name')
       .eq('id', client_id)
       .single();
 
-    // Use highwatermark 0 to get ALL dates (for debugging/full sync)
-    // In production, you'd use the stored highwatermark for incremental sync
-    const useHighwatermark = force_full_sync ? '0' : (keyData.highwatermark || '0');
-    
-    console.log(`[Steam Sync] Starting sync for ${clientData?.name}`);
-    console.log(`[Steam Sync] Using highwatermark: ${useHighwatermark}`);
-    console.log(`[Steam Sync] API Key (masked): ${financialApiKey.substring(0, 8)}...`);
+    console.log(`[Steam Sync] Starting sync for ${clientData?.name || client_id}`);
 
-    // Step 1: Get changed dates from Steam
-    const changedDates = await getChangedDatesForPartner(financialApiKey, useHighwatermark);
+    // Check for existing progress
+    const existingProgress = await getSyncProgress(client_id);
 
-    console.log(`[Steam Sync] GetChangedDatesForPartner result:`, {
-      success: changedDates.success,
-      datesCount: changedDates.dates?.length || 0,
-      error: changedDates.error,
-      rawResponse: changedDates.rawResponse
-    });
+    // Step 1: Get all changed dates from Steam
+    const highwatermark = resume && existingProgress ? '0' : (keyData.highwatermark || '0');
+    const changedDates = await getChangedDatesForPartner(financialApiKey, highwatermark);
 
-    if (!changedDates.success) {
-      return NextResponse.json({
-        success: false,
-        message: changedDates.error || 'Failed to get changed dates from Steam',
-        debug: {
-          apiCalled: true,
-          endpoint: 'GetChangedDatesForPartner',
-          highwatermarkUsed: useHighwatermark,
-          rawResponse: changedDates.rawResponse
-        },
-        rowsImported: 0,
-        rowsSkipped: 0,
-        clientName: clientData?.name
-      });
+    if (!changedDates.success || !changedDates.dates) {
+      await failSyncProgress(client_id, changedDates.error || 'Failed to get dates');
+      return NextResponse.json(
+        { error: changedDates.error || 'Failed to get changed dates' },
+        { status: 500 }
+      );
     }
 
-    // Filter dates to requested range if provided
-    let datesToSync = changedDates.dates || [];
+    // Filter dates by range if specified
+    let datesToSync = changedDates.dates;
     const totalDatesFromApi = datesToSync.length;
-    
-    if (start_date || end_date) {
-      datesToSync = datesToSync.filter(date => {
-        const d = date.replace(/\//g, '-');
-        if (start_date && d < start_date) return false;
-        if (end_date && d > end_date) return false;
-        return true;
-      });
+
+    if (start_date) {
+      datesToSync = datesToSync.filter(d => d >= start_date.replace(/-/g, '/'));
+    }
+    if (end_date) {
+      datesToSync = datesToSync.filter(d => d <= end_date.replace(/-/g, '/'));
+    }
+
+    // Resume: Skip already processed dates
+    if (resume && existingProgress?.last_successful_date) {
+      const lastDate = existingProgress.last_successful_date;
+      datesToSync = datesToSync.filter(d => d > lastDate);
+      console.log(`[Steam Sync] Resuming from ${lastDate}, ${datesToSync.length} dates remaining`);
     }
 
     console.log(`[Steam Sync] Dates from API: ${totalDatesFromApi}, After filter: ${datesToSync.length}`);
 
     if (datesToSync.length === 0) {
+      await completeSyncProgress(client_id);
       return NextResponse.json({
         success: true,
-        message: totalDatesFromApi === 0 
-          ? 'Steam API returned no dates with financial data. This could mean: (1) No sales data exists for this partner account, (2) The API key doesn\'t have access to financial data, or (3) All data was already synced.'
-          : `Steam returned ${totalDatesFromApi} date(s), but none matched your date filter (${start_date} to ${end_date}).`,
-        debug: {
-          apiCalled: true,
-          endpoint: 'GetChangedDatesForPartner',
-          highwatermarkUsed: useHighwatermark,
-          totalDatesFromApi,
-          datesAfterFilter: datesToSync.length,
-          sampleDates: changedDates.dates?.slice(0, 5),
-          newHighwatermark: changedDates.highwatermark
-        },
+        message: 'No new dates to sync',
         rowsImported: 0,
-        rowsSkipped: 0,
-        datesProcessed: 0,
-        clientName: clientData?.name
+        rowsSkipped: 0
       });
     }
 
-    // Step 2: Get detailed sales for each date
+    // Create or update progress tracking
+    if (!resume || !existingProgress) {
+      await createSyncProgress(client_id, datesToSync.length);
+    }
+
+    // Step 2: Process dates in optimized batches
     let totalImported = 0;
     let totalSkipped = 0;
+    let completedCount = existingProgress?.dates_completed || 0;
+    let failedCount = existingProgress?.dates_failed || 0;
     const errors: string[] = [];
 
-    console.log(`[Steam Sync] Starting to process ${datesToSync.length} dates in parallel batches...`);
+    console.log(`[Steam Sync] Processing ${datesToSync.length} dates in batches of ${SYNC_CONFIG.BATCH_SIZE}...`);
 
-    // Process dates in parallel batches for faster sync
-    const BATCH_SIZE = 5; // Reduced from 10 to be more conservative
-    for (let batchStart = 0; batchStart < datesToSync.length; batchStart += BATCH_SIZE) {
-      const batch = datesToSync.slice(batchStart, batchStart + BATCH_SIZE);
-      const batchNumber = Math.floor(batchStart / BATCH_SIZE) + 1;
-      const totalBatches = Math.ceil(datesToSync.length / BATCH_SIZE);
+    const totalBatches = Math.ceil(datesToSync.length / SYNC_CONFIG.BATCH_SIZE);
 
-      console.log(`[Steam Sync] Processing batch ${batchNumber}/${totalBatches} (dates ${batchStart + 1}-${Math.min(batchStart + BATCH_SIZE, datesToSync.length)}/${datesToSync.length})`);
+    for (let batchStart = 0; batchStart < datesToSync.length; batchStart += SYNC_CONFIG.BATCH_SIZE) {
+      const batch = datesToSync.slice(batchStart, batchStart + SYNC_CONFIG.BATCH_SIZE);
+      const batchNumber = Math.floor(batchStart / SYNC_CONFIG.BATCH_SIZE) + 1;
+
+      console.log(`[Steam Sync] Batch ${batchNumber}/${totalBatches} (dates ${batchStart + 1}-${Math.min(batchStart + SYNC_CONFIG.BATCH_SIZE, datesToSync.length)}/${datesToSync.length})`);
 
       try {
-        // Wrap each fetch in its own try-catch to prevent one failure from breaking the batch
-        const batchPromises = batch.map(async (date) => {
-          try {
-            return await getDetailedSalesForDate(financialApiKey, date, app_id);
-          } catch (error) {
-            console.error(`[Steam Sync] Error fetching date ${date}:`, error);
-            return {
-              success: false,
-              error: `Failed to fetch: ${error instanceof Error ? error.message : String(error)}`,
-              results: null,
-              metadata: null
-            };
-          }
-        });
-
+        // Fetch dates in parallel
+        const batchPromises = batch.map(date => getDetailedSalesForDate(financialApiKey, date));
         const batchResults = await Promise.all(batchPromises);
 
+        // Process results
         for (let i = 0; i < batch.length; i++) {
           const date = batch[i];
           const salesResult = batchResults[i];
 
           if (salesResult.success && salesResult.results) {
             try {
-              const storeResult = await storeSalesData(client_id, salesResult.results, salesResult.metadata);
+              const storeResult = await bulkStoreSalesData(
+                client_id,
+                salesResult.results,
+                salesResult.metadata
+              );
               totalImported += storeResult.imported;
               totalSkipped += storeResult.skipped;
+              completedCount++;
+
+              // Update progress after each successful date
+              await updateSyncProgress(client_id, date, completedCount, failedCount);
             } catch (storeError) {
               console.error(`[Steam Sync] Error storing data for ${date}:`, storeError);
-              errors.push(`${date}: Failed to store data - ${storeError instanceof Error ? storeError.message : String(storeError)}`);
+              errors.push(`${date}: Failed to store`);
+              failedCount++;
             }
-          } else if (salesResult.error) {
+          } else {
+            console.error(`[Steam Sync] Failed to fetch ${date}:`, salesResult.error);
             errors.push(`${date}: ${salesResult.error}`);
+            failedCount++;
           }
         }
 
-        console.log(`[Steam Sync] Batch ${batchNumber}/${totalBatches} complete. Imported: ${totalImported}, Skipped: ${totalSkipped}`);
+        console.log(`[Steam Sync] Batch ${batchNumber}/${totalBatches} complete. Total: ${totalImported} imported, ${totalSkipped} skipped, ${failedCount} failed`);
+
+        // Small delay between batches to avoid overwhelming API
+        if (batchStart + SYNC_CONFIG.BATCH_SIZE < datesToSync.length) {
+          await delay(SYNC_CONFIG.INTER_BATCH_DELAY);
+        }
       } catch (batchError) {
         console.error(`[Steam Sync] Critical error in batch ${batchNumber}:`, batchError);
         errors.push(`Batch ${batchNumber}: ${batchError instanceof Error ? batchError.message : String(batchError)}`);
-        // Continue to next batch even if this one fails
+        // Continue to next batch
       }
     }
 
-    // Update highwatermark for next sync
+    // Update highwatermark
     if (changedDates.highwatermark) {
       await supabase
         .from('steam_api_keys')
-        .update({ 
+        .update({
           highwatermark: changedDates.highwatermark,
           last_sync_date: new Date().toISOString().split('T')[0]
         })
         .eq('client_id', client_id);
+    }
+
+    // Complete or fail the sync
+    if (errors.length === 0) {
+      await completeSyncProgress(client_id);
+    } else if (errors.length === datesToSync.length) {
+      await failSyncProgress(client_id, errors.join('; '));
     }
 
     // Log import history
@@ -250,7 +552,7 @@ export async function POST(request: Request) {
         rows_imported: totalImported,
         rows_skipped: totalSkipped,
         status: errors.length === 0 ? 'completed' : 'partial',
-        error_message: errors.length > 0 ? errors.join('; ') : null
+        error_message: errors.length > 0 ? errors.slice(0, 10).join('; ') : null
       });
 
     return NextResponse.json({
@@ -258,14 +560,10 @@ export async function POST(request: Request) {
       message: `Synced ${datesToSync.length} date(s) from Steam Financial API.`,
       rowsImported: totalImported,
       rowsSkipped: totalSkipped,
-      datesProcessed: datesToSync.length,
-      errors: errors.length > 0 ? errors : undefined,
-      clientName: clientData?.name,
-      debug: {
-        apiCalled: true,
-        totalDatesFromApi,
-        datesProcessed: datesToSync.length
-      }
+      datesProcessed: completedCount,
+      datesFailed: failedCount,
+      errors: errors.length > 0 ? errors.slice(0, 10) : undefined,
+      clientName: clientData?.name
     });
 
   } catch (error) {
@@ -277,7 +575,7 @@ export async function POST(request: Request) {
   }
 }
 
-// GET - Test API key validity with actual Financial API
+// GET - Check sync progress
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
@@ -290,352 +588,18 @@ export async function GET(request: Request) {
       );
     }
 
-    const { data: keyData, error } = await supabase
-      .from('steam_api_keys')
-      .select('api_key, publisher_key, last_sync_date, highwatermark')
-      .eq('client_id', clientId)
-      .eq('is_active', true)
-      .single();
-
-    if (error || !keyData) {
-      return NextResponse.json({
-        valid: false,
-        message: 'No API key configured for this client'
-      });
-    }
-
-    // Test the Financial API key
-    const financialApiKey = keyData.publisher_key || keyData.api_key;
-    const testResult = await testFinancialApiKey(financialApiKey);
+    const progress = await getSyncProgress(clientId);
 
     return NextResponse.json({
-      valid: testResult.valid,
-      message: testResult.message,
-      lastSync: keyData.last_sync_date,
-      hasFinancialKey: !!keyData.publisher_key,
-      debug: testResult.debug
+      hasInProgressSync: !!progress,
+      progress: progress || null
     });
 
   } catch (error) {
-    console.error('Error testing Steam API key:', error);
+    console.error('Error checking sync progress:', error);
     return NextResponse.json(
-      { error: 'Failed to test API key' },
+      { error: 'Failed to check progress' },
       { status: 500 }
     );
-  }
-}
-
-// Get changed dates from IPartnerFinancialsService
-async function getChangedDatesForPartner(
-  apiKey: string,
-  highwatermark: string
-): Promise<{ success: boolean; dates?: string[]; highwatermark?: string; error?: string; rawResponse?: unknown }> {
-  try {
-    const url = `${STEAM_PARTNER_API}/IPartnerFinancialsService/GetChangedDatesForPartner/v001/?key=${apiKey}&highwatermark=${highwatermark}`;
-
-    console.log(`[Steam API] Calling: ${url.replace(apiKey, 'REDACTED')}`);
-
-    // Add timeout to prevent hanging indefinitely
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
-
-    try {
-      const response = await fetch(url, { signal: controller.signal });
-      clearTimeout(timeoutId);
-
-      const responseText = await response.text();
-
-      console.log(`[Steam API] Response status: ${response.status}`);
-      console.log(`[Steam API] Response body: ${responseText.substring(0, 500)}`);
-
-      if (!response.ok) {
-        if (response.status === 403) {
-          return {
-            success: false,
-            error: 'Access denied (403). Make sure you are using a Financial Web API Key from a Financial API Group in Steamworks.',
-            rawResponse: responseText
-          };
-        }
-        return {
-          success: false,
-          error: `Steam API returned status ${response.status}: ${responseText}`,
-          rawResponse: responseText
-        };
-      }
-
-      let data: ChangedDatesResponse;
-      try {
-        data = JSON.parse(responseText);
-      } catch (e) {
-        return {
-          success: false,
-          error: `Failed to parse Steam API response as JSON`,
-          rawResponse: responseText
-        };
-      }
-
-      return {
-        success: true,
-        dates: data.response?.dates || [],
-        highwatermark: data.response?.result_highwatermark,
-        rawResponse: data
-      };
-    } catch (fetchError) {
-      clearTimeout(timeoutId);
-      if (fetchError instanceof Error && fetchError.name === 'AbortError') {
-        return {
-          success: false,
-          error: 'Steam API request timed out after 30 seconds. The Steam servers may be slow or unresponsive. Please try again.'
-        };
-      }
-      throw fetchError;
-    }
-  } catch (error) {
-    return {
-      success: false,
-      error: `Failed to connect to Steam API: ${error instanceof Error ? error.message : String(error)}`
-    };
-  }
-}
-
-// Get detailed sales for a specific date
-async function getDetailedSalesForDate(
-  apiKey: string,
-  date: string,
-  appIdFilter?: string
-): Promise<{
-  success: boolean;
-  results?: SteamDetailedSalesResult[];
-  metadata?: {
-    packages: Map<number, string>;
-    apps: Map<number, string>;
-    countries: Map<string, { name: string; region: string }>;
-  };
-  error?: string
-}> {
-  try {
-    const allResults: SteamDetailedSalesResult[] = [];
-    const packages = new Map<number, string>();
-    const apps = new Map<number, string>();
-    const countries = new Map<string, { name: string; region: string }>();
-
-    let highwatermarkId = '0';
-    let hasMoreData = true;
-
-    // Paginate through all results for this date
-    while (hasMoreData) {
-      const url = `${STEAM_PARTNER_API}/IPartnerFinancialsService/GetDetailedSales/v001/?key=${apiKey}&date=${date}&highwatermark_id=${highwatermarkId}`;
-
-      // Add timeout for each pagination request
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
-
-      try {
-        const response = await fetch(url, { signal: controller.signal });
-        clearTimeout(timeoutId);
-
-        if (!response.ok) {
-          return {
-            success: false,
-            error: `Steam API returned status ${response.status}`
-          };
-        }
-
-        const data: SteamSalesResponse = await response.json();
-
-        // Add results
-        if (data.response.results) {
-          // Filter by app ID if specified
-          const filtered = appIdFilter
-            ? data.response.results.filter(r =>
-                r.primary_appid?.toString() === appIdFilter ||
-                r.appid?.toString() === appIdFilter
-              )
-            : data.response.results;
-          allResults.push(...filtered);
-        }
-
-        // Collect metadata
-        data.response.package_info?.forEach(p => packages.set(p.packageid, p.package_name));
-        data.response.app_info?.forEach(a => apps.set(a.appid, a.app_name));
-        data.response.country_info?.forEach(c => countries.set(c.country_code, {
-          name: c.country_name,
-          region: c.region
-        }));
-
-        // Check if there's more data
-        const maxId = data.response.max_id;
-        if (!maxId || maxId === highwatermarkId) {
-          hasMoreData = false;
-        } else {
-          highwatermarkId = maxId;
-        }
-      } catch (fetchError) {
-        clearTimeout(timeoutId);
-        if (fetchError instanceof Error && fetchError.name === 'AbortError') {
-          return {
-            success: false,
-            error: `Steam API request timed out after 30 seconds while fetching data for ${date}. Please try again.`
-          };
-        }
-        throw fetchError;
-      }
-    }
-
-    return {
-      success: true,
-      results: allResults,
-      metadata: { packages, apps, countries }
-    };
-  } catch (error) {
-    return {
-      success: false,
-      error: `Failed to get sales data: ${error instanceof Error ? error.message : String(error)}`
-    };
-  }
-}
-
-// Store sales data in our database
-async function storeSalesData(
-  clientId: string,
-  results: SteamDetailedSalesResult[],
-  metadata?: {
-    packages: Map<number, string>;
-    apps: Map<number, string>;
-    countries: Map<string, { name: string; region: string }>;
-  }
-): Promise<{ imported: number; skipped: number }> {
-  let imported = 0;
-  let skipped = 0;
-
-  for (const result of results) {
-    try {
-      // Convert date format from YYYY/MM/DD to YYYY-MM-DD
-      const date = result.date.replace(/\//g, '-');
-      
-      // Get product name from metadata
-      const productName = result.packageid 
-        ? metadata?.packages.get(result.packageid) 
-        : result.appid 
-          ? metadata?.apps.get(result.appid)
-          : 'Unknown';
-
-      // Get country info
-      const countryInfo = metadata?.countries.get(result.country_code);
-
-      // Upsert into performance_metrics table
-      const { error } = await supabase
-        .from('performance_metrics')
-        .upsert({
-          client_id: clientId,
-          date: date,
-          product_name: productName || 'Unknown',
-          platform: result.platform || 'Steam',
-          country_code: result.country_code,
-          region: countryInfo?.region || 'Unknown',
-          gross_units_sold: result.gross_units_sold || 0,
-          net_units_sold: result.net_units_sold || 0,
-          gross_revenue_usd: parseFloat(result.gross_sales_usd || '0'),
-          net_revenue_usd: parseFloat(result.net_sales_usd || '0'),
-          base_price: result.base_price ? parseFloat(result.base_price) / 100 : null,
-          sale_price: result.sale_price ? parseFloat(result.sale_price) / 100 : null,
-          currency: result.currency,
-          discount_percentage: result.total_discount_percentage,
-          steam_package_id: result.packageid?.toString(),
-          steam_app_id: result.primary_appid?.toString() || result.appid?.toString(),
-          line_item_type: result.line_item_type,
-          updated_at: new Date().toISOString()
-        }, {
-          onConflict: 'client_id,date,product_name,platform,country_code'
-        });
-
-      if (error) {
-        console.error('Error storing sales data:', error);
-        skipped++;
-      } else {
-        imported++;
-      }
-    } catch (error) {
-      console.error('Error processing sales result:', error);
-      skipped++;
-    }
-  }
-
-  return { imported, skipped };
-}
-
-// Test if the Financial API key is valid
-async function testFinancialApiKey(apiKey: string): Promise<{ valid: boolean; message: string; debug?: unknown }> {
-  try {
-    // Try to get changed dates with highwatermark 0 - this will confirm API access
-    const url = `${STEAM_PARTNER_API}/IPartnerFinancialsService/GetChangedDatesForPartner/v001/?key=${apiKey}&highwatermark=0`;
-
-    console.log(`[Steam API Test] Calling: ${url.replace(apiKey, 'REDACTED')}`);
-
-    // Add timeout to prevent hanging
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
-
-    try {
-      const response = await fetch(url, { signal: controller.signal });
-      clearTimeout(timeoutId);
-
-      const responseText = await response.text();
-
-      console.log(`[Steam API Test] Status: ${response.status}, Body: ${responseText.substring(0, 200)}`);
-
-      if (response.ok) {
-        let data: ChangedDatesResponse;
-        try {
-          data = JSON.parse(responseText);
-        } catch (e) {
-          return {
-            valid: false,
-            message: `Steam API returned invalid JSON: ${responseText.substring(0, 100)}`,
-            debug: { status: response.status, body: responseText }
-          };
-        }
-
-        const dateCount = data.response?.dates?.length || 0;
-        return {
-          valid: true,
-          message: `Financial API connected! ${dateCount} date(s) with sales data available.`,
-          debug: {
-            status: response.status,
-            dateCount,
-            sampleDates: data.response?.dates?.slice(0, 3),
-            highwatermark: data.response?.result_highwatermark
-          }
-        };
-      } else if (response.status === 403) {
-        return {
-          valid: false,
-          message: 'Access denied (403). This key may not have Financial API access. Create a Financial API Group in Steamworks and use that key.',
-          debug: { status: response.status, body: responseText }
-        };
-      } else {
-        return {
-          valid: false,
-          message: `Steam API returned status ${response.status}`,
-          debug: { status: response.status, body: responseText }
-        };
-      }
-    } catch (fetchError) {
-      clearTimeout(timeoutId);
-      if (fetchError instanceof Error && fetchError.name === 'AbortError') {
-        return {
-          valid: false,
-          message: 'Steam API connection timed out after 30 seconds. The Steam servers may be slow or unresponsive. Please try again.',
-          debug: { error: 'AbortError - Request timed out' }
-        };
-      }
-      throw fetchError;
-    }
-  } catch (error) {
-    return {
-      valid: false,
-      message: `Could not connect to Steam Partner API: ${error instanceof Error ? error.message : String(error)}`,
-      debug: { error: String(error) }
-    };
   }
 }

@@ -64,11 +64,18 @@ export default function SettingsPage() {
   const [testingKey, setTestingKey] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<{valid: boolean; message: string; debug?: SyncDebugInfo} | null>(null);
   const [syncing, setSyncing] = useState(false);
+  const [syncProgress, setSyncProgress] = useState<{
+    datesCompleted: number;
+    datesTotal: number;
+    datesFailed: number;
+    lastDate?: string;
+  } | null>(null);
   const [syncResult, setSyncResult] = useState<{
-    success: boolean; 
-    message: string; 
-    rowsImported?: number; 
+    success: boolean;
+    message: string;
+    rowsImported?: number;
     datesProcessed?: number;
+    datesFailed?: number;
     debug?: SyncDebugInfo;
   } | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -157,10 +164,12 @@ export default function SettingsPage() {
     }, 15000);
   };
 
-  const handleSync = async () => {
+  const handleSync = async (resume = false) => {
     if (!selectedKey) return;
     setSyncing(true);
     setSyncResult(null);
+    setSyncProgress(null);
+
     try {
       const res = await fetch('/api/steam-sync', {
         method: 'POST',
@@ -170,18 +179,23 @@ export default function SettingsPage() {
           start_date: syncOptions.start_date || undefined,
           end_date: syncOptions.end_date || undefined,
           app_id: syncOptions.app_id || undefined,
-          force_full_sync: syncOptions.force_full_sync
+          force_full_sync: syncOptions.force_full_sync,
+          resume: resume
         })
       });
+
       const data = await res.json();
       console.log('Sync result:', data);
-      setSyncResult({ 
-        success: data.success !== false, 
+
+      setSyncResult({
+        success: data.success !== false,
         message: data.message || data.error || 'Unknown result',
         rowsImported: data.rowsImported,
         datesProcessed: data.datesProcessed,
+        datesFailed: data.datesFailed,
         debug: data.debug as SyncDebugInfo
       });
+
       if (data.success) {
         fetchData();
       }
@@ -189,7 +203,9 @@ export default function SettingsPage() {
       console.error('Sync error:', error);
       setSyncResult({ success: false, message: 'Failed to sync data: ' + String(error) });
     }
+
     setSyncing(false);
+    setSyncProgress(null);
   };
 
   const handleDeleteKey = async (id: string) => {
@@ -574,12 +590,12 @@ export default function SettingsPage() {
             )}
 
             <div className={styles.modalActions}>
-              <button className={styles.cancelButton} onClick={() => { setShowSyncModal(false); setSyncResult(null); }}>
+              <button className={styles.cancelButton} onClick={() => { setShowSyncModal(false); setSyncResult(null); setSyncProgress(null); }}>
                 Close
               </button>
-              <button 
-                className={styles.saveButton} 
-                onClick={handleSync}
+              <button
+                className={styles.saveButton}
+                onClick={() => handleSync(false)}
                 disabled={syncing}
               >
                 {syncing ? (
