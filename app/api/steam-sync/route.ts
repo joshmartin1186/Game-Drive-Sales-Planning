@@ -51,7 +51,7 @@ interface ChangedDatesResponse {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { client_id, start_date, end_date, app_id, force_full_sync, chunk_size = 15, skip_dates = 0 } = body;
+    const { client_id, start_date, end_date, app_id, force_full_sync, chunk_size = 15, skip_dates = 0, dates_to_process } = body;
 
     if (!client_id) {
       return NextResponse.json(
@@ -99,44 +99,58 @@ export async function POST(request: Request) {
     console.log(`[Steam Sync] Starting sync for ${clientData?.name}`);
     console.log(`[Steam Sync] Using highwatermark: ${useHighwatermark}`);
     console.log(`[Steam Sync] API Key (masked): ${financialApiKey.substring(0, 8)}...`);
+    console.log(`[Steam Sync] Chunk request: skip_dates=${skip_dates}, chunk_size=${chunk_size}, has_dates_list=${!!dates_to_process}`);
 
-    // Step 1: Get changed dates from Steam
-    const changedDates = await getChangedDatesForPartner(financialApiKey, useHighwatermark);
+    let datesToSync: string[];
+    let totalDatesFromApi = 0;
+    let newHighwatermark: string | undefined;
 
-    console.log(`[Steam Sync] GetChangedDatesForPartner result:`, {
-      success: changedDates.success,
-      datesCount: changedDates.dates?.length || 0,
-      error: changedDates.error,
-      rawResponse: changedDates.rawResponse
-    });
+    // If dates are provided by the client (subsequent chunks), use them directly
+    // Otherwise, fetch from Steam API (first chunk only)
+    if (dates_to_process && Array.isArray(dates_to_process)) {
+      console.log(`[Steam Sync] Using provided dates list (${dates_to_process.length} dates)`);
+      datesToSync = dates_to_process;
+      totalDatesFromApi = dates_to_process.length;
+    } else {
+      console.log(`[Steam Sync] Fetching dates from Steam API`);
+      // Step 1: Get changed dates from Steam (only on first chunk)
+      const changedDates = await getChangedDatesForPartner(financialApiKey, useHighwatermark);
 
-    if (!changedDates.success) {
-      return NextResponse.json({
-        success: false,
-        message: changedDates.error || 'Failed to get changed dates from Steam',
-        debug: {
-          apiCalled: true,
-          endpoint: 'GetChangedDatesForPartner',
-          highwatermarkUsed: useHighwatermark,
-          rawResponse: changedDates.rawResponse
-        },
-        rowsImported: 0,
-        rowsSkipped: 0,
-        clientName: clientData?.name
+      console.log(`[Steam Sync] GetChangedDatesForPartner result:`, {
+        success: changedDates.success,
+        datesCount: changedDates.dates?.length || 0,
+        error: changedDates.error
       });
-    }
 
-    // Filter dates to requested range if provided
-    let datesToSync = changedDates.dates || [];
-    const totalDatesFromApi = datesToSync.length;
+      if (!changedDates.success) {
+        return NextResponse.json({
+          success: false,
+          message: changedDates.error || 'Failed to get changed dates from Steam',
+          debug: {
+            apiCalled: true,
+            endpoint: 'GetChangedDatesForPartner',
+            highwatermarkUsed: useHighwatermark,
+            rawResponse: changedDates.rawResponse
+          },
+          rowsImported: 0,
+          rowsSkipped: 0,
+          clientName: clientData?.name
+        });
+      }
 
-    if (start_date || end_date) {
-      datesToSync = datesToSync.filter(date => {
-        const d = date.replace(/\//g, '-');
-        if (start_date && d < start_date) return false;
-        if (end_date && d > end_date) return false;
-        return true;
-      });
+      datesToSync = changedDates.dates || [];
+      totalDatesFromApi = datesToSync.length;
+      newHighwatermark = changedDates.highwatermark;
+
+      // Filter dates to requested range if provided
+      if (start_date || end_date) {
+        datesToSync = datesToSync.filter(date => {
+          const d = date.replace(/\//g, '-');
+          if (start_date && d < start_date) return false;
+          if (end_date && d > end_date) return false;
+          return true;
+        });
+      }
     }
 
     // Apply chunking: skip and limit dates
@@ -155,19 +169,19 @@ export async function POST(request: Request) {
           ? `Steam returned ${totalDatesFromApi} date(s), but none matched your date filter (${start_date} to ${end_date}).`
           : 'All dates in this chunk have been processed.',
         debug: {
-          apiCalled: true,
+          apiCalled: !dates_to_process,
           endpoint: 'GetChangedDatesForPartner',
           highwatermarkUsed: useHighwatermark,
           totalDatesFromApi,
           datesAfterFilter: totalFilteredDates,
-          sampleDates: changedDates.dates?.slice(0, 5),
-          newHighwatermark: changedDates.highwatermark
+          sampleDates: datesToSync?.slice(0, 5)
         },
         rowsImported: 0,
         rowsSkipped: 0,
         datesProcessed: 0,
         totalDates: totalFilteredDates,
         remainingDates,
+        allDates: datesToSync, // Return full list for subsequent chunks
         clientName: clientData?.name
       });
     }
@@ -190,12 +204,12 @@ export async function POST(request: Request) {
       }
     }
 
-    // Update highwatermark for next sync
-    if (changedDates.highwatermark) {
+    // Update highwatermark for next sync (only if we fetched from Steam)
+    if (newHighwatermark) {
       await supabase
         .from('steam_api_keys')
-        .update({ 
-          highwatermark: changedDates.highwatermark,
+        .update({
+          highwatermark: newHighwatermark,
           last_sync_date: new Date().toISOString().split('T')[0]
         })
         .eq('client_id', client_id);
@@ -208,8 +222,8 @@ export async function POST(request: Request) {
         .insert({
           client_id,
           import_type: 'steam_api_sync',
-          date_range_start: start_date || changedDates.dates?.[0]?.replace(/\//g, '-'),
-          date_range_end: end_date || changedDates.dates?.[changedDates.dates.length - 1]?.replace(/\//g, '-'),
+          date_range_start: start_date || datesToSync?.[0]?.replace(/\//g, '-'),
+          date_range_end: end_date || datesToSync?.[datesToSync.length - 1]?.replace(/\//g, '-'),
           rows_imported: totalImported,
           rows_skipped: totalSkipped,
           status: errors.length === 0 ? 'in_progress' : 'partial',
@@ -225,10 +239,11 @@ export async function POST(request: Request) {
       datesProcessed: chunk.length,
       totalDates: totalFilteredDates,
       remainingDates,
+      allDates: datesToSync, // Return full list for subsequent chunks
       errors: errors.length > 0 ? errors : undefined,
       clientName: clientData?.name,
       debug: {
-        apiCalled: true,
+        apiCalled: !dates_to_process,
         totalDatesFromApi,
         datesProcessed: chunk.length
       }

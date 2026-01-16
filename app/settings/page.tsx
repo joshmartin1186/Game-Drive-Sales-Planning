@@ -177,6 +177,7 @@ export default function SettingsPage() {
     let allErrors: string[] = [];
     let totalDates = 0;
     let chunkNumber = 0;
+    let allDates: string[] | null = null; // Store dates list from first response
 
     try {
       // Keep syncing until no more dates remain
@@ -193,20 +194,33 @@ export default function SettingsPage() {
             app_id: syncOptions.app_id || undefined,
             force_full_sync: syncOptions.force_full_sync,
             chunk_size: CHUNK_SIZE,
-            skip_dates: skipDates
+            skip_dates: skipDates,
+            dates_to_process: allDates // Pass dates list for subsequent chunks
           })
         });
 
+        // Get response text first to handle both JSON and non-JSON responses
+        const responseText = await res.text();
+
         if (!res.ok) {
-          throw new Error(`API returned status ${res.status}`);
+          throw new Error(`API returned status ${res.status}: ${responseText.substring(0, 200)}`);
         }
 
-        const data = await res.json();
+        // Try to parse as JSON
+        let data;
+        try {
+          data = JSON.parse(responseText);
+        } catch (parseError) {
+          throw new Error(`API returned invalid JSON (possible timeout): ${responseText.substring(0, 200)}`);
+        }
+
         console.log(`Chunk ${chunkNumber} result:`, data);
 
         // Update totals from first chunk
         if (chunkNumber === 1) {
           totalDates = data.totalDates || 0;
+          allDates = data.allDates || null; // Store dates list for subsequent chunks
+          console.log(`First chunk: got ${allDates?.length || 0} dates to process in total`);
         }
 
         // Accumulate results
