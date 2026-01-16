@@ -397,19 +397,19 @@ export default function SettingsPage() {
             </div>
 
             <div className={styles.formGroup}>
-              <label>Steam Web API Key *</label>
+              <label>Steam Web API Key (Optional)</label>
               <input
                 type="text"
-                placeholder="Enter your Steam Web API key"
+                placeholder="Enter your Steam Web API key (optional)"
                 value={formData.api_key}
                 onChange={e => setFormData({...formData, api_key: e.target.value})}
                 style={{ fontFamily: 'monospace' }}
               />
-              <small>Basic API key from steamcommunity.com/dev/apikey</small>
+              <small>For public Steam data only - NOT required for sales/financial data</small>
             </div>
 
             <div className={styles.formGroup}>
-              <label>Financial Web API Key (Required for Sales Data)</label>
+              <label>Financial Web API Key (Publisher Key) *</label>
               <input
                 type="text"
                 placeholder="Enter your Financial Web API key"
@@ -417,7 +417,7 @@ export default function SettingsPage() {
                 onChange={e => setFormData({...formData, publisher_key: e.target.value})}
                 style={{ fontFamily: 'monospace' }}
               />
-              <small>From Steamworks → Manage Groups → Financial API Group</small>
+              <small>⚠️ Required for sales data - From Steamworks → Manage Groups → Financial API Group</small>
             </div>
 
             <div className={styles.formGroup}>

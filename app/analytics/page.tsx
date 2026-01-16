@@ -82,6 +82,13 @@ interface CurrentPeriodState {
   discountPct: number | null
 }
 
+interface Client {
+  id: string
+  name: string
+  email: string | null
+  contact_person: string | null
+}
+
 // ============================================
 // UTILITY FUNCTIONS FOR SAFE NUMBER CONVERSION
 // ============================================
@@ -202,6 +209,8 @@ export default function AnalyticsPage() {
   const [performanceData, setPerformanceData] = useState<PerformanceData[]>([])
   const [summaryStats, setSummaryStats] = useState<SummaryStats | null>(null)
   const [dateRange, setDateRange] = useState<DateRange>({ start: null, end: null })
+  const [selectedClient, setSelectedClient] = useState<string>('all')
+  const [clients, setClients] = useState<Client[]>([])
   const [selectedProduct, setSelectedProduct] = useState<string>('all')
   const [selectedRegion, setSelectedRegion] = useState<string>('all')
   const [selectedPlatform, setSelectedPlatform] = useState<string>('all')
@@ -234,6 +243,9 @@ export default function AnalyticsPage() {
       }
       if (selectedPlatform !== 'all') {
         query = query.eq('platform', selectedPlatform)
+      }
+      if (selectedClient !== 'all') {
+        query = query.eq('client_id', selectedClient)
       }
 
       const { data, error } = await query
@@ -279,7 +291,26 @@ export default function AnalyticsPage() {
     } finally {
       setIsLoading(false)
     }
-  }, [supabase, dateRange, selectedProduct, selectedRegion, selectedPlatform])
+  }, [supabase, dateRange, selectedClient, selectedProduct, selectedRegion, selectedPlatform])
+
+  // Fetch clients
+  const fetchClients = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('clients')
+        .select('id, name, email, contact_person')
+        .order('name', { ascending: true })
+
+      if (error) throw error
+      setClients(data || [])
+    } catch (error) {
+      console.error('Error fetching clients:', error)
+    }
+  }, [supabase])
+
+  useEffect(() => {
+    fetchClients()
+  }, [fetchClients])
 
   useEffect(() => {
     fetchPerformanceData()
@@ -496,6 +527,12 @@ export default function AnalyticsPage() {
             <p className={styles.subtitle}>Performance metrics and sales analysis</p>
           </div>
           <div className={styles.headerRight}>
+            <Link href="/analytics/builder" className={styles.builderButton}>
+              <svg className={styles.buttonIcon} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+              </svg>
+              Dashboard Builder
+            </Link>
             <button className={styles.importButton} onClick={() => setShowImportModal(true)}>
               <svg className={styles.buttonIcon} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
@@ -521,6 +558,14 @@ export default function AnalyticsPage() {
               <button className={styles.presetButton} onClick={() => setPresetDateRange('90d')}>90D</button>
               <button className={styles.presetButton} onClick={() => setPresetDateRange('ytd')}>YTD</button>
             </div>
+          </div>
+
+          <div className={styles.filterGroup}>
+            <label className={styles.filterLabel}>Client</label>
+            <select className={styles.filterSelect} value={selectedClient} onChange={(e) => setSelectedClient(e.target.value)}>
+              <option value="all">All Clients</option>
+              {clients.map(client => (<option key={client.id} value={client.id}>{client.name}</option>))}
+            </select>
           </div>
 
           <div className={styles.filterGroup}>

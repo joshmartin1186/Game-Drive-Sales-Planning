@@ -1,0 +1,342 @@
+/* Builder Container */
+.builderContainer {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: #f9fafb;
+}
+
+/* Toolbar */
+.toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 24px;
+  background: white;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.toolbarLeft {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.toolbarTitle {
+  font-size: 20px;
+  font-weight: 700;
+  color: #111827;
+  margin: 0;
+}
+
+.chartCount {
+  font-size: 14px;
+  color: #6b7280;
+  padding: 4px 12px;
+  background: #f3f4f6;
+  border-radius: 12px;
+}
+
+.toolbarRight {
+  display: flex;
+  gap: 12px;
+}
+
+.toolbarButton,
+.toolbarButtonPrimary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: none;
+}
+
+.toolbarButton {
+  background: white;
+  color: #374151;
+  border: 1px solid #d1d5db;
+}
+
+.toolbarButton:hover {
+  background: #f9fafb;
+  border-color: #9ca3af;
+}
+
+.toolbarButtonPrimary {
+  background: #3b82f6;
+  color: white;
+}
+
+.toolbarButtonPrimary:hover {
+  background: #2563eb;
+}
+
+/* Templates Panel */
+.templatesPanel {
+  background: white;
+  border-bottom: 1px solid #e5e7eb;
+  padding: 20px 24px;
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.templatesPanelHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.templatesPanelTitle {
+  font-size: 16px;
+  font-weight: 600;
+  color: #111827;
+  margin: 0;
+}
+
+.closeTemplatesButton {
+  background: none;
+  border: none;
+  color: #6b7280;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.closeTemplatesButton:hover {
+  background: #f3f4f6;
+  color: #111827;
+}
+
+.templatesGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.templateCard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 20px 16px;
+  background: #f9fafb;
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.templateCard:hover {
+  background: #f3f4f6;
+  border-color: #3b82f6;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.templateIcon {
+  font-size: 32px;
+}
+
+.templateTitle {
+  font-size: 14px;
+  font-weight: 600;
+  color: #111827;
+  text-align: center;
+}
+
+.templateType {
+  font-size: 11px;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Grid Container */
+.gridContainer {
+  flex: 1;
+  overflow: auto;
+  padding: 24px;
+}
+
+.gridLayout {
+  min-height: 100%;
+}
+
+/* Grid Item */
+.gridItem {
+  position: relative;
+  background: white;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.dragHandle {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #9ca3af;
+  cursor: grab;
+  z-index: 10;
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 4px;
+  transition: all 0.2s;
+  opacity: 0;
+}
+
+.gridItem:hover .dragHandle {
+  opacity: 1;
+}
+
+.dragHandle:active {
+  cursor: grabbing;
+}
+
+.dragHandle:hover {
+  color: #374151;
+  background: white;
+}
+
+/* Empty State */
+.emptyState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  padding: 40px;
+  text-align: center;
+}
+
+.emptyIcon {
+  font-size: 64px;
+  margin-bottom: 16px;
+  opacity: 0.5;
+}
+
+.emptyTitle {
+  font-size: 24px;
+  font-weight: 700;
+  color: #111827;
+  margin: 0 0 8px 0;
+}
+
+.emptyDescription {
+  font-size: 16px;
+  color: #6b7280;
+  margin: 0 0 24px 0;
+  max-width: 400px;
+}
+
+.emptyActions {
+  display: flex;
+  gap: 12px;
+}
+
+.emptyButton,
+.emptyButtonPrimary {
+  padding: 12px 24px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: none;
+}
+
+.emptyButton {
+  background: white;
+  color: #374151;
+  border: 1px solid #d1d5db;
+}
+
+.emptyButton:hover {
+  background: #f9fafb;
+  border-color: #9ca3af;
+}
+
+.emptyButtonPrimary {
+  background: #3b82f6;
+  color: white;
+}
+
+.emptyButtonPrimary:hover {
+  background: #2563eb;
+}
+
+/* React Grid Layout Overrides */
+/* Note: These styles apply globally to react-grid-layout classes */
+
+/* Responsive */
+@media (max-width: 1024px) {
+  .toolbar {
+    flex-direction: column;
+    gap: 12px;
+    align-items: stretch;
+  }
+
+  .toolbarLeft,
+  .toolbarRight {
+    justify-content: space-between;
+  }
+
+  .templatesGrid {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  }
+
+  .gridContainer {
+    padding: 16px;
+  }
+}
+
+@media (max-width: 640px) {
+  .toolbar {
+    padding: 12px 16px;
+  }
+
+  .toolbarTitle {
+    font-size: 18px;
+  }
+
+  .templatesPanel {
+    padding: 16px;
+  }
+
+  .templatesGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .emptyActions {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .emptyButton,
+  .emptyButtonPrimary {
+    width: 100%;
+  }
+}
