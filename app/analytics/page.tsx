@@ -866,8 +866,7 @@ function ImportPerformanceModal({ onClose, onSuccess }: { onClose: () => void; o
         'sale price (usd)': 'sale_price',
         'currency': 'currency',
         'gross steam sales (usd)': 'gross_revenue_usd',
-        'net steam sales (usd)': 'net_revenue_usd',
-        'product name': 'product_name'
+        'net steam sales (usd)': 'net_revenue_usd'
       }
 
       const { data: clients } = await supabase.from('clients').select('id').limit(1)
