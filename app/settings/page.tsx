@@ -184,6 +184,11 @@ export default function SettingsPage() {
         })
       });
 
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`API returned ${res.status}: ${text}`);
+      }
+
       const data = await res.json();
       console.log('Sync result:', data);
 
