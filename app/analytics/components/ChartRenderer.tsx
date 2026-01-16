@@ -270,8 +270,9 @@ export default function ChartRenderer({ config, data, onEdit, onDelete }: ChartR
                 key={index}
                 d={`M 50 50 L ${startX} ${startY} A 40 40 0 ${largeArc} 1 ${endX} ${endY} Z`}
                 fill={color}
-                title={`${item.label}: ${(percentage * 100).toFixed(1)}%`}
-              />
+              >
+                <title>{`${item.label}: ${(percentage * 100).toFixed(1)}%`}</title>
+              </path>
             )
           })}
         </svg>
