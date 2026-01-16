@@ -215,15 +215,20 @@ export default function ChartBuilder({ performanceData, initialCharts = [], onCh
           <GridLayout
             className={styles.gridLayout}
             layout={layout}
-            cols={12}
-            rowHeight={60}
             width={1200}
+            gridConfig={{
+              cols: 12,
+              rowHeight: 60,
+              maxRows: Infinity,
+            }}
+            dragConfig={{
+              handle: `.${styles.dragHandle}`,
+              isDraggable: true,
+            }}
+            resizeConfig={{
+              isResizable: true,
+            }}
             onLayoutChange={handleLayoutChange}
-            draggableHandle={`.${styles.dragHandle}`}
-            isDraggable
-            isResizable
-            compactType="vertical"
-            preventCollision={false}
           >
             {charts.map(chart => (
               <div key={chart.id} className={styles.gridItem}>
