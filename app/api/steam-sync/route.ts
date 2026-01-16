@@ -112,9 +112,12 @@ export async function POST(request: Request) {
       datesToSync = dates_to_process;
       totalDatesFromApi = dates_to_process.length;
     } else {
-      console.log(`[Steam Sync] Fetching dates from Steam API`);
+      console.log(`[Steam Sync] Fetching dates from Steam API (this may take 30-60 seconds)...`);
+      const fetchStartTime = Date.now();
       // Step 1: Get changed dates from Steam (only on first chunk)
       const changedDates = await getChangedDatesForPartner(financialApiKey, useHighwatermark);
+      const fetchElapsed = Date.now() - fetchStartTime;
+      console.log(`[Steam Sync] Fetched dates list in ${fetchElapsed}ms`);
 
       console.log(`[Steam Sync] GetChangedDatesForPartner result:`, {
         success: changedDates.success,
@@ -321,15 +324,21 @@ export async function GET(request: Request) {
 
 // Get changed dates from IPartnerFinancialsService
 async function getChangedDatesForPartner(
-  apiKey: string, 
+  apiKey: string,
   highwatermark: string
 ): Promise<{ success: boolean; dates?: string[]; highwatermark?: string; error?: string; rawResponse?: unknown }> {
   try {
     const url = `${STEAM_PARTNER_API}/IPartnerFinancialsService/GetChangedDatesForPartner/v001/?key=${apiKey}&highwatermark=${highwatermark}`;
-    
+
     console.log(`[Steam API] Calling: ${url.replace(apiKey, 'REDACTED')}`);
-    
-    const response = await fetch(url);
+
+    // Add a 45-second timeout to this specific API call
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 45000);
+
+    const response = await fetch(url, { signal: controller.signal });
+    clearTimeout(timeoutId);
+
     const responseText = await response.text();
     
     console.log(`[Steam API] Response status: ${response.status}`);
@@ -368,6 +377,12 @@ async function getChangedDatesForPartner(
       rawResponse: data
     };
   } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      return {
+        success: false,
+        error: 'Steam API call timed out after 45 seconds. The API might be slow or unavailable.'
+      };
+    }
     return {
       success: false,
       error: `Failed to connect to Steam API: ${error instanceof Error ? error.message : String(error)}`
