@@ -72,6 +72,16 @@ interface SyncProgress {
 // Helper: Delay execution
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
+// Helper: Timeout wrapper for promises
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, errorMessage: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(errorMessage)), timeoutMs)
+    )
+  ]);
+}
+
 // Helper: Fetch with retry and exponential backoff
 async function fetchWithRetry<T>(
   fetchFn: () => Promise<T>,
@@ -199,7 +209,11 @@ async function getChangedDatesForPartner(
     const timeoutId = setTimeout(() => controller.abort(), SYNC_CONFIG.TIMEOUT_MS);
 
     try {
-      const response = await fetch(url, { signal: controller.signal });
+      const response = await withTimeout(
+        fetch(url, { signal: controller.signal }),
+        SYNC_CONFIG.TIMEOUT_MS,
+        `Steam API request timed out after ${SYNC_CONFIG.TIMEOUT_MS}ms`
+      );
       clearTimeout(timeoutId);
 
       if (!response.ok) {
@@ -209,7 +223,11 @@ async function getChangedDatesForPartner(
         };
       }
 
-      const data: ChangedDatesResponse = await response.json();
+      const data: ChangedDatesResponse = await withTimeout(
+        response.json(),
+        10000,
+        'JSON parsing timed out after 10s'
+      );
       return {
         success: true,
         dates: data.response?.dates || [],
@@ -256,14 +274,22 @@ async function getDetailedSalesForDate(
       const timeoutId = setTimeout(() => controller.abort(), SYNC_CONFIG.TIMEOUT_MS);
 
       try {
-        const response = await fetch(url, { signal: controller.signal });
+        const response = await withTimeout(
+          fetch(url, { signal: controller.signal }),
+          SYNC_CONFIG.TIMEOUT_MS,
+          `Steam API request timed out after ${SYNC_CONFIG.TIMEOUT_MS}ms`
+        );
         clearTimeout(timeoutId);
 
         if (!response.ok) {
           throw new Error(`Steam API returned status ${response.status}`);
         }
 
-        const data: SteamSalesResponse = await response.json();
+        const data: SteamSalesResponse = await withTimeout(
+          response.json(),
+          10000,
+          'JSON parsing timed out after 10s'
+        );
 
         // Add results
         if (data.response.results) {
