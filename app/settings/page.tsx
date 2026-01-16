@@ -193,7 +193,7 @@ export default function SettingsPage() {
       allDates = datesData.dates || [];
 
       // Filter by date range if specified
-      if (syncOptions.start_date || syncOptions.end_date) {
+      if ((syncOptions.start_date || syncOptions.end_date) && allDates) {
         allDates = allDates.filter(date => {
           const d = date.replace(/\//g, '-');
           if (syncOptions.start_date && d < syncOptions.start_date) return false;
