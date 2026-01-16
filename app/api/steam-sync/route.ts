@@ -51,7 +51,7 @@ interface ChangedDatesResponse {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { client_id, start_date, end_date, app_id, force_full_sync } = body;
+    const { client_id, start_date, end_date, app_id, force_full_sync, chunk_size = 15, skip_dates = 0 } = body;
 
     if (!client_id) {
       return NextResponse.json(
@@ -129,7 +129,7 @@ export async function POST(request: Request) {
     // Filter dates to requested range if provided
     let datesToSync = changedDates.dates || [];
     const totalDatesFromApi = datesToSync.length;
-    
+
     if (start_date || end_date) {
       datesToSync = datesToSync.filter(date => {
         const d = date.replace(/\//g, '-');
@@ -139,38 +139,47 @@ export async function POST(request: Request) {
       });
     }
 
-    console.log(`[Steam Sync] Dates from API: ${totalDatesFromApi}, After filter: ${datesToSync.length}`);
+    // Apply chunking: skip and limit dates
+    const totalFilteredDates = datesToSync.length;
+    const chunk = datesToSync.slice(skip_dates, skip_dates + chunk_size);
+    const remainingDates = Math.max(0, totalFilteredDates - (skip_dates + chunk.length));
 
-    if (datesToSync.length === 0) {
+    console.log(`[Steam Sync] Dates from API: ${totalDatesFromApi}, After filter: ${totalFilteredDates}, Chunk: ${chunk.length} (skip: ${skip_dates}, remaining: ${remainingDates})`);
+
+    if (chunk.length === 0) {
       return NextResponse.json({
         success: true,
-        message: totalDatesFromApi === 0 
+        message: totalDatesFromApi === 0
           ? 'Steam API returned no dates with financial data. This could mean: (1) No sales data exists for this partner account, (2) The API key doesn\'t have access to financial data, or (3) All data was already synced.'
-          : `Steam returned ${totalDatesFromApi} date(s), but none matched your date filter (${start_date} to ${end_date}).`,
+          : totalFilteredDates === 0
+          ? `Steam returned ${totalDatesFromApi} date(s), but none matched your date filter (${start_date} to ${end_date}).`
+          : 'All dates in this chunk have been processed.',
         debug: {
           apiCalled: true,
           endpoint: 'GetChangedDatesForPartner',
           highwatermarkUsed: useHighwatermark,
           totalDatesFromApi,
-          datesAfterFilter: datesToSync.length,
+          datesAfterFilter: totalFilteredDates,
           sampleDates: changedDates.dates?.slice(0, 5),
           newHighwatermark: changedDates.highwatermark
         },
         rowsImported: 0,
         rowsSkipped: 0,
         datesProcessed: 0,
+        totalDates: totalFilteredDates,
+        remainingDates,
         clientName: clientData?.name
       });
     }
 
-    // Step 2: Get detailed sales for each date
+    // Step 2: Get detailed sales for each date in this chunk
     let totalImported = 0;
     let totalSkipped = 0;
     const errors: string[] = [];
 
-    for (const date of datesToSync) {
+    for (const date of chunk) {
       const salesResult = await getDetailedSalesForDate(financialApiKey, date, app_id);
-      
+
       if (salesResult.success && salesResult.results) {
         // Store the sales data in our database
         const storeResult = await storeSalesData(client_id, salesResult.results, salesResult.metadata);
@@ -192,32 +201,36 @@ export async function POST(request: Request) {
         .eq('client_id', client_id);
     }
 
-    // Log import history
-    await supabase
-      .from('performance_import_history')
-      .insert({
-        client_id,
-        import_type: 'steam_api_sync',
-        date_range_start: start_date || datesToSync[0]?.replace(/\//g, '-'),
-        date_range_end: end_date || datesToSync[datesToSync.length - 1]?.replace(/\//g, '-'),
-        rows_imported: totalImported,
-        rows_skipped: totalSkipped,
-        status: errors.length === 0 ? 'completed' : 'partial',
-        error_message: errors.length > 0 ? errors.join('; ') : null
-      });
+    // Log import history only for the first chunk
+    if (skip_dates === 0) {
+      await supabase
+        .from('performance_import_history')
+        .insert({
+          client_id,
+          import_type: 'steam_api_sync',
+          date_range_start: start_date || changedDates.dates?.[0]?.replace(/\//g, '-'),
+          date_range_end: end_date || changedDates.dates?.[changedDates.dates.length - 1]?.replace(/\//g, '-'),
+          rows_imported: totalImported,
+          rows_skipped: totalSkipped,
+          status: errors.length === 0 ? 'in_progress' : 'partial',
+          error_message: errors.length > 0 ? errors.join('; ') : null
+        });
+    }
 
     return NextResponse.json({
       success: true,
-      message: `Synced ${datesToSync.length} date(s) from Steam Financial API.`,
+      message: `Synced ${chunk.length} date(s) from Steam Financial API.`,
       rowsImported: totalImported,
       rowsSkipped: totalSkipped,
-      datesProcessed: datesToSync.length,
+      datesProcessed: chunk.length,
+      totalDates: totalFilteredDates,
+      remainingDates,
       errors: errors.length > 0 ? errors : undefined,
       clientName: clientData?.name,
       debug: {
         apiCalled: true,
         totalDatesFromApi,
-        datesProcessed: datesToSync.length
+        datesProcessed: chunk.length
       }
     });
 

@@ -65,11 +65,18 @@ export default function SettingsPage() {
   const [testResult, setTestResult] = useState<{valid: boolean; message: string; debug?: SyncDebugInfo} | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<{
-    success: boolean; 
-    message: string; 
-    rowsImported?: number; 
+    success: boolean;
+    message: string;
+    rowsImported?: number;
     datesProcessed?: number;
     debug?: SyncDebugInfo;
+  } | null>(null);
+  const [syncProgress, setSyncProgress] = useState<{
+    currentChunk: number;
+    totalChunks: number;
+    datesProcessed: number;
+    totalDates: number;
+    rowsImported: number;
   } | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
 
@@ -161,35 +168,95 @@ export default function SettingsPage() {
     if (!selectedKey) return;
     setSyncing(true);
     setSyncResult(null);
+    setSyncProgress(null);
+
+    const CHUNK_SIZE = 15; // Process 15 dates per API call
+    let skipDates = 0;
+    let totalRowsImported = 0;
+    let totalDatesProcessed = 0;
+    let allErrors: string[] = [];
+    let totalDates = 0;
+    let chunkNumber = 0;
+
     try {
-      const res = await fetch('/api/steam-sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          client_id: selectedKey.client_id,
-          start_date: syncOptions.start_date || undefined,
-          end_date: syncOptions.end_date || undefined,
-          app_id: syncOptions.app_id || undefined,
-          force_full_sync: syncOptions.force_full_sync
-        })
-      });
-      const data = await res.json();
-      console.log('Sync result:', data);
-      setSyncResult({ 
-        success: data.success !== false, 
-        message: data.message || data.error || 'Unknown result',
-        rowsImported: data.rowsImported,
-        datesProcessed: data.datesProcessed,
-        debug: data.debug as SyncDebugInfo
-      });
-      if (data.success) {
-        fetchData();
+      // Keep syncing until no more dates remain
+      while (true) {
+        chunkNumber++;
+
+        const res = await fetch('/api/steam-sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            client_id: selectedKey.client_id,
+            start_date: syncOptions.start_date || undefined,
+            end_date: syncOptions.end_date || undefined,
+            app_id: syncOptions.app_id || undefined,
+            force_full_sync: syncOptions.force_full_sync,
+            chunk_size: CHUNK_SIZE,
+            skip_dates: skipDates
+          })
+        });
+
+        if (!res.ok) {
+          throw new Error(`API returned status ${res.status}`);
+        }
+
+        const data = await res.json();
+        console.log(`Chunk ${chunkNumber} result:`, data);
+
+        // Update totals from first chunk
+        if (chunkNumber === 1) {
+          totalDates = data.totalDates || 0;
+        }
+
+        // Accumulate results
+        totalRowsImported += data.rowsImported || 0;
+        totalDatesProcessed += data.datesProcessed || 0;
+        if (data.errors) {
+          allErrors.push(...data.errors);
+        }
+
+        // Update progress
+        const remainingDates = data.remainingDates || 0;
+        const estimatedTotalChunks = Math.ceil(totalDates / CHUNK_SIZE);
+        setSyncProgress({
+          currentChunk: chunkNumber,
+          totalChunks: estimatedTotalChunks,
+          datesProcessed: totalDatesProcessed,
+          totalDates,
+          rowsImported: totalRowsImported
+        });
+
+        // Check if we're done
+        if (remainingDates === 0 || data.datesProcessed === 0) {
+          // Sync complete
+          setSyncResult({
+            success: true,
+            message: `Sync complete! Processed ${totalDatesProcessed} date(s) in ${chunkNumber} chunk(s).`,
+            rowsImported: totalRowsImported,
+            datesProcessed: totalDatesProcessed,
+            debug: data.debug as SyncDebugInfo
+          });
+          break;
+        }
+
+        // Move to next chunk
+        skipDates += data.datesProcessed;
       }
+
+      // Refresh data after successful sync
+      fetchData();
+
     } catch (error) {
       console.error('Sync error:', error);
-      setSyncResult({ success: false, message: 'Failed to sync data: ' + String(error) });
+      setSyncResult({
+        success: false,
+        message: `Failed to sync data after ${totalDatesProcessed} date(s): ${String(error)}`
+      });
+    } finally {
+      setSyncing(false);
+      setSyncProgress(null);
     }
-    setSyncing(false);
   };
 
   const handleDeleteKey = async (id: string) => {
@@ -449,11 +516,16 @@ export default function SettingsPage() {
 
       {/* Sync Modal */}
       {showSyncModal && selectedKey && (
-        <div className={styles.modalOverlay} onClick={() => { setShowSyncModal(false); setSyncResult(null); }}>
+        <div className={styles.modalOverlay} onClick={() => { if (!syncing) { setShowSyncModal(false); setSyncResult(null); setSyncProgress(null); } }}>
           <div className={styles.modal} onClick={e => e.stopPropagation()} style={{ maxWidth: '550px' }}>
             <div className={styles.modalHeader}>
               <h3>Sync Steam Data</h3>
-              <button className={styles.closeButton} onClick={() => { setShowSyncModal(false); setSyncResult(null); }}>
+              <button
+                className={styles.closeButton}
+                onClick={() => { if (!syncing) { setShowSyncModal(false); setSyncResult(null); setSyncProgress(null); } }}
+                disabled={syncing}
+                style={{ opacity: syncing ? 0.5 : 1, cursor: syncing ? 'not-allowed' : 'pointer' }}
+              >
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <line x1="18" y1="6" x2="6" y2="18"/>
                   <line x1="6" y1="6" x2="18" y2="18"/>
@@ -508,6 +580,41 @@ export default function SettingsPage() {
                 <small>Use this to re-sync all data from scratch</small>
               </div>
             </div>
+
+            {syncProgress && (
+              <div className={styles.syncProgress} style={{
+                padding: '16px',
+                background: '#f1f5f9',
+                borderRadius: '8px',
+                marginBottom: '16px'
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                  <strong>Syncing in progress...</strong>
+                  <span style={{ fontSize: '13px', color: '#64748b' }}>
+                    Chunk {syncProgress.currentChunk}/{syncProgress.totalChunks}
+                  </span>
+                </div>
+                <div style={{
+                  width: '100%',
+                  height: '8px',
+                  background: '#e2e8f0',
+                  borderRadius: '4px',
+                  overflow: 'hidden',
+                  marginBottom: '8px'
+                }}>
+                  <div style={{
+                    width: `${(syncProgress.datesProcessed / syncProgress.totalDates) * 100}%`,
+                    height: '100%',
+                    background: 'linear-gradient(90deg, #3b82f6, #1d4ed8)',
+                    transition: 'width 0.3s ease'
+                  }}></div>
+                </div>
+                <div style={{ fontSize: '13px', color: '#64748b' }}>
+                  {syncProgress.datesProcessed} / {syncProgress.totalDates} dates processed
+                  {syncProgress.rowsImported > 0 && ` • ${syncProgress.rowsImported} rows imported`}
+                </div>
+              </div>
+            )}
 
             {syncResult && (
               <div className={`${styles.syncResult} ${syncResult.success ? styles.success : styles.error}`}>
@@ -574,11 +681,15 @@ export default function SettingsPage() {
             )}
 
             <div className={styles.modalActions}>
-              <button className={styles.cancelButton} onClick={() => { setShowSyncModal(false); setSyncResult(null); }}>
+              <button
+                className={styles.cancelButton}
+                onClick={() => { if (!syncing) { setShowSyncModal(false); setSyncResult(null); setSyncProgress(null); } }}
+                disabled={syncing}
+              >
                 Close
               </button>
-              <button 
-                className={styles.saveButton} 
+              <button
+                className={styles.saveButton}
                 onClick={handleSync}
                 disabled={syncing}
               >
