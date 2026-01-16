@@ -51,7 +51,7 @@ interface ChangedDatesResponse {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { client_id, start_date, end_date, app_id, force_full_sync, chunk_size = 15, skip_dates = 0, dates_to_process } = body;
+    const { client_id, start_date, end_date, app_id, force_full_sync, chunk_size = 5, skip_dates = 0, dates_to_process } = body;
 
     if (!client_id) {
       return NextResponse.json(
@@ -190,19 +190,32 @@ export async function POST(request: Request) {
     let totalImported = 0;
     let totalSkipped = 0;
     const errors: string[] = [];
+    const startTime = Date.now();
 
     for (const date of chunk) {
+      const dateStartTime = Date.now();
+      console.log(`[Steam Sync] Processing date ${date}...`);
+
       const salesResult = await getDetailedSalesForDate(financialApiKey, date, app_id);
 
       if (salesResult.success && salesResult.results) {
+        const storeStartTime = Date.now();
         // Store the sales data in our database
         const storeResult = await storeSalesData(client_id, salesResult.results, salesResult.metadata);
         totalImported += storeResult.imported;
         totalSkipped += storeResult.skipped;
+
+        const dateElapsed = Date.now() - dateStartTime;
+        const storeElapsed = Date.now() - storeStartTime;
+        console.log(`[Steam Sync] Date ${date} complete: ${storeResult.imported} rows imported, ${dateElapsed}ms total (${storeElapsed}ms for DB)`);
       } else if (salesResult.error) {
         errors.push(`${date}: ${salesResult.error}`);
+        console.error(`[Steam Sync] Date ${date} failed: ${salesResult.error}`);
       }
     }
+
+    const totalElapsed = Date.now() - startTime;
+    console.log(`[Steam Sync] Chunk complete: ${chunk.length} dates processed in ${totalElapsed}ms (avg ${Math.round(totalElapsed / chunk.length)}ms per date)`);
 
     // Update highwatermark for next sync (only if we fetched from Steam)
     if (newHighwatermark) {
