@@ -255,7 +255,8 @@ export async function POST(request: Request) {
       datesProcessed: chunk.length,
       totalDates: totalFilteredDates,
       remainingDates,
-      allDates: datesToSync, // Return full list for subsequent chunks
+      // Only return dates list on first chunk to reduce response size
+      allDates: skip_dates === 0 ? datesToSync : undefined,
       errors: errors.length > 0 ? errors : undefined,
       clientName: clientData?.name,
       debug: {

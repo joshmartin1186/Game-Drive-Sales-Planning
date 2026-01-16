@@ -201,8 +201,10 @@ export default function SettingsPage() {
 
         // Get response text first to handle both JSON and non-JSON responses
         const responseText = await res.text();
+        console.log(`Chunk ${chunkNumber} response status: ${res.status}, body length: ${responseText.length}`);
 
         if (!res.ok) {
+          console.error(`API error response: ${responseText.substring(0, 500)}`);
           throw new Error(`API returned status ${res.status}: ${responseText.substring(0, 200)}`);
         }
 
@@ -211,6 +213,7 @@ export default function SettingsPage() {
         try {
           data = JSON.parse(responseText);
         } catch (parseError) {
+          console.error(`JSON parse error. Response start: ${responseText.substring(0, 500)}`);
           throw new Error(`API returned invalid JSON (possible timeout): ${responseText.substring(0, 200)}`);
         }
 
