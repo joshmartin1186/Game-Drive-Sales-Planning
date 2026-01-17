@@ -54,14 +54,20 @@ export async function GET(request: Request) {
 
     console.log(`[Steam Dates] Fetching dates for client ${clientId}, highwatermark: ${useHighwatermark}`);
 
-    // Call Steam API with timeout
+    // Call Steam API with timeout - leave 5 seconds buffer for Vercel's 60s limit
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 55000); // 55 second timeout
+    const timeoutId = setTimeout(() => controller.abort(), 50000); // 50 second timeout (safer buffer)
 
     const url = `${STEAM_PARTNER_API}/IPartnerFinancialsService/GetChangedDatesForPartner/v001/?key=${financialApiKey}&highwatermark=${useHighwatermark}`;
 
+    console.log(`[Steam Dates] Calling Steam API at ${new Date().toISOString()}`);
+    const startTime = Date.now();
+
     const response = await fetch(url, { signal: controller.signal });
     clearTimeout(timeoutId);
+
+    const elapsed = Date.now() - startTime;
+    console.log(`[Steam Dates] Steam API responded in ${elapsed}ms with status ${response.status}`);
 
     if (!response.ok) {
       return NextResponse.json(
@@ -83,12 +89,14 @@ export async function GET(request: Request) {
 
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
+      console.error('[Steam Dates] Request timed out after 50 seconds');
       return NextResponse.json(
-        { error: 'Request timed out after 55 seconds' },
+        { error: 'Steam API request timed out. The Steam Partner API may be slow or unresponsive.' },
         { status: 504 }
       );
     }
-    console.error('Error fetching Steam dates:', error);
+    console.error('[Steam Dates] Unexpected error:', error);
+    console.error('[Steam Dates] Error stack:', error instanceof Error ? error.stack : 'No stack trace');
     return NextResponse.json(
       { error: `Failed to fetch dates: ${error instanceof Error ? error.message : String(error)}` },
       { status: 500 }

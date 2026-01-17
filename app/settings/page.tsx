@@ -181,15 +181,31 @@ export default function SettingsPage() {
 
     try {
       // Step 1: Fetch dates list first (separate API call to avoid timeout)
-      console.log('Fetching dates list from Steam...');
+      console.log('[Sync] Fetching dates list from Steam API...');
+      const datesStartTime = Date.now();
       const datesRes = await fetch(`/api/steam-dates?client_id=${selectedKey.client_id}&force_full_sync=${syncOptions.force_full_sync}`);
+      const datesElapsed = Date.now() - datesStartTime;
+      console.log(`[Sync] Dates API responded in ${datesElapsed}ms with status ${datesRes.status}`);
 
       if (!datesRes.ok) {
-        const error = await datesRes.json();
-        throw new Error(error.error || 'Failed to fetch dates');
+        // Try to parse error as JSON, but handle HTML error pages gracefully
+        const contentType = datesRes.headers.get('content-type');
+        console.log(`[Sync] Error response content-type: ${contentType}`);
+
+        let errorMessage = `Failed to fetch dates (HTTP ${datesRes.status})`;
+        try {
+          const errorData = await datesRes.json();
+          errorMessage = errorData.error || errorMessage;
+        } catch (parseError) {
+          const errorText = await datesRes.text();
+          console.error(`[Sync] Could not parse error response as JSON. First 500 chars:`, errorText.substring(0, 500));
+          errorMessage = `API returned non-JSON error (likely timeout). Status: ${datesRes.status}`;
+        }
+        throw new Error(errorMessage);
       }
 
       const datesData = await datesRes.json();
+      console.log(`[Sync] Successfully fetched ${datesData.dates?.length || 0} dates from Steam`);
       allDates = datesData.dates || [];
 
       // Filter by date range if specified

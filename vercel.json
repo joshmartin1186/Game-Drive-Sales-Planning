@@ -2,6 +2,9 @@
   "functions": {
     "app/api/steam-sync/route.ts": {
       "maxDuration": 60
+    },
+    "app/api/steam-dates/route.ts": {
+      "maxDuration": 60
     }
   }
 }
