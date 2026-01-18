@@ -139,6 +139,16 @@ export async function POST(request: Request) {
       });
     }
 
+    // IMPORTANT: Limit to 30 dates per request to avoid Vercel timeout (10 second limit on free plan)
+    // Process older dates first, so we can resume from where we left off
+    const MAX_DATES_PER_REQUEST = 30;
+    let hasMoreDates = false;
+    if (datesToSync.length > MAX_DATES_PER_REQUEST) {
+      console.log(`[Steam Sync] Found ${datesToSync.length} dates to sync. Processing first ${MAX_DATES_PER_REQUEST} to avoid timeout.`);
+      hasMoreDates = true;
+      datesToSync = datesToSync.slice(0, MAX_DATES_PER_REQUEST);
+    }
+
     console.log(`[Steam Sync] Dates from API: ${totalDatesFromApi}, After filter: ${datesToSync.length}`);
 
     if (datesToSync.length === 0) {
@@ -208,10 +218,14 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       success: true,
-      message: `Synced ${datesToSync.length} date(s) from Steam Financial API.`,
+      message: hasMoreDates
+        ? `Synced ${datesToSync.length} date(s) from Steam Financial API. ${totalDatesFromApi - datesToSync.length} more dates available - click "Start Sync" again to continue.`
+        : `Synced ${datesToSync.length} date(s) from Steam Financial API.`,
       rowsImported: totalImported,
       rowsSkipped: totalSkipped,
       datesProcessed: datesToSync.length,
+      hasMoreDates,
+      remainingDates: hasMoreDates ? totalDatesFromApi - datesToSync.length : 0,
       errors: errors.length > 0 ? errors : undefined,
       clientName: clientData?.name,
       debug: {
