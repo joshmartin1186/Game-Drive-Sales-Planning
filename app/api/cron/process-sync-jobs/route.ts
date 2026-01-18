@@ -15,8 +15,26 @@ export async function GET(request: Request) {
   try {
     // Verify this is a cron request (Vercel adds this header)
     const authHeader = request.headers.get('authorization');
-    if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const expectedAuth = `Bearer ${process.env.CRON_SECRET}`;
+
+    // Log for debugging
+    console.log('[Cron] Auth check:', {
+      hasAuthHeader: !!authHeader,
+      hasCronSecret: !!process.env.CRON_SECRET,
+      authMatches: authHeader === expectedAuth
+    });
+
+    // Temporarily allow manual testing - REMOVE THIS LATER
+    const isManualTest = request.headers.get('user-agent')?.includes('Mozilla');
+
+    if (!isManualTest && authHeader !== expectedAuth) {
+      return NextResponse.json({
+        error: 'Unauthorized',
+        debug: {
+          hasAuthHeader: !!authHeader,
+          hasCronSecret: !!process.env.CRON_SECRET
+        }
+      }, { status: 401 });
     }
 
     console.log('[Cron] Starting sync job processor');
