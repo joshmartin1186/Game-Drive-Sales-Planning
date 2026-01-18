@@ -20,16 +20,26 @@ export async function GET(request: Request) {
       );
     }
 
-    let query = supabase.from('sync_jobs').select('*');
+    let result;
 
     if (jobId) {
-      query = query.eq('id', jobId).single();
-    } else if (clientId) {
+      result = await supabase
+        .from('sync_jobs')
+        .select('*')
+        .eq('id', jobId)
+        .single();
+    } else {
       // Get the most recent job for this client
-      query = query.eq('client_id', clientId).order('created_at', { ascending: false }).limit(1).single();
+      result = await supabase
+        .from('sync_jobs')
+        .select('*')
+        .eq('client_id', clientId!)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
     }
 
-    const { data: job, error } = await query;
+    const { data: job, error } = result;
 
     if (error || !job) {
       return NextResponse.json(
