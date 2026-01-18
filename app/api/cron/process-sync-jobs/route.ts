@@ -229,15 +229,20 @@ async function processSingleDate(
   dateStr: string,
   clientId: string
 ): Promise<{ imported: number; skipped: number }> {
+  // Steam API dates come as "2025/01/18" but we need to keep that format for the API call
   const url = `${STEAM_PARTNER_API}/IPartnerFinancialsService/GetDailyFinancialDataForPartner/v001/?key=${apiKey}&date=${dateStr}`;
+  console.log(`[Cron] Fetching data for date: ${dateStr}`);
   const response = await fetch(url);
 
   if (!response.ok) {
-    throw new Error(`Steam API returned status ${response.status}`);
+    const errorText = await response.text();
+    console.error(`[Cron] Steam API error for ${dateStr}: ${response.status} - ${errorText}`);
+    throw new Error(`Steam API returned status ${response.status} for date ${dateStr}`);
   }
 
   const data = await response.json();
   const rows = data.response?.rows || [];
+  console.log(`[Cron] Date ${dateStr}: Found ${rows.length} rows`);
 
   let imported = 0;
   let skipped = 0;
