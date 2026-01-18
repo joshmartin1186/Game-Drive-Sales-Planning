@@ -286,9 +286,9 @@ async function processSingleDate(
         app_name: productName || null,
         product_type: result.packageid ? 'package' : 'app',
         country_code: result.country_code || null,
-        units_sold: result.units_sold || 0,
-        gross_revenue: result.gross_revenue_usd || 0,
-        net_revenue: result.net_revenue_usd || 0
+        units_sold: result.net_units_sold || 0,
+        gross_revenue: parseFloat(result.gross_sales_usd || '0'),
+        net_revenue: parseFloat(result.net_sales_usd || '0')
       };
 
       const { error } = await supabase
