@@ -162,34 +162,90 @@ export default function SettingsPage() {
     setSyncing(true);
     setSyncResult(null);
     try {
-      const res = await fetch('/api/steam-sync', {
+      // Trigger background job
+      const res = await fetch('/api/steam-sync/trigger', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           client_id: selectedKey.client_id,
           start_date: syncOptions.start_date || undefined,
           end_date: syncOptions.end_date || undefined,
-          app_id: syncOptions.app_id || undefined,
           force_full_sync: syncOptions.force_full_sync
         })
       });
+
       const data = await res.json();
-      console.log('Sync result:', data);
-      setSyncResult({ 
-        success: data.success !== false, 
-        message: data.message || data.error || 'Unknown result',
-        rowsImported: data.rowsImported,
-        datesProcessed: data.datesProcessed,
-        debug: data.debug as SyncDebugInfo
-      });
-      if (data.success) {
-        fetchData();
+
+      if (!data.success) {
+        setSyncResult({
+          success: false,
+          message: data.error || 'Failed to start sync job'
+        });
+        setSyncing(false);
+        return;
       }
+
+      // Job triggered successfully, start polling for status
+      const jobId = data.jobId;
+      setSyncResult({
+        success: true,
+        message: 'Sync job started! Processing in background...'
+      });
+
+      // Poll for job status every 2 seconds
+      const pollInterval = setInterval(async () => {
+        try {
+          const statusRes = await fetch(`/api/steam-sync/status?job_id=${jobId}`);
+          const statusData = await statusRes.json();
+
+          if (statusData.status === 'completed') {
+            clearInterval(pollInterval);
+            setSyncResult({
+              success: true,
+              message: `Sync completed! Imported ${statusData.progress.rowsImported} rows from ${statusData.progress.datesProcessed} dates.`,
+              rowsImported: statusData.progress.rowsImported,
+              datesProcessed: statusData.progress.datesProcessed
+            });
+            setSyncing(false);
+            fetchData();
+          } else if (statusData.status === 'failed') {
+            clearInterval(pollInterval);
+            setSyncResult({
+              success: false,
+              message: `Sync failed: ${statusData.error}`
+            });
+            setSyncing(false);
+          } else {
+            // Still running - update progress
+            setSyncResult({
+              success: true,
+              message: `Syncing... ${statusData.progress.percentComplete}% complete (${statusData.progress.datesProcessed}/${statusData.progress.totalDates} dates)`,
+              rowsImported: statusData.progress.rowsImported,
+              datesProcessed: statusData.progress.datesProcessed
+            });
+          }
+        } catch (error) {
+          console.error('Error polling status:', error);
+        }
+      }, 2000);
+
+      // Stop polling after 5 minutes
+      setTimeout(() => {
+        clearInterval(pollInterval);
+        if (syncing) {
+          setSyncResult({
+            success: true,
+            message: 'Sync is taking longer than expected. It will continue in the background. Check back later for results.'
+          });
+          setSyncing(false);
+        }
+      }, 300000);
+
     } catch (error) {
       console.error('Sync error:', error);
-      setSyncResult({ success: false, message: 'Failed to sync data: ' + String(error) });
+      setSyncResult({ success: false, message: 'Failed to start sync: ' + String(error) });
+      setSyncing(false);
     }
-    setSyncing(false);
   };
 
   const handleDeleteKey = async (id: string) => {
