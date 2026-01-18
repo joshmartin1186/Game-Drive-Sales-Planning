@@ -280,31 +280,43 @@ export async function GET(request: Request) {
 
 // Get changed dates from IPartnerFinancialsService
 async function getChangedDatesForPartner(
-  apiKey: string, 
+  apiKey: string,
   highwatermark: string
 ): Promise<{ success: boolean; dates?: string[]; highwatermark?: string; error?: string; rawResponse?: unknown }> {
   try {
     const url = `${STEAM_PARTNER_API}/IPartnerFinancialsService/GetChangedDatesForPartner/v001/?key=${apiKey}&highwatermark=${highwatermark}`;
-    
+
     console.log(`[Steam API] Calling: ${url.replace(apiKey, 'REDACTED')}`);
-    
+
     const response = await fetch(url);
     const responseText = await response.text();
-    
+    const contentType = response.headers.get('content-type');
+
     console.log(`[Steam API] Response status: ${response.status}`);
+    console.log(`[Steam API] Content-Type: ${contentType}`);
     console.log(`[Steam API] Response body: ${responseText.substring(0, 500)}`);
-    
+
     if (!response.ok) {
       if (response.status === 403) {
-        return { 
-          success: false, 
+        return {
+          success: false,
           error: 'Access denied (403). Make sure you are using a Financial Web API Key from a Financial API Group in Steamworks.',
           rawResponse: responseText
         };
       }
-      return { 
-        success: false, 
-        error: `Steam API returned status ${response.status}: ${responseText}`,
+      return {
+        success: false,
+        error: `Steam API returned status ${response.status}: ${responseText.substring(0, 200)}`,
+        rawResponse: responseText
+      };
+    }
+
+    // Check if response is actually JSON
+    if (!contentType?.includes('application/json') && !responseText.trim().startsWith('{')) {
+      console.error('[Steam API] Response is not JSON:', responseText.substring(0, 200));
+      return {
+        success: false,
+        error: `Steam API returned non-JSON response: ${responseText.substring(0, 200)}`,
         rawResponse: responseText
       };
     }
@@ -313,13 +325,14 @@ async function getChangedDatesForPartner(
     try {
       data = JSON.parse(responseText);
     } catch (e) {
+      console.error('[Steam API] JSON Parse Error:', e);
       return {
         success: false,
-        error: `Failed to parse Steam API response as JSON`,
+        error: `Steam API returned invalid JSON. Response: ${responseText.substring(0, 200)}`,
         rawResponse: responseText
       };
     }
-    
+
     return {
       success: true,
       dates: data.response?.dates || [],
@@ -327,6 +340,7 @@ async function getChangedDatesForPartner(
       rawResponse: data
     };
   } catch (error) {
+    console.error('[Steam API] Fetch Error:', error);
     return {
       success: false,
       error: `Failed to connect to Steam API: ${error instanceof Error ? error.message : String(error)}`
