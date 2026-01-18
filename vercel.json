@@ -4,5 +4,6 @@
       "path": "/api/cron/process-sync-jobs",
       "schedule": "* * * * *"
     }
-  ]
+  ],
+  "buildCommand": "next build"
 }
