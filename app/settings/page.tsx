@@ -6,6 +6,8 @@ import { Navbar } from '../components/Navbar';
 import { Sidebar } from '../components/Sidebar';
 import styles from './settings.module.css';
 
+// Version: 2.0.0 - Background sync enabled
+
 interface Client {
   id: string;
   name: string;
