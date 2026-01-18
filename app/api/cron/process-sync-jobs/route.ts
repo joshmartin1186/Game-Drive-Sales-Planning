@@ -229,8 +229,8 @@ async function processSingleDate(
   dateStr: string,
   clientId: string
 ): Promise<{ imported: number; skipped: number }> {
-  // Steam API dates come as "2025/01/18" but we need to keep that format for the API call
-  const url = `${STEAM_PARTNER_API}/IPartnerFinancialsService/GetDailyFinancialDataForPartner/v001/?key=${apiKey}&date=${dateStr}`;
+  // Use GetDetailedSales endpoint (same as the working sync route)
+  const url = `${STEAM_PARTNER_API}/IPartnerFinancialsService/GetDetailedSales/v001/?key=${apiKey}&date=${dateStr}&highwatermark_id=0`;
   console.log(`[Cron] Fetching data for date: ${dateStr}`);
   const response = await fetch(url);
 
@@ -241,37 +241,54 @@ async function processSingleDate(
   }
 
   const data = await response.json();
-  const rows = data.response?.rows || [];
-  console.log(`[Cron] Date ${dateStr}: Found ${rows.length} rows`);
+  const results = data.response?.results || [];
+  console.log(`[Cron] Date ${dateStr}: Found ${results.length} sales records`);
 
   let imported = 0;
   let skipped = 0;
 
-  for (const row of rows) {
-    const salesData = {
-      client_id: clientId,
-      sale_date: dateStr.replace(/\//g, '-'),
-      app_id: row.app_id?.toString() || null,
-      app_name: row.app_name || null,
-      product_type: row.product_type || null,
-      country_code: row.country_code || null,
-      units_sold: typeof row.units_sold === 'string' ? parseInt(row.units_sold) : (row.units_sold || 0),
-      gross_revenue: typeof row.gross_revenue === 'string' ? parseFloat(row.gross_revenue) : (row.gross_revenue || 0),
-      net_revenue: typeof row.net_revenue === 'string' ? parseFloat(row.net_revenue) : (row.net_revenue || 0)
-    };
+  // Create metadata maps from response
+  const packages = new Map();
+  const apps = new Map();
+  data.response?.package_info?.forEach((p: any) => packages.set(p.packageid, p.package_name));
+  data.response?.app_info?.forEach((a: any) => apps.set(a.appid, a.app_name));
 
-    const { error } = await supabase
-      .from('steam_sales')
-      .upsert(salesData, {
-        onConflict: 'client_id,sale_date,app_id,product_type,country_code',
-        ignoreDuplicates: false
-      });
+  for (const result of results) {
+    try {
+      const productName = result.packageid
+        ? packages.get(result.packageid)
+        : result.appid
+          ? apps.get(result.appid)
+          : 'Unknown';
 
-    if (error) {
-      console.error(`Error upserting row:`, error);
+      const salesData = {
+        client_id: clientId,
+        sale_date: result.date.replace(/\//g, '-'),
+        app_id: (result.primary_appid || result.appid)?.toString() || null,
+        app_name: productName || null,
+        product_type: result.packageid ? 'package' : 'app',
+        country_code: result.country_code || null,
+        units_sold: result.units_sold || 0,
+        gross_revenue: result.gross_revenue_usd || 0,
+        net_revenue: result.net_revenue_usd || 0
+      };
+
+      const { error } = await supabase
+        .from('steam_sales')
+        .upsert(salesData, {
+          onConflict: 'client_id,sale_date,app_id,product_type,country_code',
+          ignoreDuplicates: false
+        });
+
+      if (error) {
+        console.error(`[Cron] Error upserting row:`, error);
+        skipped++;
+      } else {
+        imported++;
+      }
+    } catch (rowError) {
+      console.error(`[Cron] Error processing row:`, rowError);
       skipped++;
-    } else {
-      imported++;
     }
   }
 
