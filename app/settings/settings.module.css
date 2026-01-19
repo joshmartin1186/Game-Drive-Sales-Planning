@@ -198,6 +198,26 @@
   background: #fef2f2;
 }
 
+.actionButton.autoSyncOn {
+  color: #16a34a;
+  border-color: #16a34a;
+  background: #f0fdf4;
+  font-weight: 600;
+}
+
+.actionButton.autoSyncOn:hover {
+  background: #dcfce7;
+}
+
+.actionButton.autoSyncOff {
+  color: #64748b;
+  border-color: #cbd5e1;
+}
+
+.actionButton.autoSyncOff:hover {
+  background: #f1f5f9;
+}
+
 .emptyState {
   text-align: center;
   padding: 40px;

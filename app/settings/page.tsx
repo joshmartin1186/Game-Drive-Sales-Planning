@@ -23,6 +23,11 @@ interface SteamApiKey {
   is_active: boolean;
   last_sync_date: string | null;
   clients: Client;
+  auto_sync_enabled?: boolean;
+  sync_start_date?: string;
+  sync_frequency_hours?: number;
+  last_auto_sync?: string;
+  next_sync_due?: string;
 }
 
 interface SyncDebugInfo {
@@ -74,12 +79,20 @@ export default function SettingsPage() {
     debug?: SyncDebugInfo;
   } | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [showAutoSyncModal, setShowAutoSyncModal] = useState(false);
+  const [autoSyncLoading, setAutoSyncLoading] = useState(false);
+  const [autoSyncError, setAutoSyncError] = useState<string | null>(null);
 
   const [formData, setFormData] = useState({
     client_id: '',
     api_key: '',
     publisher_key: '',
     app_ids: ''
+  });
+
+  const [autoSyncConfig, setAutoSyncConfig] = useState({
+    start_date: new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    frequency_hours: 24
   });
 
   const [syncOptions, setSyncOptions] = useState({
@@ -262,9 +275,119 @@ export default function SettingsPage() {
     }
   };
 
+  const handleToggleAutoSync = async (key: SteamApiKey) => {
+    if (key.auto_sync_enabled) {
+      // Disable auto-sync
+      if (!confirm('Are you sure you want to disable auto-sync? This will cancel any pending automatic syncs.')) return;
+
+      setAutoSyncLoading(true);
+      try {
+        const res = await fetch('/api/steam-sync/auto-sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            client_id: key.client_id,
+            action: 'disable'
+          })
+        });
+
+        const data = await res.json();
+        if (data.success) {
+          fetchData();
+        } else {
+          alert('Failed to disable auto-sync: ' + (data.error || 'Unknown error'));
+        }
+      } catch (error) {
+        console.error('Error disabling auto-sync:', error);
+        alert('Failed to disable auto-sync');
+      }
+      setAutoSyncLoading(false);
+    } else {
+      // Show modal to enable auto-sync
+      setSelectedKey(key);
+      setAutoSyncConfig({
+        start_date: new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        frequency_hours: 24
+      });
+      setShowAutoSyncModal(true);
+      setAutoSyncError(null);
+    }
+  };
+
+  const handleEnableAutoSync = async () => {
+    if (!selectedKey) return;
+
+    setAutoSyncLoading(true);
+    setAutoSyncError(null);
+    try {
+      const res = await fetch('/api/steam-sync/auto-sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          client_id: selectedKey.client_id,
+          action: 'enable',
+          start_date: autoSyncConfig.start_date,
+          frequency_hours: autoSyncConfig.frequency_hours
+        })
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        setShowAutoSyncModal(false);
+        fetchData();
+      } else {
+        setAutoSyncError(data.error || 'Failed to enable auto-sync');
+      }
+    } catch (error) {
+      console.error('Error enabling auto-sync:', error);
+      setAutoSyncError('Failed to enable auto-sync');
+    }
+    setAutoSyncLoading(false);
+  };
+
+  const handleTriggerManualSync = async (clientId: string) => {
+    setAutoSyncLoading(true);
+    try {
+      const res = await fetch('/api/steam-sync/auto-sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          client_id: clientId,
+          action: 'trigger'
+        })
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        alert('Manual sync triggered! Check the status in a few moments.');
+      } else {
+        alert('Failed to trigger sync: ' + (data.error || 'Unknown error'));
+      }
+    } catch (error) {
+      console.error('Error triggering manual sync:', error);
+      alert('Failed to trigger manual sync');
+    }
+    setAutoSyncLoading(false);
+  };
+
   const maskApiKey = (key: string) => {
     if (key.length <= 8) return '••••••••';
     return key.substring(0, 4) + '••••••••' + key.substring(key.length - 4);
+  };
+
+  const formatNextSync = (nextSyncDue: string | undefined) => {
+    if (!nextSyncDue) return 'Not scheduled';
+    const date = new Date(nextSyncDue);
+    const now = new Date();
+    const diffMs = date.getTime() - now.getTime();
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffMins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+
+    if (diffMs < 0) return 'Overdue';
+    if (diffHours < 1) return `in ${diffMins}m`;
+    if (diffHours < 24) return `in ${diffHours}h ${diffMins}m`;
+    const diffDays = Math.floor(diffHours / 24);
+    return `in ${diffDays}d ${diffHours % 24}h`;
   };
 
   // Get clients that don't have an API key yet
@@ -338,6 +461,40 @@ export default function SettingsPage() {
                           <span>{key.app_ids?.length || 0} App IDs</span>
                           {key.last_sync_date && <span>Last sync: {key.last_sync_date}</span>}
                         </div>
+                        {key.auto_sync_enabled && (
+                          <div style={{ marginTop: '8px', padding: '8px', background: '#dbeafe', borderRadius: '4px', fontSize: '12px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M23 4v6h-6"/>
+                                <path d="M1 20v-6h6"/>
+                                <path d="M3.51 9a9 9 0 0114.85-3.36L23 10"/>
+                                <path d="M20.49 15a9 9 0 01-14.85 3.36L1 14"/>
+                              </svg>
+                              <strong style={{ color: '#1e40af' }}>Auto-sync enabled</strong>
+                            </div>
+                            <div style={{ color: '#1e3a8a', fontSize: '11px' }}>
+                              <div>Syncing from {key.sync_start_date} to present</div>
+                              <div>Every {key.sync_frequency_hours}h • Next: {formatNextSync(key.next_sync_due)}</div>
+                            </div>
+                            <button
+                              onClick={() => handleTriggerManualSync(key.client_id)}
+                              disabled={autoSyncLoading}
+                              style={{
+                                marginTop: '6px',
+                                padding: '4px 8px',
+                                background: '#3b82f6',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '4px',
+                                fontSize: '11px',
+                                cursor: autoSyncLoading ? 'not-allowed' : 'pointer',
+                                opacity: autoSyncLoading ? 0.6 : 1
+                              }}
+                            >
+                              Sync Now
+                            </button>
+                          </div>
+                        )}
                       </div>
                       {testingKey === key.client_id && testResult && (
                         <div className={`${styles.statusBadge} ${testResult.valid ? styles.valid : styles.invalid}`}>
@@ -355,7 +512,19 @@ export default function SettingsPage() {
                       )}
                     </div>
                     <div className={styles.keyActions}>
-                      <button 
+                      <button
+                        className={`${styles.actionButton} ${key.auto_sync_enabled ? styles.autoSyncOn : styles.autoSyncOff}`}
+                        onClick={() => handleToggleAutoSync(key)}
+                        disabled={autoSyncLoading}
+                        title={key.auto_sync_enabled ? 'Disable auto-sync' : 'Enable auto-sync'}
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <circle cx="12" cy="12" r="10"/>
+                          <path d="M8 12l2 2 4-4"/>
+                        </svg>
+                        Auto
+                      </button>
+                      <button
                         className={`${styles.actionButton} ${styles.test}`}
                         onClick={() => handleTestKey(key.client_id)}
                         disabled={testingKey === key.client_id}
@@ -371,7 +540,7 @@ export default function SettingsPage() {
                           </>
                         )}
                       </button>
-                      <button 
+                      <button
                         className={`${styles.actionButton} ${styles.sync}`}
                         onClick={() => { setSelectedKey(key); setShowSyncModal(true); setSyncResult(null); }}
                       >
@@ -383,7 +552,7 @@ export default function SettingsPage() {
                         </svg>
                         Sync
                       </button>
-                      <button 
+                      <button
                         className={`${styles.actionButton} ${styles.delete}`}
                         onClick={() => handleDeleteKey(key.id)}
                       >
@@ -647,6 +816,97 @@ export default function SettingsPage() {
                   </>
                 ) : (
                   'Start Sync'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Auto-Sync Configuration Modal */}
+      {showAutoSyncModal && selectedKey && (
+        <div className={styles.modalOverlay} onClick={() => { setShowAutoSyncModal(false); setAutoSyncError(null); }}>
+          <div className={styles.modal} onClick={e => e.stopPropagation()} style={{ maxWidth: '500px' }}>
+            <div className={styles.modalHeader}>
+              <h3>Enable Auto-Sync</h3>
+              <button className={styles.closeButton} onClick={() => { setShowAutoSyncModal(false); setAutoSyncError(null); }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <line x1="18" y1="6" x2="6" y2="18"/>
+                  <line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+              </button>
+            </div>
+
+            <p style={{ color: '#64748b', marginBottom: '16px' }}>
+              Automatically sync data from a start date to the present day on a regular schedule. No end date required - your data will always be current.
+            </p>
+
+            {autoSyncError && (
+              <div style={{ padding: '12px', background: '#fef2f2', color: '#dc2626', borderRadius: '6px', marginBottom: '16px', fontSize: '14px' }}>
+                {autoSyncError}
+              </div>
+            )}
+
+            <div className={styles.formGroup}>
+              <label>Start Date *</label>
+              <input
+                type="date"
+                value={autoSyncConfig.start_date}
+                onChange={e => setAutoSyncConfig({...autoSyncConfig, start_date: e.target.value})}
+              />
+              <small>Data will be synced from this date to the present day</small>
+            </div>
+
+            <div className={styles.formGroup}>
+              <label>Sync Frequency (hours) *</label>
+              <select
+                value={autoSyncConfig.frequency_hours}
+                onChange={e => setAutoSyncConfig({...autoSyncConfig, frequency_hours: parseInt(e.target.value)})}
+              >
+                <option value="1">Every hour</option>
+                <option value="3">Every 3 hours</option>
+                <option value="6">Every 6 hours</option>
+                <option value="12">Every 12 hours</option>
+                <option value="24">Once per day (24 hours)</option>
+                <option value="48">Every 2 days (48 hours)</option>
+                <option value="72">Every 3 days (72 hours)</option>
+                <option value="168">Once per week (168 hours)</option>
+              </select>
+              <small>How often to automatically sync new data</small>
+            </div>
+
+            {!selectedKey.publisher_key && (
+              <div style={{ padding: '12px', background: '#fef3c7', borderRadius: '6px', fontSize: '14px', marginTop: '12px' }}>
+                <strong>⚠️ No Financial API Key:</strong> Add a Financial Web API Key to sync sales data.
+              </div>
+            )}
+
+            <div style={{ padding: '12px', background: '#dbeafe', borderRadius: '6px', fontSize: '13px', marginTop: '12px' }}>
+              <strong>ℹ️ How it works:</strong>
+              <ul style={{ margin: '8px 0 0 0', paddingLeft: '20px', lineHeight: '1.6' }}>
+                <li>Syncs data from your start date to today automatically</li>
+                <li>Runs on your chosen schedule without manual intervention</li>
+                <li>No end date - always keeps data current</li>
+                <li>You can trigger manual syncs anytime</li>
+              </ul>
+            </div>
+
+            <div className={styles.modalActions}>
+              <button className={styles.cancelButton} onClick={() => { setShowAutoSyncModal(false); setAutoSyncError(null); }}>
+                Cancel
+              </button>
+              <button
+                className={styles.saveButton}
+                onClick={handleEnableAutoSync}
+                disabled={autoSyncLoading || !autoSyncConfig.start_date}
+              >
+                {autoSyncLoading ? (
+                  <>
+                    <span className={styles.spinner}></span>
+                    Enabling...
+                  </>
+                ) : (
+                  'Enable Auto-Sync'
                 )}
               </button>
             </div>
