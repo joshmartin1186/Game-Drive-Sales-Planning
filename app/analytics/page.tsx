@@ -601,19 +601,26 @@ export default function AnalyticsPage() {
     return new Intl.NumberFormat('en-US').format(Math.round(value))
   }
 
-  const formatDate = (dateStr: string, includeDay: boolean = true) => {
+  const formatDate = (dateStr: string, includeDay: boolean = true, forLabel: boolean = false) => {
     // Parse date as UTC to avoid timezone shifts
     const [year, month, day] = dateStr.split('-').map(Number)
     const date = new Date(Date.UTC(year, month - 1, day))
 
     // If we have more than 45 data points, we're showing monthly data
     if (dailyData.length > 45) {
-      // For monthly view, show just "Jan 2024"
+      // For monthly view, show just "Jan 2024" in tooltips, but "Jan" for labels
+      if (forLabel) {
+        return date.toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' })
+      }
       return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' })
     }
     // For daily view, include day only if requested
     if (includeDay) {
       return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })
+    }
+    // For bar labels in daily view, show "Jan 1" with day number
+    if (forLabel) {
+      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
     }
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
   }
@@ -769,7 +776,7 @@ export default function AnalyticsPage() {
                         }}
                       />
                     </div>
-                    <span className={styles.barLabel}>{formatDate(day.date, false)}</span>
+                    <span className={styles.barLabel}>{formatDate(day.date, false, true)}</span>
                   </div>
                 )
               })}
@@ -1168,6 +1175,30 @@ export default function AnalyticsPage() {
               ))}
             </div>
 
+            {/* Growth and Price Metrics Row */}
+            <div className={styles.metricsSection}>
+              {widgets.filter(w => w.type === 'growth' || w.type === 'avg-price').map(widget => (
+                <div
+                  key={widget.id}
+                  className={`${styles.widgetWrapper} ${isEditMode ? styles.editableWidget : ''}`}
+                  draggable={isEditMode}
+                  onDragStart={() => handleDragStart(widget.id)}
+                  onDragEnd={handleDragEnd}
+                >
+                  {isEditMode && (
+                    <div className={styles.widgetControls}>
+                      <button className={styles.widgetDeleteBtn} onClick={() => handleDeleteWidget(widget.id)} title="Delete widget">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
+                  )}
+                  {renderWidget(widget)}
+                </div>
+              ))}
+            </div>
+
             {/* Charts Row */}
             <div className={styles.chartsSection}>
               {widgets.filter(w => w.type === 'chart').map(widget => (
@@ -1212,6 +1243,29 @@ export default function AnalyticsPage() {
               ))}
             </div>
 
+            {/* Countries and Table Section */}
+            <div className={styles.bottomSection}>
+              {widgets.filter(w => w.type === 'countries').map(widget => (
+                <div
+                  key={widget.id}
+                  className={`${styles.widgetWrapper} ${isEditMode ? styles.editableWidget : ''}`}
+                  draggable={isEditMode}
+                  onDragStart={() => handleDragStart(widget.id)}
+                  onDragEnd={handleDragEnd}
+                >
+                  {isEditMode && (
+                    <div className={styles.widgetControls}>
+                      <button className={styles.widgetDeleteBtn} onClick={() => handleDeleteWidget(widget.id)} title="Delete widget">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
+                  )}
+                  {renderWidget(widget)}
+                </div>
+              ))}
+
             {/* Table Section */}
             {widgets.filter(w => w.type === 'table').map(widget => (
               <div 
@@ -1233,6 +1287,7 @@ export default function AnalyticsPage() {
                 {renderWidget(widget)}
               </div>
             ))}
+            </div>
 
             <div className={styles.dataInfo}>
               <span className={styles.dataInfoText}>Showing {formatNumber(performanceData.length)} records across {summaryStats?.totalDays || 0} days</span>

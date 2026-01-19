@@ -648,6 +648,32 @@
   }
 }
 
+.metricsSection {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+@media (max-width: 1200px) {
+  .metricsSection {
+    grid-template-columns: 1fr;
+  }
+}
+
+.bottomSection {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+@media (max-width: 1200px) {
+  .bottomSection {
+    grid-template-columns: 1fr;
+  }
+}
+
 .chartCard {
   background: white;
   padding: 20px;
