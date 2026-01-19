@@ -245,8 +245,9 @@ export default function AnalyticsPage() {
     try {
       let query = supabase
         .from('steam_performance_data_view')
-        .select('*')
+        .select('*', { count: 'exact' })
         .order('date', { ascending: true })
+        .limit(10000) // Increase limit to handle large datasets
 
       if (dateRange.start) {
         query = query.gte('date', dateRange.start.toISOString().split('T')[0])
