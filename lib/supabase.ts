@@ -15,13 +15,25 @@ if (!supabaseAnonKey) {
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
 // Server-side Supabase client with service role key (for API routes)
-// Use service role key if available (server-side), otherwise fallback to anon key
-const isServer = typeof window === 'undefined'
-const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+// Function to create server client on-demand to avoid build-time issues
+export function getServerSupabase() {
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!serviceRoleKey) {
+    console.warn('SUPABASE_SERVICE_ROLE_KEY not found, falling back to anon key')
+    return supabase
+  }
+  return createClient(supabaseUrl, serviceRoleKey)
+}
 
-export const serverSupabase = isServer && serviceRoleKey
-  ? createClient(supabaseUrl, serviceRoleKey)
-  : supabase
+// For backwards compatibility, export a serverSupabase instance
+// This will be created at runtime, not build time
+export const serverSupabase = (() => {
+  if (typeof window !== 'undefined') {
+    return supabase // Client-side, use anon key
+  }
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  return serviceRoleKey ? createClient(supabaseUrl, serviceRoleKey) : supabase
+})()
 
 // Database types based on our schema
 export interface Client {
