@@ -243,45 +243,57 @@ export default function AnalyticsPage() {
   const fetchPerformanceData = useCallback(async () => {
     setIsLoading(true)
     try {
-      let query = supabase
-        .from('steam_performance_data_view')
-        .select('*', { count: 'exact' })
-        .order('date', { ascending: true })
-        .limit(10000) // Increase limit to handle large datasets
+      // Supabase has a hard 1000 row limit per query, so fetch in batches
+      let allData: PerformanceData[] = []
+      let hasMore = true
+      let offset = 0
+      const batchSize = 1000
 
-      if (dateRange.start) {
-        query = query.gte('date', dateRange.start.toISOString().split('T')[0])
-      }
-      if (dateRange.end) {
-        query = query.lte('date', dateRange.end.toISOString().split('T')[0])
-      }
-      if (selectedProduct !== 'all') {
-        query = query.eq('product_name', selectedProduct)
-      }
-      if (selectedClient !== 'all') {
-        query = query.eq('client_id', selectedClient)
-      }
-      if (selectedRegion !== 'all') {
-        query = query.eq('region', selectedRegion)
-      }
-      if (selectedPlatform !== 'all') {
-        query = query.eq('platform', selectedPlatform)
+      while (hasMore) {
+        let query = supabase
+          .from('steam_performance_data_view')
+          .select('*', { count: 'exact' })
+          .order('date', { ascending: true })
+          .range(offset, offset + batchSize - 1)
+
+        if (dateRange.start) {
+          query = query.gte('date', dateRange.start.toISOString().split('T')[0])
+        }
+        if (dateRange.end) {
+          query = query.lte('date', dateRange.end.toISOString().split('T')[0])
+        }
+        if (selectedProduct !== 'all') {
+          query = query.eq('product_name', selectedProduct)
+        }
+        if (selectedClient !== 'all') {
+          query = query.eq('client_id', selectedClient)
+        }
+        if (selectedRegion !== 'all') {
+          query = query.eq('region', selectedRegion)
+        }
+        if (selectedPlatform !== 'all') {
+          query = query.eq('platform', selectedPlatform)
+        }
+
+        const { data, error } = await query
+
+        if (error) throw error
+
+        allData = allData.concat(data || [])
+        hasMore = (data?.length || 0) === batchSize
+        offset += batchSize
       }
 
-      const { data, error } = await query
+      setPerformanceData(allData)
+      setDataAvailable(allData.length > 0)
 
-      if (error) throw error
+      if (allData.length > 0) {
+        const totalRevenue = allData.reduce((sum, row) => sum + toNumber(row.net_steam_sales_usd), 0)
+        const totalUnits = allData.reduce((sum, row) => sum + toNumber(row.net_units_sold), 0)
+        const totalGrossUnits = allData.reduce((sum, row) => sum + toNumber(row.gross_units_sold), 0)
+        const totalChargebacks = allData.reduce((sum, row) => sum + toNumber(row.chargebacks_returns), 0)
 
-      setPerformanceData(data || [])
-      setDataAvailable((data?.length || 0) > 0)
-
-      if (data && data.length > 0) {
-        const totalRevenue = data.reduce((sum, row) => sum + toNumber(row.net_steam_sales_usd), 0)
-        const totalUnits = data.reduce((sum, row) => sum + toNumber(row.net_units_sold), 0)
-        const totalGrossUnits = data.reduce((sum, row) => sum + toNumber(row.gross_units_sold), 0)
-        const totalChargebacks = data.reduce((sum, row) => sum + toNumber(row.chargebacks_returns), 0)
-        
-        const uniqueDates = new Set(data.map(row => row.date))
+        const uniqueDates = new Set(allData.map(row => row.date))
         const totalDays = uniqueDates.size || 1
 
         setSummaryStats({
@@ -293,9 +305,9 @@ export default function AnalyticsPage() {
           totalDays
         })
 
-        const uniqueProducts = Array.from(new Set(data.map(row => row.product_name).filter(Boolean)))
-        const uniqueRegions = Array.from(new Set(data.map(row => row.region).filter(Boolean))) as string[]
-        const uniquePlatforms = Array.from(new Set(data.map(row => row.platform).filter(Boolean)))
+        const uniqueProducts = Array.from(new Set(allData.map(row => row.product_name).filter(Boolean)))
+        const uniqueRegions = Array.from(new Set(allData.map(row => row.region).filter(Boolean))) as string[]
+        const uniquePlatforms = Array.from(new Set(allData.map(row => row.platform).filter(Boolean)))
         
         setProducts(uniqueProducts)
         setRegions(uniqueRegions)
