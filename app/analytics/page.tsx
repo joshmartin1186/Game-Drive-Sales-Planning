@@ -507,12 +507,15 @@ export default function AnalyticsPage() {
   }
 
   const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr)
+    // Parse date as UTC to avoid timezone shifts
+    const [year, month, day] = dateStr.split('-').map(Number)
+    const date = new Date(Date.UTC(year, month - 1, day))
+
     // If we have more than 45 data points, we're showing monthly data
     if (dailyData.length > 45) {
-      return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+      return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' })
     }
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
   }
 
   const setPresetDateRange = (preset: string) => {
@@ -630,9 +633,13 @@ export default function AnalyticsPage() {
 
   // Render chart widget
   const renderChartWidget = (widget: DashboardWidget) => {
+    const isMonthlyView = dailyData.length > 45
     return (
       <div className={styles.chartCard}>
-        <h3 className={styles.chartTitle}>{widget.title}</h3>
+        <h3 className={styles.chartTitle}>
+          {widget.title}
+          {isMonthlyView && <span style={{ fontSize: '0.875rem', fontWeight: 400, color: '#64748b', marginLeft: '8px' }}>(Monthly)</span>}
+        </h3>
         <div className={styles.chartLegend}>
           <span className={styles.legendItem}>
             <span className={styles.legendDot} style={{ backgroundColor: '#16a34a' }} />
