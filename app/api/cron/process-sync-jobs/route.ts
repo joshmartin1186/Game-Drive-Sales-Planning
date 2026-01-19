@@ -295,14 +295,16 @@ async function processSingleDate(
   data.response?.app_info?.forEach((a: any) => apps.set(a.appid, a.app_name));
 
   // Batch process all records at once instead of individual upserts
-  const salesDataBatch = results.map((result: any) => {
+  const salesDataMap = new Map<string, any>();
+
+  results.forEach((result: any) => {
     const productName = result.packageid
       ? packages.get(result.packageid)
       : result.appid
         ? apps.get(result.appid)
         : 'Unknown';
 
-    return {
+    const salesData = {
       client_id: clientId,
       sale_date: result.date.replace(/\//g, '-'),
       app_id: (result.primary_appid || result.appid)?.toString() || null,
@@ -313,7 +315,23 @@ async function processSingleDate(
       gross_revenue: parseFloat(result.gross_sales_usd || '0'),
       net_revenue: parseFloat(result.net_sales_usd || '0')
     };
+
+    // Create unique key from constraint fields to deduplicate
+    const key = `${salesData.client_id}|${salesData.sale_date}|${salesData.app_id}|${salesData.product_type}|${salesData.country_code}`;
+
+    // If duplicate, sum the values
+    if (salesDataMap.has(key)) {
+      const existing = salesDataMap.get(key);
+      existing.units_sold += salesData.units_sold;
+      existing.gross_revenue += salesData.gross_revenue;
+      existing.net_revenue += salesData.net_revenue;
+    } else {
+      salesDataMap.set(key, salesData);
+    }
   });
+
+  const salesDataBatch = Array.from(salesDataMap.values());
+  console.log(`[Cron] Deduplicated ${results.length} records to ${salesDataBatch.length} unique rows`);
 
   // Single batch upsert for all records
   const { error, count } = await supabase
@@ -329,5 +347,5 @@ async function processSingleDate(
     return { imported: 0, skipped: results.length };
   }
 
-  return { imported: count || results.length, skipped: 0 };
+  return { imported: count || salesDataBatch.length, skipped: 0 };
 }
