@@ -96,7 +96,7 @@ export default function SettingsPage() {
   });
 
   const [syncOptions, setSyncOptions] = useState({
-    start_date: new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    start_date: '2024-01-01',  // Default to reasonable historical start date
     end_date: new Date().toISOString().split('T')[0],
     app_id: '',
     force_full_sync: false
@@ -174,6 +174,37 @@ export default function SettingsPage() {
 
   const handleSync = async () => {
     if (!selectedKey) return;
+
+    // Validation: Check date range
+    if (!syncOptions.start_date || !syncOptions.end_date) {
+      alert('Please provide both start and end dates for the sync.');
+      return;
+    }
+
+    // Validation: Warn if force_full_sync is enabled
+    if (syncOptions.force_full_sync) {
+      const confirmed = confirm(
+        '⚠️ WARNING: Force full sync is enabled.\n\n' +
+        'This will re-sync all data from scratch using the Steam API highwatermark reset.\n\n' +
+        'Existing data will be updated/merged (not deleted), but this may take longer.\n\n' +
+        'Continue with force full sync?'
+      );
+      if (!confirmed) return;
+    }
+
+    // Validation: Warn about date range
+    const startDate = new Date(syncOptions.start_date);
+    const endDate = new Date(syncOptions.end_date);
+    const daysDiff = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+
+    if (daysDiff > 365) {
+      const confirmed = confirm(
+        `⚠️ Large Date Range: You are syncing ${daysDiff} days of data.\n\n` +
+        `This may take a while to complete. Continue?`
+      );
+      if (!confirmed) return;
+    }
+
     setSyncing(true);
     setSyncResult(null);
     try {
@@ -306,7 +337,7 @@ export default function SettingsPage() {
       // Show modal to enable auto-sync
       setSelectedKey(key);
       setAutoSyncConfig({
-        start_date: new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        start_date: '2024-01-01',  // Default to reasonable historical start date
         frequency_hours: 24
       });
       setShowAutoSyncModal(true);
