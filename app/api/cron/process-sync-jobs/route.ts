@@ -9,6 +9,11 @@ const supabase = createClient(
 const STEAM_PARTNER_API = 'https://partner.steam-api.com';
 const MAX_DATES_PER_RUN = 5; // Process 5 dates per cron execution to avoid timeout
 
+// Force dynamic rendering - required for accessing request headers
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+export const maxDuration = 60;
+
 // This endpoint will be called by Vercel Cron
 // It processes one pending job at a time
 export async function GET(request: Request) {
