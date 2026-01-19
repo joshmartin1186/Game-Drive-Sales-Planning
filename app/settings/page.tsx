@@ -401,8 +401,8 @@ export default function SettingsPage() {
     setAutoSyncLoading(false);
   };
 
-  const maskApiKey = (key: string) => {
-    if (key.length <= 8) return '••••••••';
+  const maskApiKey = (key: string | null) => {
+    if (!key || key.length <= 8) return '••••••••';
     return key.substring(0, 4) + '••••••••' + key.substring(key.length - 4);
   };
 
