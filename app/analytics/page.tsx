@@ -104,7 +104,7 @@ interface CurrentPeriodState {
 // Widget Types for editable dashboard
 interface DashboardWidget {
   id: string
-  type: 'stat' | 'chart' | 'table' | 'region' | 'countries' | 'growth' | 'avg-price'
+  type: 'stat' | 'chart' | 'table' | 'region' | 'countries' | 'growth' | 'avg-price' | 'heatmap'
   title: string
   config: {
     statKey?: string
