@@ -1048,8 +1048,8 @@ export default function AnalyticsPage() {
     }
 
     // Group into weeks
-    const weeks: typeof calendarData[][] = []
-    let currentWeek: typeof calendarData = []
+    const weeks: Array<Array<{ date: string; revenue: number; dayOfWeek: number }>> = []
+    let currentWeek: Array<{ date: string; revenue: number; dayOfWeek: number }> = []
 
     calendarData.forEach((day, idx) => {
       if (idx === 0 && day.dayOfWeek !== 0) {
