@@ -113,14 +113,14 @@ export default function SettingsPage() {
       const clientsRes = await fetch('/api/clients');
       if (clientsRes.ok) {
         const clientsData = await clientsRes.json();
-        setClients(clientsData);
+        setClients(Array.isArray(clientsData) ? clientsData : []);
       }
 
       // Fetch API keys
       const keysRes = await fetch('/api/steam-api-keys');
       if (keysRes.ok) {
         const keysData = await keysRes.json();
-        setApiKeys(keysData);
+        setApiKeys(Array.isArray(keysData) ? keysData : []);
       }
     } catch (error) {
       console.error('Error fetching data:', error);
