@@ -288,53 +288,46 @@ async function processSingleDate(
   const results = data.response?.results || [];
   console.log(`[Cron] Date ${dateStr}: Found ${results.length} sales records`);
 
-  let imported = 0;
-  let skipped = 0;
-
   // Create metadata maps from response
   const packages = new Map();
   const apps = new Map();
   data.response?.package_info?.forEach((p: any) => packages.set(p.packageid, p.package_name));
   data.response?.app_info?.forEach((a: any) => apps.set(a.appid, a.app_name));
 
-  for (const result of results) {
-    try {
-      const productName = result.packageid
-        ? packages.get(result.packageid)
-        : result.appid
-          ? apps.get(result.appid)
-          : 'Unknown';
+  // Batch process all records at once instead of individual upserts
+  const salesDataBatch = results.map((result: any) => {
+    const productName = result.packageid
+      ? packages.get(result.packageid)
+      : result.appid
+        ? apps.get(result.appid)
+        : 'Unknown';
 
-      const salesData = {
-        client_id: clientId,
-        sale_date: result.date.replace(/\//g, '-'),
-        app_id: (result.primary_appid || result.appid)?.toString() || null,
-        app_name: productName || null,
-        product_type: result.packageid ? 'package' : 'app',
-        country_code: result.country_code || null,
-        units_sold: result.net_units_sold || 0,
-        gross_revenue: parseFloat(result.gross_sales_usd || '0'),
-        net_revenue: parseFloat(result.net_sales_usd || '0')
-      };
+    return {
+      client_id: clientId,
+      sale_date: result.date.replace(/\//g, '-'),
+      app_id: (result.primary_appid || result.appid)?.toString() || null,
+      app_name: productName || null,
+      product_type: result.packageid ? 'package' : 'app',
+      country_code: result.country_code || null,
+      units_sold: result.net_units_sold || 0,
+      gross_revenue: parseFloat(result.gross_sales_usd || '0'),
+      net_revenue: parseFloat(result.net_sales_usd || '0')
+    };
+  });
 
-      const { error } = await supabase
-        .from('steam_sales')
-        .upsert(salesData, {
-          onConflict: 'client_id,sale_date,app_id,product_type,country_code',
-          ignoreDuplicates: false
-        });
+  // Single batch upsert for all records
+  const { error, count } = await supabase
+    .from('steam_sales')
+    .upsert(salesDataBatch, {
+      onConflict: 'client_id,sale_date,app_id,product_type,country_code',
+      ignoreDuplicates: false,
+      count: 'exact'
+    });
 
-      if (error) {
-        console.error(`[Cron] Error upserting row:`, error);
-        skipped++;
-      } else {
-        imported++;
-      }
-    } catch (rowError) {
-      console.error(`[Cron] Error processing row:`, rowError);
-      skipped++;
-    }
+  if (error) {
+    console.error(`[Cron] Error batch upserting:`, error);
+    return { imported: 0, skipped: results.length };
   }
 
-  return { imported, skipped };
+  return { imported: count || results.length, skipped: 0 };
 }
