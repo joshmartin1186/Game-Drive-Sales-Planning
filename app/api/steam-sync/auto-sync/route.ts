@@ -1,8 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+import { supabase } from '@/lib/supabase';
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
@@ -13,7 +10,6 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     // Get auto-sync status for this API key
     const { data, error } = await supabase
@@ -54,8 +50,6 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
-
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     if (action === 'enable') {
       // Validate inputs
