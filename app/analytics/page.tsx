@@ -773,20 +773,27 @@ export default function AnalyticsPage() {
           {dailyData.length > 0 ? (
             <div className={styles.barChart}>
               {dailyData.map((day, idx) => {
+                // Color based on revenue intensity
+                const intensity = day.revenue / maxDailyRevenue
+                const barColor = day.isSale ? '#16a34a' :
+                  intensity > 0.8 ? '#3b82f6' :
+                  intensity > 0.6 ? '#60a5fa' :
+                  intensity > 0.4 ? '#93c5fd' : '#cbd5e1'
+
                 return (
                   <div key={idx} className={styles.barColumn}>
                     <div className={styles.barTooltip}>
-                      <div style={{ fontWeight: 600, marginBottom: '4px' }}>{formatDate(day.date)}</div>
-                      <div><strong>Revenue:</strong> {formatCurrency(day.revenue)}</div>
-                      <div><strong>Units:</strong> {formatNumber(day.units)}</div>
-                      {day.isSale && <div style={{ marginTop: '4px', color: '#10b981' }}>🏷️ Sale Period</div>}
+                      <div style={{ fontWeight: 700, marginBottom: '6px', fontSize: '15px' }}>{formatDate(day.date)}</div>
+                      <div style={{ fontSize: '14px', marginBottom: '2px' }}><strong>Revenue:</strong> {formatCurrency(day.revenue)}</div>
+                      <div style={{ fontSize: '14px' }}><strong>Units:</strong> {formatNumber(day.units)}</div>
+                      {day.isSale && <div style={{ marginTop: '6px', color: '#10b981', fontWeight: 600 }}>🏷️ Sale Period</div>}
                     </div>
                     <div className={styles.barWrapper}>
                       <div
                         className={styles.bar}
                         style={{
                           height: `${Math.max((day.revenue / maxDailyRevenue) * 100, 2)}%`,
-                          backgroundColor: day.isSale ? '#16a34a' : '#94a3b8'
+                          backgroundColor: barColor
                         }}
                       />
                     </div>
@@ -1090,9 +1097,9 @@ export default function AnalyticsPage() {
                     }
                     const intensity = day.revenue / maxRevenue
                     const color = intensity === 0 ? '#e2e8f0' :
-                      intensity < 0.25 ? '#93c5fd' :
-                      intensity < 0.5 ? '#60a5fa' :
-                      intensity < 0.75 ? '#3b82f6' : '#2563eb'
+                      intensity < 0.25 ? '#60a5fa' :
+                      intensity < 0.5 ? '#3b82f6' :
+                      intensity < 0.75 ? '#2563eb' : '#1e40af'
 
                     return (
                       <div
@@ -1111,9 +1118,9 @@ export default function AnalyticsPage() {
             <span style={{ fontSize: '11px', color: '#64748b' }}>Less</span>
             {[0, 0.25, 0.5, 0.75, 1].map((intensity, idx) => {
               const color = intensity === 0 ? '#e2e8f0' :
-                intensity < 0.25 ? '#93c5fd' :
-                intensity < 0.5 ? '#60a5fa' :
-                intensity < 0.75 ? '#3b82f6' : '#2563eb'
+                intensity < 0.25 ? '#60a5fa' :
+                intensity < 0.5 ? '#3b82f6' :
+                intensity < 0.75 ? '#2563eb' : '#1e40af'
               return <div key={idx} style={{ width: '12px', height: '12px', backgroundColor: color, borderRadius: '2px' }} />
             })}
             <span style={{ fontSize: '11px', color: '#64748b' }}>More</span>
