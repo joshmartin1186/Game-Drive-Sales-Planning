@@ -7,7 +7,7 @@ const supabase = createClient(
 );
 
 const STEAM_PARTNER_API = 'https://partner.steam-api.com';
-const MAX_DATES_PER_RUN = 5; // Process 5 dates per cron execution to avoid timeout
+const MAX_DATES_PER_RUN = 1; // Process 1 date per cron execution to avoid timeout
 
 // Force dynamic rendering - required for accessing request headers
 export const dynamic = 'force-dynamic';
