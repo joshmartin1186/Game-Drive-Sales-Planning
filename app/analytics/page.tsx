@@ -1089,10 +1089,10 @@ export default function AnalyticsPage() {
                       return <div key={dayIdx} className={styles.heatmapCell} style={{ backgroundColor: 'transparent' }} />
                     }
                     const intensity = day.revenue / maxRevenue
-                    const color = intensity === 0 ? '#f1f5f9' :
-                      intensity < 0.25 ? '#dbeafe' :
-                      intensity < 0.5 ? '#93c5fd' :
-                      intensity < 0.75 ? '#3b82f6' : '#1e40af'
+                    const color = intensity === 0 ? '#e2e8f0' :
+                      intensity < 0.25 ? '#93c5fd' :
+                      intensity < 0.5 ? '#60a5fa' :
+                      intensity < 0.75 ? '#3b82f6' : '#2563eb'
 
                     return (
                       <div
@@ -1110,10 +1110,10 @@ export default function AnalyticsPage() {
           <div className={styles.heatmapLegend}>
             <span style={{ fontSize: '11px', color: '#64748b' }}>Less</span>
             {[0, 0.25, 0.5, 0.75, 1].map((intensity, idx) => {
-              const color = intensity === 0 ? '#f1f5f9' :
-                intensity < 0.25 ? '#dbeafe' :
-                intensity < 0.5 ? '#93c5fd' :
-                intensity < 0.75 ? '#3b82f6' : '#1e40af'
+              const color = intensity === 0 ? '#e2e8f0' :
+                intensity < 0.25 ? '#93c5fd' :
+                intensity < 0.5 ? '#60a5fa' :
+                intensity < 0.75 ? '#3b82f6' : '#2563eb'
               return <div key={idx} style={{ width: '12px', height: '12px', backgroundColor: color, borderRadius: '2px' }} />
             })}
             <span style={{ fontSize: '11px', color: '#64748b' }}>More</span>
