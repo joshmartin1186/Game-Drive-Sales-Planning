@@ -62,8 +62,8 @@ function formatRawResponse(rawResponse: unknown): string {
 }
 
 export default function SettingsPage() {
-  const [clients, setClients] = useState<Client[]>([]);
-  const [apiKeys, setApiKeys] = useState<SteamApiKey[]>([]);
+  const [clients, setClients] = useState<Client[] | null>(null);
+  const [apiKeys, setApiKeys] = useState<SteamApiKey[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showSyncModal, setShowSyncModal] = useState(false);
@@ -422,8 +422,8 @@ export default function SettingsPage() {
   };
 
   // Get clients that don't have an API key yet
-  const availableClients = clients.filter(
-    client => !apiKeys?.some(key => key.client_id === client.id)
+  const availableClients = (clients || []).filter(
+    client => !(apiKeys || []).some(key => key.client_id === client.id)
   );
 
   return (
