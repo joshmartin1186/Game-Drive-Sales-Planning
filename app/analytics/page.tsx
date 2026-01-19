@@ -747,12 +747,18 @@ export default function AnalyticsPage() {
   // Render chart widget
   const renderChartWidget = (widget: DashboardWidget) => {
     const isMonthlyView = dailyData.length > 45
+    // Get year from first data point
+    const yearLabel = dailyData.length > 0 ? dailyData[0].date.substring(0, 4) : ''
+
     return (
       <div className={styles.chartCard}>
-        <h3 className={styles.chartTitle}>
-          {widget.title}
-          {isMonthlyView && <span style={{ fontSize: '0.875rem', fontWeight: 400, color: '#64748b', marginLeft: '8px' }}>(Monthly)</span>}
-        </h3>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '8px' }}>
+          <h3 className={styles.chartTitle}>
+            {widget.title}
+            {isMonthlyView && <span style={{ fontSize: '0.875rem', fontWeight: 400, color: '#64748b', marginLeft: '8px' }}>(Monthly)</span>}
+          </h3>
+          {yearLabel && <span style={{ fontSize: '0.875rem', fontWeight: 500, color: '#64748b' }}>{yearLabel}</span>}
+        </div>
         <div className={styles.chartLegend}>
           <span className={styles.legendItem}>
             <span className={styles.legendDot} style={{ backgroundColor: '#16a34a' }} />
@@ -770,10 +776,10 @@ export default function AnalyticsPage() {
                 return (
                   <div key={idx} className={styles.barColumn}>
                     <div className={styles.barTooltip}>
-                      <div>{formatDate(day.date)}</div>
+                      <div style={{ fontWeight: 600, marginBottom: '4px' }}>{formatDate(day.date)}</div>
                       <div><strong>Revenue:</strong> {formatCurrency(day.revenue)}</div>
                       <div><strong>Units:</strong> {formatNumber(day.units)}</div>
-                      {day.isSale && <div>🏷️ Sale Period</div>}
+                      {day.isSale && <div style={{ marginTop: '4px', color: '#10b981' }}>🏷️ Sale Period</div>}
                     </div>
                     <div className={styles.barWrapper}>
                       <div
@@ -1003,7 +1009,7 @@ export default function AnalyticsPage() {
     )
   }
 
-  // Render heatmap widget
+  // Render heatmap widget - Calendar style
   const renderHeatmapWidget = (widget: DashboardWidget) => {
     if (!performanceData.length) {
       return (
@@ -1014,56 +1020,92 @@ export default function AnalyticsPage() {
       )
     }
 
-    // Create a day-of-week vs week heatmap
-    const heatmapData: { date: string; dayOfWeek: number; week: number; revenue: number }[] = []
+    // Create date-based revenue map
     const dateMap = new Map<string, number>()
-
     performanceData.forEach(row => {
       const revenue = toNumber(row.net_steam_sales_usd)
       dateMap.set(row.date, (dateMap.get(row.date) || 0) + revenue)
     })
 
-    dateMap.forEach((revenue, dateStr) => {
-      const [year, month, day] = dateStr.split('-').map(Number)
-      const date = new Date(Date.UTC(year, month - 1, day))
-      const dayOfWeek = date.getUTCDay() // 0 = Sunday
-      const weekOfYear = Math.floor((date.getTime() - new Date(date.getUTCFullYear(), 0, 1).getTime()) / (7 * 24 * 60 * 60 * 1000))
+    // Get date range - last 16 weeks
+    const dates = Array.from(dateMap.keys()).sort()
+    const endDate = dates[dates.length - 1] ? new Date(dates[dates.length - 1] + 'T00:00:00Z') : new Date()
+    const startDate = new Date(endDate)
+    startDate.setDate(startDate.getDate() - (16 * 7)) // 16 weeks back
 
-      heatmapData.push({ date: dateStr, dayOfWeek, week: weekOfYear, revenue })
+    // Generate calendar grid data
+    const calendarData: { date: string; revenue: number; dayOfWeek: number }[] = []
+    const maxRevenue = Math.max(...Array.from(dateMap.values()), 1)
+
+    for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+      const dateStr = d.toISOString().split('T')[0]
+      const revenue = dateMap.get(dateStr) || 0
+      calendarData.push({
+        date: dateStr,
+        revenue,
+        dayOfWeek: d.getDay()
+      })
+    }
+
+    // Group into weeks
+    const weeks: typeof calendarData[][] = []
+    let currentWeek: typeof calendarData = []
+
+    calendarData.forEach((day, idx) => {
+      if (idx === 0 && day.dayOfWeek !== 0) {
+        // Fill empty days at start
+        for (let i = 0; i < day.dayOfWeek; i++) {
+          currentWeek.push({ date: '', revenue: 0, dayOfWeek: i })
+        }
+      }
+      currentWeek.push(day)
+      if (day.dayOfWeek === 6 || idx === calendarData.length - 1) {
+        // Fill empty days at end
+        while (currentWeek.length < 7) {
+          currentWeek.push({ date: '', revenue: 0, dayOfWeek: currentWeek.length })
+        }
+        weeks.push(currentWeek)
+        currentWeek = []
+      }
     })
 
-    const maxRevenue = Math.max(...heatmapData.map(d => d.revenue), 1)
-    const weekSet = new Set(heatmapData.map(d => d.week))
-    const weeks = Array.from(weekSet).sort((a, b) => a - b).slice(-20) // Last 20 weeks
-    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+    const days = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
 
     return (
       <div className={styles.chartCard}>
         <h3 className={styles.chartTitle}>{widget.title}</h3>
         <div className={styles.heatmapContainer}>
-          <div className={styles.heatmapGrid}>
-            {days.map((day, dayIdx) => (
-              <div key={dayIdx} className={styles.heatmapRow}>
-                <div className={styles.heatmapLabel}>{day}</div>
-                {weeks.map(week => {
-                  const cell = heatmapData.find(d => d.week === week && d.dayOfWeek === dayIdx)
-                  const intensity = cell ? (cell.revenue / maxRevenue) : 0
-                  const color = intensity === 0 ? '#f1f5f9' :
-                    intensity < 0.25 ? '#dbeafe' :
-                    intensity < 0.5 ? '#93c5fd' :
-                    intensity < 0.75 ? '#3b82f6' : '#1e40af'
+          <div style={{ display: 'flex', gap: '4px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', paddingTop: '20px' }}>
+              {days.map((day, idx) => (
+                <div key={idx} className={styles.heatmapLabel}>{day}</div>
+              ))}
+            </div>
+            <div className={styles.heatmapGrid}>
+              {weeks.map((week, weekIdx) => (
+                <div key={weekIdx} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  {week.map((day, dayIdx) => {
+                    if (!day.date) {
+                      return <div key={dayIdx} className={styles.heatmapCell} style={{ backgroundColor: 'transparent' }} />
+                    }
+                    const intensity = day.revenue / maxRevenue
+                    const color = intensity === 0 ? '#f1f5f9' :
+                      intensity < 0.25 ? '#dbeafe' :
+                      intensity < 0.5 ? '#93c5fd' :
+                      intensity < 0.75 ? '#3b82f6' : '#1e40af'
 
-                  return (
-                    <div
-                      key={week}
-                      className={styles.heatmapCell}
-                      style={{ backgroundColor: color }}
-                      title={cell ? `${cell.date}\n${formatCurrency(cell.revenue)}` : 'No data'}
-                    />
-                  )
-                })}
-              </div>
-            ))}
+                    return (
+                      <div
+                        key={dayIdx}
+                        className={styles.heatmapCell}
+                        style={{ backgroundColor: color }}
+                        title={`${day.date}\n${formatCurrency(day.revenue)}`}
+                      />
+                    )
+                  })}
+                </div>
+              ))}
+            </div>
           </div>
           <div className={styles.heatmapLegend}>
             <span style={{ fontSize: '11px', color: '#64748b' }}>Less</span>
@@ -1072,7 +1114,7 @@ export default function AnalyticsPage() {
                 intensity < 0.25 ? '#dbeafe' :
                 intensity < 0.5 ? '#93c5fd' :
                 intensity < 0.75 ? '#3b82f6' : '#1e40af'
-              return <div key={idx} style={{ width: '14px', height: '14px', backgroundColor: color, borderRadius: '2px' }} />
+              return <div key={idx} style={{ width: '12px', height: '12px', backgroundColor: color, borderRadius: '2px' }} />
             })}
             <span style={{ fontSize: '11px', color: '#64748b' }}>More</span>
           </div>
