@@ -33,9 +33,9 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { client_id, api_key, publisher_key, app_ids } = body;
 
-    if (!client_id || !api_key) {
+    if (!client_id || !publisher_key) {
       return NextResponse.json(
-        { error: 'Client ID and API key are required' },
+        { error: 'Client ID and Financial Web API key are required' },
         { status: 400 }
       );
     }
@@ -53,7 +53,7 @@ export async function POST(request: Request) {
       const { data, error } = await supabase
         .from('steam_api_keys')
         .update({
-          api_key,
+          api_key: api_key || null,
           publisher_key: publisher_key || null,
           app_ids: app_ids || [],
           updated_at: new Date().toISOString()
@@ -70,7 +70,7 @@ export async function POST(request: Request) {
         .from('steam_api_keys')
         .insert({
           client_id,
-          api_key,
+          api_key: api_key || null,
           publisher_key: publisher_key || null,
           app_ids: app_ids || [],
           is_active: true

@@ -655,19 +655,7 @@ export default function SettingsPage() {
             </div>
 
             <div className={styles.formGroup}>
-              <label>Steam Web API Key *</label>
-              <input
-                type="text"
-                placeholder="Enter your Steam Web API key"
-                value={formData.api_key}
-                onChange={e => setFormData({...formData, api_key: e.target.value})}
-                style={{ fontFamily: 'monospace' }}
-              />
-              <small>Basic API key from steamcommunity.com/dev/apikey</small>
-            </div>
-
-            <div className={styles.formGroup}>
-              <label>Financial Web API Key (Required for Sales Data)</label>
+              <label>Financial Web API Key (Required for Sales Data) *</label>
               <input
                 type="text"
                 placeholder="Enter your Financial Web API key"
@@ -676,6 +664,18 @@ export default function SettingsPage() {
                 style={{ fontFamily: 'monospace' }}
               />
               <small>From Steamworks → Manage Groups → Financial API Group</small>
+            </div>
+
+            <div className={styles.formGroup}>
+              <label>Steam Web API Key (Optional)</label>
+              <input
+                type="text"
+                placeholder="Enter your Steam Web API key"
+                value={formData.api_key}
+                onChange={e => setFormData({...formData, api_key: e.target.value})}
+                style={{ fontFamily: 'monospace' }}
+              />
+              <small>Basic API key from steamcommunity.com/dev/apikey</small>
             </div>
 
             <div className={styles.formGroup}>
@@ -693,10 +693,10 @@ export default function SettingsPage() {
               <button className={styles.cancelButton} onClick={() => setShowAddModal(false)}>
                 Cancel
               </button>
-              <button 
-                className={styles.saveButton} 
+              <button
+                className={styles.saveButton}
                 onClick={handleAddKey}
-                disabled={!formData.client_id || !formData.api_key}
+                disabled={!formData.client_id || !formData.publisher_key}
               >
                 Save API Key
               </button>
