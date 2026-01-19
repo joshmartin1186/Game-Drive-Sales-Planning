@@ -352,8 +352,8 @@ export default function AnalyticsPage() {
       }))
       .sort((a, b) => a.date.localeCompare(b.date))
 
-    // If more than 60 days, group by month for better visualization
-    if (dailyEntries.length > 60) {
+    // If more than 45 days, group by month for better visualization
+    if (dailyEntries.length > 45) {
       const byMonth = new Map<string, { revenue: number; units: number; hasSale: boolean }>()
 
       dailyEntries.forEach(entry => {
@@ -508,8 +508,8 @@ export default function AnalyticsPage() {
 
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr)
-    // If we have more than 60 data points, we're showing monthly data
-    if (dailyData.length > 60) {
+    // If we have more than 45 data points, we're showing monthly data
+    if (dailyData.length > 45) {
       return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
     }
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
