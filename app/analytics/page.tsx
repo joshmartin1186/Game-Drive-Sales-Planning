@@ -192,16 +192,19 @@ function AnalyticsSidebar() {
   )
 }
 
-// Default dashboard layout
+// Default dashboard layout - comprehensive view
 const DEFAULT_WIDGETS: DashboardWidget[] = [
+  // Top stats row
   { id: 'stat-revenue', type: 'stat', title: 'Total Revenue', config: { statKey: 'totalRevenue' }, position: { x: 0, y: 0 }, size: { w: 1, h: 1 } },
   { id: 'stat-units', type: 'stat', title: 'Total Units', config: { statKey: 'totalUnits' }, position: { x: 1, y: 0 }, size: { w: 1, h: 1 } },
   { id: 'stat-avg-rev', type: 'stat', title: 'Avg Daily Revenue', config: { statKey: 'avgDailyRevenue' }, position: { x: 2, y: 0 }, size: { w: 1, h: 1 } },
   { id: 'stat-avg-units', type: 'stat', title: 'Avg Daily Units', config: { statKey: 'avgDailyUnits' }, position: { x: 3, y: 0 }, size: { w: 1, h: 1 } },
   { id: 'stat-refund', type: 'stat', title: 'Refund Rate', config: { statKey: 'refundRate' }, position: { x: 4, y: 0 }, size: { w: 1, h: 1 } },
+  // Charts row - wider revenue chart, regions on right
   { id: 'chart-revenue', type: 'chart', title: 'Revenue Over Time', config: { chartType: 'bar', dataSource: 'daily' }, position: { x: 0, y: 1 }, size: { w: 3, h: 2 } },
   { id: 'chart-region', type: 'region', title: 'Revenue by Region', config: { dataSource: 'region' }, position: { x: 3, y: 1 }, size: { w: 2, h: 2 } },
-  { id: 'table-periods', type: 'table', title: 'Period Comparison', config: { dataSource: 'periods' }, position: { x: 0, y: 3 }, size: { w: 5, h: 2 } },
+  // Period comparison table
+  { id: 'table-periods', type: 'table', title: 'Sale Performance Analysis', config: { dataSource: 'periods' }, position: { x: 0, y: 3 }, size: { w: 5, h: 2 } },
 ]
 
 export default function AnalyticsPage() {
@@ -506,14 +509,19 @@ export default function AnalyticsPage() {
     return new Intl.NumberFormat('en-US').format(Math.round(value))
   }
 
-  const formatDate = (dateStr: string) => {
+  const formatDate = (dateStr: string, includeDay: boolean = true) => {
     // Parse date as UTC to avoid timezone shifts
     const [year, month, day] = dateStr.split('-').map(Number)
     const date = new Date(Date.UTC(year, month - 1, day))
 
     // If we have more than 45 data points, we're showing monthly data
     if (dailyData.length > 45) {
+      // For monthly view, show just "Jan 2024"
       return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' })
+    }
+    // For daily view, include day only if requested
+    if (includeDay) {
+      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })
     }
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
   }
@@ -653,20 +661,26 @@ export default function AnalyticsPage() {
         <div className={styles.barChartContainer}>
           {dailyData.length > 0 ? (
             <div className={styles.barChart}>
-              {dailyData.map((day, idx) => (
-                <div key={idx} className={styles.barColumn} title={`${formatDate(day.date)}: ${formatCurrency(day.revenue)}`}>
-                  <div className={styles.barWrapper}>
-                    <div 
-                      className={styles.bar}
-                      style={{ 
-                        height: `${Math.max((day.revenue / maxDailyRevenue) * 100, 2)}%`,
-                        backgroundColor: day.isSale ? '#16a34a' : '#94a3b8'
-                      }}
-                    />
+              {dailyData.map((day, idx) => {
+                const tooltipText = isMonthlyView
+                  ? `${formatDate(day.date)}\nRevenue: ${formatCurrency(day.revenue)}\nUnits: ${formatNumber(day.units)}`
+                  : `${formatDate(day.date, true)}\nRevenue: ${formatCurrency(day.revenue)}\nUnits: ${formatNumber(day.units)}${day.isSale ? '\n🏷️ Sale Period' : ''}`
+
+                return (
+                  <div key={idx} className={styles.barColumn} title={tooltipText}>
+                    <div className={styles.barWrapper}>
+                      <div
+                        className={styles.bar}
+                        style={{
+                          height: `${Math.max((day.revenue / maxDailyRevenue) * 100, 2)}%`,
+                          backgroundColor: day.isSale ? '#16a34a' : '#94a3b8'
+                        }}
+                      />
+                    </div>
+                    <span className={styles.barLabel}>{formatDate(day.date, false)}</span>
                   </div>
-                  <span className={styles.barLabel}>{formatDate(day.date)}</span>
-                </div>
-              ))}
+                )
+              })}
             </div>
           ) : (
             <div className={styles.noChartData}>No time series data available</div>
