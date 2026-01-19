@@ -225,9 +225,11 @@ const DEFAULT_WIDGETS: DashboardWidget[] = [
   // Charts row - wider revenue chart, regions on right
   { id: 'chart-revenue', type: 'chart', title: 'Revenue Over Time', config: { chartType: 'bar', dataSource: 'daily' }, position: { x: 0, y: 2 }, size: { w: 3, h: 2 } },
   { id: 'chart-region', type: 'region', title: 'Revenue by Region', config: { dataSource: 'region' }, position: { x: 3, y: 2 }, size: { w: 2, h: 2 } },
-  // Top countries and period table
-  { id: 'top-countries', type: 'countries', title: 'Top Countries', config: { dataSource: 'countries' }, position: { x: 0, y: 4 }, size: { w: 2, h: 2 } },
-  { id: 'table-periods', type: 'table', title: 'Sale Performance Analysis', config: { dataSource: 'periods' }, position: { x: 2, y: 4 }, size: { w: 3, h: 2 } },
+  // Heatmap and countries
+  { id: 'revenue-heatmap', type: 'heatmap', title: 'Revenue Heatmap', config: { dataSource: 'daily' }, position: { x: 0, y: 4 }, size: { w: 3, h: 2 } },
+  { id: 'top-countries', type: 'countries', title: 'Top Countries', config: { dataSource: 'countries' }, position: { x: 3, y: 4 }, size: { w: 2, h: 2 } },
+  // Period table
+  { id: 'table-periods', type: 'table', title: 'Sale Performance Analysis', config: { dataSource: 'periods' }, position: { x: 0, y: 6 }, size: { w: 5, h: 2 } },
 ]
 
 export default function AnalyticsPage() {
@@ -606,22 +608,26 @@ export default function AnalyticsPage() {
     const [year, month, day] = dateStr.split('-').map(Number)
     const date = new Date(Date.UTC(year, month - 1, day))
 
-    // If we have more than 45 data points, we're showing monthly data
-    if (dailyData.length > 45) {
-      // For monthly view, show just "Jan 2024" in tooltips, but "Jan" for labels
+    // Check if this is monthly data by looking at the day component
+    // Monthly grouped data will have day=1
+    const isMonthlyData = day === 1 && dailyData.length <= 12
+
+    // For monthly aggregated data
+    if (isMonthlyData || dailyData.length > 45) {
       if (forLabel) {
+        // Bar labels: show just "Jan" without year
         return date.toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' })
       }
+      // Tooltips: show "Jan 2024" with year
       return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' })
     }
-    // For daily view, include day only if requested
+
+    // For daily view data
     if (includeDay) {
+      // Tooltips with full date and year
       return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })
     }
-    // For bar labels in daily view, show "Jan 1" with day number
-    if (forLabel) {
-      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
-    }
+    // Bar labels in daily view
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
   }
 
@@ -761,12 +767,14 @@ export default function AnalyticsPage() {
           {dailyData.length > 0 ? (
             <div className={styles.barChart}>
               {dailyData.map((day, idx) => {
-                const tooltipText = isMonthlyView
-                  ? `${formatDate(day.date)}\nRevenue: ${formatCurrency(day.revenue)}\nUnits: ${formatNumber(day.units)}`
-                  : `${formatDate(day.date, true)}\nRevenue: ${formatCurrency(day.revenue)}\nUnits: ${formatNumber(day.units)}${day.isSale ? '\n🏷️ Sale Period' : ''}`
-
                 return (
-                  <div key={idx} className={styles.barColumn} title={tooltipText}>
+                  <div key={idx} className={styles.barColumn}>
+                    <div className={styles.barTooltip}>
+                      <div>{formatDate(day.date)}</div>
+                      <div><strong>Revenue:</strong> {formatCurrency(day.revenue)}</div>
+                      <div><strong>Units:</strong> {formatNumber(day.units)}</div>
+                      {day.isSale && <div>🏷️ Sale Period</div>}
+                    </div>
                     <div className={styles.barWrapper}>
                       <div
                         className={styles.bar}
@@ -995,6 +1003,84 @@ export default function AnalyticsPage() {
     )
   }
 
+  // Render heatmap widget
+  const renderHeatmapWidget = (widget: DashboardWidget) => {
+    if (!performanceData.length) {
+      return (
+        <div className={styles.chartCard}>
+          <h3 className={styles.chartTitle}>{widget.title}</h3>
+          <div className={styles.noChartData}>No data available</div>
+        </div>
+      )
+    }
+
+    // Create a day-of-week vs week heatmap
+    const heatmapData: { date: string; dayOfWeek: number; week: number; revenue: number }[] = []
+    const dateMap = new Map<string, number>()
+
+    performanceData.forEach(row => {
+      const revenue = toNumber(row.net_steam_sales_usd)
+      dateMap.set(row.date, (dateMap.get(row.date) || 0) + revenue)
+    })
+
+    dateMap.forEach((revenue, dateStr) => {
+      const [year, month, day] = dateStr.split('-').map(Number)
+      const date = new Date(Date.UTC(year, month - 1, day))
+      const dayOfWeek = date.getUTCDay() // 0 = Sunday
+      const weekOfYear = Math.floor((date.getTime() - new Date(date.getUTCFullYear(), 0, 1).getTime()) / (7 * 24 * 60 * 60 * 1000))
+
+      heatmapData.push({ date: dateStr, dayOfWeek, week: weekOfYear, revenue })
+    })
+
+    const maxRevenue = Math.max(...heatmapData.map(d => d.revenue), 1)
+    const weekSet = new Set(heatmapData.map(d => d.week))
+    const weeks = Array.from(weekSet).sort((a, b) => a - b).slice(-20) // Last 20 weeks
+    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+
+    return (
+      <div className={styles.chartCard}>
+        <h3 className={styles.chartTitle}>{widget.title}</h3>
+        <div className={styles.heatmapContainer}>
+          <div className={styles.heatmapGrid}>
+            {days.map((day, dayIdx) => (
+              <div key={dayIdx} className={styles.heatmapRow}>
+                <div className={styles.heatmapLabel}>{day}</div>
+                {weeks.map(week => {
+                  const cell = heatmapData.find(d => d.week === week && d.dayOfWeek === dayIdx)
+                  const intensity = cell ? (cell.revenue / maxRevenue) : 0
+                  const color = intensity === 0 ? '#f1f5f9' :
+                    intensity < 0.25 ? '#dbeafe' :
+                    intensity < 0.5 ? '#93c5fd' :
+                    intensity < 0.75 ? '#3b82f6' : '#1e40af'
+
+                  return (
+                    <div
+                      key={week}
+                      className={styles.heatmapCell}
+                      style={{ backgroundColor: color }}
+                      title={cell ? `${cell.date}\n${formatCurrency(cell.revenue)}` : 'No data'}
+                    />
+                  )
+                })}
+              </div>
+            ))}
+          </div>
+          <div className={styles.heatmapLegend}>
+            <span style={{ fontSize: '11px', color: '#64748b' }}>Less</span>
+            {[0, 0.25, 0.5, 0.75, 1].map((intensity, idx) => {
+              const color = intensity === 0 ? '#f1f5f9' :
+                intensity < 0.25 ? '#dbeafe' :
+                intensity < 0.5 ? '#93c5fd' :
+                intensity < 0.75 ? '#3b82f6' : '#1e40af'
+              return <div key={idx} style={{ width: '14px', height: '14px', backgroundColor: color, borderRadius: '2px' }} />
+            })}
+            <span style={{ fontSize: '11px', color: '#64748b' }}>More</span>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   // Render widget based on type
   const renderWidget = (widget: DashboardWidget) => {
     switch (widget.type) {
@@ -1004,6 +1090,7 @@ export default function AnalyticsPage() {
       case 'countries': return renderCountriesWidget(widget)
       case 'growth': return renderGrowthWidget(widget)
       case 'avg-price': return renderAvgPriceWidget(widget)
+      case 'heatmap': return renderHeatmapWidget(widget)
       case 'table': return renderTableWidget(widget)
       default: return null
     }
@@ -1243,8 +1330,28 @@ export default function AnalyticsPage() {
               ))}
             </div>
 
-            {/* Countries and Table Section */}
+            {/* Heatmap and Countries Section */}
             <div className={styles.bottomSection}>
+              {widgets.filter(w => w.type === 'heatmap').map(widget => (
+                <div
+                  key={widget.id}
+                  className={`${styles.widgetWrapper} ${isEditMode ? styles.editableWidget : ''}`}
+                  draggable={isEditMode}
+                  onDragStart={() => handleDragStart(widget.id)}
+                  onDragEnd={handleDragEnd}
+                >
+                  {isEditMode && (
+                    <div className={styles.widgetControls}>
+                      <button className={styles.widgetDeleteBtn} onClick={() => handleDeleteWidget(widget.id)} title="Delete widget">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
+                  )}
+                  {renderWidget(widget)}
+                </div>
+              ))}
               {widgets.filter(w => w.type === 'countries').map(widget => (
                 <div
                   key={widget.id}
