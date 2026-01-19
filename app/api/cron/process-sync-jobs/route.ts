@@ -7,7 +7,7 @@ const supabase = createClient(
 );
 
 const STEAM_PARTNER_API = 'https://partner.steam-api.com';
-const MAX_DATES_PER_RUN = 30; // Process 30 dates per cron execution
+const MAX_DATES_PER_RUN = 5; // Process 5 dates per cron execution to avoid timeout
 
 // This endpoint will be called by Vercel Cron
 // It processes one pending job at a time
@@ -38,6 +38,22 @@ export async function GET(request: Request) {
     }
 
     console.log('[Cron] Starting sync job processor');
+
+    // Reset stuck jobs (running for > 10 minutes)
+    const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+    const { data: stuckJobs } = await supabase
+      .from('sync_jobs')
+      .select('id')
+      .eq('status', 'running')
+      .lt('started_at', tenMinutesAgo);
+
+    if (stuckJobs && stuckJobs.length > 0) {
+      console.log(`[Cron] Resetting ${stuckJobs.length} stuck jobs`);
+      await supabase
+        .from('sync_jobs')
+        .update({ status: 'pending', started_at: null })
+        .in('id', stuckJobs.map(j => j.id));
+    }
 
     // Get one pending job (oldest first)
     const { data: job, error: jobError } = await supabase
@@ -150,12 +166,15 @@ export async function GET(request: Request) {
 
     for (const dateStr of datesToProcess) {
       try {
+        console.log(`[Cron] Starting to process date: ${dateStr}`);
         const result = await processSingleDate(financialApiKey, dateStr, job.client_id);
+        console.log(`[Cron] Completed ${dateStr}: imported=${result.imported}, skipped=${result.skipped}`);
         totalImported += result.imported;
         totalSkipped += result.skipped;
       } catch (error) {
         const errorMsg = `Error processing ${dateStr}: ${error instanceof Error ? error.message : String(error)}`;
-        console.error(errorMsg);
+        console.error(`[Cron] ${errorMsg}`);
+        console.error('[Cron] Full error:', error);
         errors.push(errorMsg);
       }
     }
@@ -250,11 +269,13 @@ async function processSingleDate(
   // Use GetDetailedSales endpoint (same as the working sync route)
   const url = `${STEAM_PARTNER_API}/IPartnerFinancialsService/GetDetailedSales/v001/?key=${apiKey}&date=${dateStr}&highwatermark_id=0`;
   console.log(`[Cron] Fetching data for date: ${dateStr}`);
+  console.log(`[Cron] API URL: ${url.replace(apiKey, 'REDACTED')}`);
   const response = await fetch(url);
 
   if (!response.ok) {
     const errorText = await response.text();
-    console.error(`[Cron] Steam API error for ${dateStr}: ${response.status} - ${errorText}`);
+    console.error(`[Cron] Steam API error for ${dateStr}: ${response.status}`);
+    console.error(`[Cron] Error body: ${errorText}`);
     throw new Error(`Steam API returned status ${response.status} for date ${dateStr}`);
   }
 
