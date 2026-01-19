@@ -481,7 +481,7 @@ export default function SettingsPage() {
               </div>
             ) : (
               <div className={styles.keysList}>
-                {apiKeys.map((key) => (
+                {apiKeys?.map((key) => (
                   <div key={key.id} className={styles.keyCard}>
                     <div className={styles.keyInfo}>
                       <span className={styles.clientBadge}>{key.clients?.name || 'Unknown Client'}</span>
@@ -645,13 +645,13 @@ export default function SettingsPage() {
                 onChange={e => setFormData({...formData, client_id: e.target.value})}
               >
                 <option value="">Select a client...</option>
-                {clients.map(client => (
+                {clients?.map(client => (
                   <option key={client.id} value={client.id}>
                     {client.name}
                   </option>
                 ))}
               </select>
-              <small>{availableClients.length} clients without API keys</small>
+              <small>{availableClients?.length || 0} clients without API keys</small>
             </div>
 
             <div className={styles.formGroup}>
