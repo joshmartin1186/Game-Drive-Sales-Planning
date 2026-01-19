@@ -1288,3 +1288,12 @@
   opacity: 0.6;
   cursor: not-allowed;
 }
+
+/* Line Chart for Revenue Per Unit */
+.lineChart {
+  position: relative;
+  width: 100%;
+  background: #f8fafc;
+  border-radius: 8px;
+  padding: 10px;
+}

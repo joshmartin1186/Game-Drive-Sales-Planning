@@ -61,6 +61,25 @@ interface RegionData {
   percentage: number
 }
 
+interface CountryData {
+  country: string
+  revenue: number
+  units: number
+  percentage: number
+  avgPrice: number
+}
+
+interface GrowthData {
+  currentRevenue: number
+  currentUnits: number
+  previousRevenue: number
+  previousUnits: number
+  revenueGrowth: number
+  unitsGrowth: number
+  avgPriceCurrent: number
+  avgPricePrevious: number
+}
+
 interface PeriodData {
   name: string
   startDate: string
@@ -85,7 +104,7 @@ interface CurrentPeriodState {
 // Widget Types for editable dashboard
 interface DashboardWidget {
   id: string
-  type: 'stat' | 'chart' | 'table' | 'region'
+  type: 'stat' | 'chart' | 'table' | 'region' | 'countries' | 'growth' | 'avg-price'
   title: string
   config: {
     statKey?: string
@@ -200,11 +219,15 @@ const DEFAULT_WIDGETS: DashboardWidget[] = [
   { id: 'stat-avg-rev', type: 'stat', title: 'Avg Daily Revenue', config: { statKey: 'avgDailyRevenue' }, position: { x: 2, y: 0 }, size: { w: 1, h: 1 } },
   { id: 'stat-avg-units', type: 'stat', title: 'Avg Daily Units', config: { statKey: 'avgDailyUnits' }, position: { x: 3, y: 0 }, size: { w: 1, h: 1 } },
   { id: 'stat-refund', type: 'stat', title: 'Refund Rate', config: { statKey: 'refundRate' }, position: { x: 4, y: 0 }, size: { w: 1, h: 1 } },
+  // Growth indicators row
+  { id: 'growth-metrics', type: 'growth', title: 'Period Growth', config: { dataSource: 'growth' }, position: { x: 0, y: 1 }, size: { w: 2, h: 1 } },
+  { id: 'avg-price', type: 'avg-price', title: 'Revenue Per Unit', config: { dataSource: 'avgPrice' }, position: { x: 2, y: 1 }, size: { w: 3, h: 1 } },
   // Charts row - wider revenue chart, regions on right
-  { id: 'chart-revenue', type: 'chart', title: 'Revenue Over Time', config: { chartType: 'bar', dataSource: 'daily' }, position: { x: 0, y: 1 }, size: { w: 3, h: 2 } },
-  { id: 'chart-region', type: 'region', title: 'Revenue by Region', config: { dataSource: 'region' }, position: { x: 3, y: 1 }, size: { w: 2, h: 2 } },
-  // Period comparison table
-  { id: 'table-periods', type: 'table', title: 'Sale Performance Analysis', config: { dataSource: 'periods' }, position: { x: 0, y: 3 }, size: { w: 5, h: 2 } },
+  { id: 'chart-revenue', type: 'chart', title: 'Revenue Over Time', config: { chartType: 'bar', dataSource: 'daily' }, position: { x: 0, y: 2 }, size: { w: 3, h: 2 } },
+  { id: 'chart-region', type: 'region', title: 'Revenue by Region', config: { dataSource: 'region' }, position: { x: 3, y: 2 }, size: { w: 2, h: 2 } },
+  // Top countries and period table
+  { id: 'top-countries', type: 'countries', title: 'Top Countries', config: { dataSource: 'countries' }, position: { x: 0, y: 4 }, size: { w: 2, h: 2 } },
+  { id: 'table-periods', type: 'table', title: 'Sale Performance Analysis', config: { dataSource: 'periods' }, position: { x: 2, y: 4 }, size: { w: 3, h: 2 } },
 ]
 
 export default function AnalyticsPage() {
@@ -386,10 +409,10 @@ export default function AnalyticsPage() {
   // Compute regional breakdown
   const regionData = useMemo((): RegionData[] => {
     if (!performanceData.length) return []
-    
+
     const byRegion = new Map<string, { revenue: number; units: number }>()
     let totalRevenue = 0
-    
+
     performanceData.forEach(row => {
       const region = row.region || 'Unknown'
       const existing = byRegion.get(region) || { revenue: 0, units: 0 }
@@ -400,7 +423,7 @@ export default function AnalyticsPage() {
       })
       totalRevenue += rowRevenue
     })
-    
+
     return Array.from(byRegion.entries())
       .map(([region, data]) => ({
         region,
@@ -410,6 +433,75 @@ export default function AnalyticsPage() {
       }))
       .sort((a, b) => b.revenue - a.revenue)
   }, [performanceData])
+
+  // Compute top countries
+  const countryData = useMemo((): CountryData[] => {
+    if (!performanceData.length) return []
+
+    const byCountry = new Map<string, { revenue: number; units: number }>()
+    let totalRevenue = 0
+
+    performanceData.forEach(row => {
+      const country = row.country || row.country_code || 'Unknown'
+      const existing = byCountry.get(country) || { revenue: 0, units: 0 }
+      const rowRevenue = toNumber(row.net_steam_sales_usd)
+      const rowUnits = toNumber(row.net_units_sold)
+      byCountry.set(country, {
+        revenue: existing.revenue + rowRevenue,
+        units: existing.units + rowUnits
+      })
+      totalRevenue += rowRevenue
+    })
+
+    return Array.from(byCountry.entries())
+      .map(([country, data]) => ({
+        country,
+        revenue: data.revenue,
+        units: data.units,
+        percentage: safeDivide(data.revenue, totalRevenue) * 100,
+        avgPrice: safeDivide(data.revenue, data.units)
+      }))
+      .sort((a, b) => b.revenue - a.revenue)
+      .slice(0, 10) // Top 10
+  }, [performanceData])
+
+  // Compute growth metrics (current period vs previous period)
+  const growthData = useMemo((): GrowthData | null => {
+    if (!dailyData.length || dailyData.length < 2) return null
+
+    // Split the data into two halves
+    const midpoint = Math.floor(dailyData.length / 2)
+    const previousPeriod = dailyData.slice(0, midpoint)
+    const currentPeriod = dailyData.slice(midpoint)
+
+    const previousRevenue = previousPeriod.reduce((sum, d) => sum + d.revenue, 0)
+    const previousUnits = previousPeriod.reduce((sum, d) => sum + d.units, 0)
+    const currentRevenue = currentPeriod.reduce((sum, d) => sum + d.revenue, 0)
+    const currentUnits = currentPeriod.reduce((sum, d) => sum + d.units, 0)
+
+    return {
+      currentRevenue,
+      currentUnits,
+      previousRevenue,
+      previousUnits,
+      revenueGrowth: safeDivide(currentRevenue - previousRevenue, previousRevenue) * 100,
+      unitsGrowth: safeDivide(currentUnits - previousUnits, previousUnits) * 100,
+      avgPriceCurrent: safeDivide(currentRevenue, currentUnits),
+      avgPricePrevious: safeDivide(previousRevenue, previousUnits)
+    }
+  }, [dailyData])
+
+  // Compute revenue per unit over time
+  const avgPriceData = useMemo(() => {
+    if (!dailyData.length) return []
+
+    return dailyData.map(day => ({
+      date: day.date,
+      avgPrice: safeDivide(day.revenue, day.units),
+      revenue: day.revenue,
+      units: day.units
+    }))
+  }, [dailyData])
 
   const pushPeriod = (periods: PeriodData[], period: CurrentPeriodState): void => {
     if (period.dates.length > 0) {
@@ -770,12 +862,141 @@ export default function AnalyticsPage() {
     )
   }
 
+  // Render top countries widget
+  const renderCountriesWidget = (widget: DashboardWidget) => {
+    const maxCountryRevenue = countryData.length > 0 ? countryData[0].revenue : 1
+
+    return (
+      <div className={styles.chartCard}>
+        <h3 className={styles.chartTitle}>{widget.title}</h3>
+        <div className={styles.horizontalBarChart}>
+          {countryData.length > 0 ? countryData.map((country, idx) => (
+            <div key={idx} className={styles.horizontalBarRow}>
+              <span className={styles.horizontalBarLabel}>{country.country}</span>
+              <div className={styles.horizontalBarWrapper}>
+                <div
+                  className={styles.horizontalBar}
+                  style={{ width: `${(country.revenue / maxCountryRevenue) * 100}%` }}
+                />
+                <span className={styles.horizontalBarValue}>
+                  {formatCurrency(country.revenue)} ({country.percentage.toFixed(1)}%)
+                </span>
+              </div>
+            </div>
+          )) : (
+            <div className={styles.noChartData}>No country data available</div>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  // Render growth metrics widget
+  const renderGrowthWidget = (widget: DashboardWidget) => {
+    if (!growthData) {
+      return (
+        <div className={styles.chartCard}>
+          <h3 className={styles.chartTitle}>{widget.title}</h3>
+          <div className={styles.noChartData}>Insufficient data for growth comparison</div>
+        </div>
+      )
+    }
+
+    const revenuePositive = growthData.revenueGrowth >= 0
+    const unitsPositive = growthData.unitsGrowth >= 0
+
+    return (
+      <div className={styles.chartCard}>
+        <h3 className={styles.chartTitle}>{widget.title}</h3>
+        <div style={{ padding: '20px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+          <div>
+            <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '8px' }}>Revenue Growth</div>
+            <div style={{ fontSize: '24px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ color: revenuePositive ? '#16a34a' : '#dc2626' }}>
+                {revenuePositive ? '↑' : '↓'} {Math.abs(growthData.revenueGrowth).toFixed(1)}%
+              </span>
+            </div>
+            <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '4px' }}>
+              {formatCurrency(growthData.previousRevenue)} → {formatCurrency(growthData.currentRevenue)}
+            </div>
+          </div>
+          <div>
+            <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '8px' }}>Units Growth</div>
+            <div style={{ fontSize: '24px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ color: unitsPositive ? '#16a34a' : '#dc2626' }}>
+                {unitsPositive ? '↑' : '↓'} {Math.abs(growthData.unitsGrowth).toFixed(1)}%
+              </span>
+            </div>
+            <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '4px' }}>
+              {formatNumber(growthData.previousUnits)} → {formatNumber(growthData.currentUnits)}
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Render average price widget
+  const renderAvgPriceWidget = (widget: DashboardWidget) => {
+    if (!avgPriceData.length) {
+      return (
+        <div className={styles.chartCard}>
+          <h3 className={styles.chartTitle}>{widget.title}</h3>
+          <div className={styles.noChartData}>No data available</div>
+        </div>
+      )
+    }
+
+    const maxPrice = Math.max(...avgPriceData.map(d => d.avgPrice))
+    const minPrice = Math.min(...avgPriceData.map(d => d.avgPrice))
+    const avgPrice = avgPriceData.reduce((sum, d) => sum + d.avgPrice, 0) / avgPriceData.length
+
+    return (
+      <div className={styles.chartCard}>
+        <h3 className={styles.chartTitle}>{widget.title}</h3>
+        <div style={{ padding: '20px' }}>
+          <div style={{ display: 'flex', gap: '30px', marginBottom: '20px' }}>
+            <div>
+              <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '4px' }}>Average</div>
+              <div style={{ fontSize: '20px', fontWeight: '600' }}>{formatCurrency(avgPrice)}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '4px' }}>Min</div>
+              <div style={{ fontSize: '20px', fontWeight: '600', color: '#16a34a' }}>{formatCurrency(minPrice)}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '4px' }}>Max</div>
+              <div style={{ fontSize: '20px', fontWeight: '600', color: '#dc2626' }}>{formatCurrency(maxPrice)}</div>
+            </div>
+          </div>
+          <div className={styles.lineChart} style={{ height: '120px' }}>
+            <svg width="100%" height="100%" viewBox="0 0 500 120" preserveAspectRatio="none">
+              <polyline
+                fill="none"
+                stroke="#3b82f6"
+                strokeWidth="2"
+                points={avgPriceData.map((d, i) => {
+                  const x = (i / (avgPriceData.length - 1)) * 500
+                  const y = 120 - ((d.avgPrice - minPrice) / (maxPrice - minPrice || 1)) * 110
+                  return `${x},${y}`
+                }).join(' ')}
+              />
+            </svg>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   // Render widget based on type
   const renderWidget = (widget: DashboardWidget) => {
     switch (widget.type) {
       case 'stat': return renderStatWidget(widget)
       case 'chart': return renderChartWidget(widget)
       case 'region': return renderRegionWidget(widget)
+      case 'countries': return renderCountriesWidget(widget)
+      case 'growth': return renderGrowthWidget(widget)
+      case 'avg-price': return renderAvgPriceWidget(widget)
       case 'table': return renderTableWidget(widget)
       default: return null
     }
