@@ -326,12 +326,13 @@ export default function AnalyticsPage() {
     fetchPerformanceData()
   }, [fetchPerformanceData])
 
-  // Compute daily time series data
+  // Compute daily time series data with smart grouping
   const dailyData = useMemo((): DailyData[] => {
     if (!performanceData.length) return []
-    
+
+    // First aggregate by day
     const byDate = new Map<string, { revenue: number; units: number; hasSale: boolean }>()
-    
+
     performanceData.forEach(row => {
       const existing = byDate.get(row.date) || { revenue: 0, units: 0, hasSale: false }
       const rowIsSale = isSalePrice(row.base_price_usd, row.sale_price_usd)
@@ -341,8 +342,8 @@ export default function AnalyticsPage() {
         hasSale: existing.hasSale || rowIsSale
       })
     })
-    
-    return Array.from(byDate.entries())
+
+    const dailyEntries = Array.from(byDate.entries())
       .map(([date, data]) => ({
         date,
         revenue: data.revenue,
@@ -350,6 +351,33 @@ export default function AnalyticsPage() {
         isSale: data.hasSale
       }))
       .sort((a, b) => a.date.localeCompare(b.date))
+
+    // If more than 60 days, group by month for better visualization
+    if (dailyEntries.length > 60) {
+      const byMonth = new Map<string, { revenue: number; units: number; hasSale: boolean }>()
+
+      dailyEntries.forEach(entry => {
+        // Get YYYY-MM format
+        const monthKey = entry.date.substring(0, 7) + '-01'
+        const existing = byMonth.get(monthKey) || { revenue: 0, units: 0, hasSale: false }
+        byMonth.set(monthKey, {
+          revenue: existing.revenue + entry.revenue,
+          units: existing.units + entry.units,
+          hasSale: existing.hasSale || entry.isSale
+        })
+      })
+
+      return Array.from(byMonth.entries())
+        .map(([date, data]) => ({
+          date,
+          revenue: data.revenue,
+          units: data.units,
+          isSale: data.hasSale
+        }))
+        .sort((a, b) => a.date.localeCompare(b.date))
+    }
+
+    return dailyEntries
   }, [performanceData])
 
   // Compute regional breakdown
@@ -480,6 +508,10 @@ export default function AnalyticsPage() {
 
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr)
+    // If we have more than 60 data points, we're showing monthly data
+    if (dailyData.length > 60) {
+      return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+    }
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
   }
 
