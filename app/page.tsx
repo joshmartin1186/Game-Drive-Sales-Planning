@@ -3,8 +3,8 @@
 // Cache invalidation: 2026-01-12T19:15:00Z - Added PageToggle navigation
 
 import { useState, useEffect, useMemo, useCallback } from 'react'
-import { createClient } from '@supabase/supabase-js'
 import { parseISO, format, addDays } from 'date-fns'
+import { supabase } from '@/lib/supabase'
 import GanttChart from './components/GanttChart'
 import SalesTable from './components/SalesTable'
 import AddSaleModal from './components/AddSaleModal'
@@ -27,10 +27,6 @@ import { useUndo } from '@/lib/undo-context'
 import { normalizeToLocalDate } from '@/lib/dateUtils'
 import styles from './page.module.css'
 import { Sale, Platform, Product, Game, Client, SaleWithDetails, PlatformEvent } from '@/lib/types'
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
-const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
 interface SalePrefill { productId: string; platformId: string; startDate: string; endDate: string; directCreate?: boolean; saleName?: string; discountPercentage?: number; saleType?: string }
 interface CalendarGenerationState { productId: string; productName: string; launchDate: string }

@@ -1,14 +1,10 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { createClient } from '@supabase/supabase-js'
 import { format, parseISO } from 'date-fns'
+import { supabase } from '@/lib/supabase'
 import { SaleWithDetails, Platform } from '@/lib/types'
 import styles from './VersionManager.module.css'
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
-const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
 interface CalendarVersion {
   id: string
