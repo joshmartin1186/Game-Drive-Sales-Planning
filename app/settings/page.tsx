@@ -423,7 +423,7 @@ export default function SettingsPage() {
 
   // Get clients that don't have an API key yet
   const availableClients = clients.filter(
-    client => !apiKeys.some(key => key.client_id === client.id)
+    client => !apiKeys?.some(key => key.client_id === client.id)
   );
 
   return (
@@ -468,7 +468,7 @@ export default function SettingsPage() {
                 <div className={styles.spinner}></div>
                 <p>Loading...</p>
               </div>
-            ) : apiKeys.length === 0 ? (
+            ) : !apiKeys || apiKeys.length === 0 ? (
               <div className={styles.emptyState}>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                   <rect x="3" y="11" width="18" height="11" rx="2"/>
