@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { serverSupabase as supabase } from '@/lib/supabase';
 
 // GET - Fetch all Steam API keys with client info
 export async function GET() {

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { serverSupabase as supabase } from '@/lib/supabase';
 
 // POST - Trigger a background Steam sync job
 export async function POST(request: Request) {

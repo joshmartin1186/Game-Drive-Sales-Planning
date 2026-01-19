@@ -1,17 +1,27 @@
 import { createClient } from '@supabase/supabase-js'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
 if (!supabaseUrl) {
   throw new Error('Missing env.NEXT_PUBLIC_SUPABASE_URL')
 }
 
-if (!supabaseKey) {
+if (!supabaseAnonKey) {
   throw new Error('Missing env.NEXT_PUBLIC_SUPABASE_ANON_KEY')
 }
 
-export const supabase = createClient(supabaseUrl, supabaseKey)
+// Client-side Supabase client with anon key
+export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+
+// Server-side Supabase client with service role key (for API routes)
+// Use service role key if available (server-side), otherwise fallback to anon key
+const isServer = typeof window === 'undefined'
+const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+
+export const serverSupabase = isServer && serviceRoleKey
+  ? createClient(supabaseUrl, serviceRoleKey)
+  : supabase
 
 // Database types based on our schema
 export interface Client {

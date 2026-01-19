@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { serverSupabase as supabase } from '@/lib/supabase';
 
 // GET - Check status of a sync job
 export async function GET(request: Request) {

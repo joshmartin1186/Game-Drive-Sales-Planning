@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { serverSupabase as supabase } from '@/lib/supabase';
 
 const STEAM_PARTNER_API = 'https://partner.steam-api.com';
 const MAX_DATES_PER_RUN = 1; // Process 1 date per cron execution to avoid timeout
