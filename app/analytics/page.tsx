@@ -244,7 +244,7 @@ export default function AnalyticsPage() {
     setIsLoading(true)
     try {
       let query = supabase
-        .from('steam_performance_data')
+        .from('steam_performance_data_view')
         .select('*')
         .order('date', { ascending: true })
 
