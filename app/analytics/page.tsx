@@ -384,8 +384,12 @@ export default function AnalyticsPage() {
       }))
       .sort((a, b) => a.date.localeCompare(b.date))
 
-    // If more than 45 days, group by month for better visualization
-    if (dailyEntries.length > 45) {
+    // Only group by month for longer periods (90D+, YTD, All Time)
+    // Keep daily granularity for 7D, 30D, 60D
+    const isDailyView = selectedDatePreset === '7d' || selectedDatePreset === '30d' || selectedDatePreset === '60d'
+    const shouldGroupByMonth = !isDailyView && dailyEntries.length > 45
+
+    if (shouldGroupByMonth) {
       const byMonth = new Map<string, { revenue: number; units: number; hasSale: boolean }>()
 
       dailyEntries.forEach(entry => {
@@ -410,7 +414,7 @@ export default function AnalyticsPage() {
     }
 
     return dailyEntries
-  }, [performanceData])
+  }, [performanceData, selectedDatePreset])
 
   // Compute regional breakdown
   const regionData = useMemo((): RegionData[] => {
@@ -989,29 +993,40 @@ export default function AnalyticsPage() {
             </svg>
 
             {/* Hover tooltip */}
-            {hoveredLinePoint !== null && (
-              <div style={{
-                position: 'absolute',
-                left: `${(hoveredLinePoint.x / width) * 100}%`,
-                top: `${(hoveredLinePoint.y / height) * 100 - 10}%`,
-                transform: 'translate(-50%, -100%)',
-                backgroundColor: 'white',
-                padding: '8px 12px',
-                borderRadius: '6px',
-                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
-                border: '1px solid #e2e8f0',
-                pointerEvents: 'none',
-                zIndex: 10,
-                whiteSpace: 'nowrap'
-              }}>
-                <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '2px' }}>
-                  {formatDate(sampledData[hoveredLinePoint.index].date)}
+            {hoveredLinePoint !== null && (() => {
+              // Calculate tooltip position with bounds checking
+              const tooltipWidth = 120 // approximate width
+              const leftPercent = (hoveredLinePoint.x / width) * 100
+              const topPercent = (hoveredLinePoint.y / height) * 100
+
+              // Keep tooltip within container bounds
+              const adjustedLeft = Math.min(Math.max(leftPercent, 10), 90)
+              const adjustedTop = Math.max(topPercent - 15, 5)
+
+              return (
+                <div style={{
+                  position: 'absolute',
+                  left: `${adjustedLeft}%`,
+                  top: `${adjustedTop}%`,
+                  transform: 'translate(-50%, -100%)',
+                  backgroundColor: 'white',
+                  padding: '8px 12px',
+                  borderRadius: '6px',
+                  boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+                  border: '1px solid #e2e8f0',
+                  pointerEvents: 'none',
+                  zIndex: 10,
+                  whiteSpace: 'nowrap'
+                }}>
+                  <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '2px' }}>
+                    {formatDate(sampledData[hoveredLinePoint.index].date)}
+                  </div>
+                  <div style={{ fontSize: '16px', fontWeight: '700', color: '#1e293b' }}>
+                    {formatCurrency(sampledData[hoveredLinePoint.index].revenue)}
+                  </div>
                 </div>
-                <div style={{ fontSize: '16px', fontWeight: '700', color: '#1e293b' }}>
-                  {formatCurrency(sampledData[hoveredLinePoint.index].revenue)}
-                </div>
-              </div>
-            )}
+              )
+            })()}
           </div>
         </div>
       )
