@@ -424,6 +424,29 @@
   opacity: 1;
 }
 
+.widgetEditBtn {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: #dbeafe;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.widgetEditBtn:hover {
+  background: #bfdbfe;
+}
+
+.widgetEditBtn svg {
+  width: 16px;
+  height: 16px;
+  color: #2563eb;
+}
+
 .widgetDeleteBtn {
   width: 28px;
   height: 28px;

@@ -244,6 +244,7 @@ export default function AnalyticsPage() {
   const [selectedPlatform, setSelectedPlatform] = useState<string>('all')
   const [hoveredPieSlice, setHoveredPieSlice] = useState<number | null>(null)
   const [hoveredLinePoint, setHoveredLinePoint] = useState<{ index: number; x: number; y: number } | null>(null)
+  const [editingWidget, setEditingWidget] = useState<DashboardWidget | null>(null)
   const [products, setProducts] = useState<string[]>([])
   const [clients, setClients] = useState<{id: string, name: string}[]>([])
   const [regions, setRegions] = useState<string[]>([])
@@ -787,6 +788,12 @@ export default function AnalyticsPage() {
 
   const resetLayout = () => {
     setWidgets(DEFAULT_WIDGETS)
+  }
+
+  const handleSaveWidget = (updatedWidget: DashboardWidget) => {
+    setWidgets(prev => prev.map(w => w.id === updatedWidget.id ? updatedWidget : w))
+    localStorage.setItem('gamedrive-dashboard-layout-v2', JSON.stringify(widgets))
+    setEditingWidget(null)
   }
 
   // Load saved layout
@@ -1978,8 +1985,13 @@ export default function AnalyticsPage() {
                 >
                   {isEditMode && (
                     <div className={styles.widgetControls}>
+                      <button className={styles.widgetEditBtn} onClick={() => setEditingWidget(widget)} title="Edit widget">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="16" height="16">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                      </button>
                       <button className={styles.widgetDeleteBtn} onClick={() => handleDeleteWidget(widget.id)} title="Delete widget">
-                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="16" height="16">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                         </svg>
                       </button>
@@ -2002,8 +2014,13 @@ export default function AnalyticsPage() {
                 >
                   {isEditMode && (
                     <div className={styles.widgetControls}>
+                      <button className={styles.widgetEditBtn} onClick={() => setEditingWidget(widget)} title="Edit widget">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="16" height="16">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                      </button>
                       <button className={styles.widgetDeleteBtn} onClick={() => handleDeleteWidget(widget.id)} title="Delete widget">
-                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="16" height="16">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                         </svg>
                       </button>
@@ -2034,6 +2051,14 @@ export default function AnalyticsPage() {
           <AddWidgetModal
             onClose={() => setShowAddWidgetModal(false)}
             onAdd={handleAddWidget}
+          />
+        )}
+
+        {editingWidget && (
+          <EditWidgetModal
+            widget={editingWidget}
+            onClose={() => setEditingWidget(null)}
+            onSave={handleSaveWidget}
           />
         )}
       </div>
@@ -2101,6 +2126,118 @@ function AddWidgetModal({ onClose, onAdd }: { onClose: () => void; onAdd: (type:
             onClick={() => onAdd(selectedType, title || widgetTypes.find(w => w.type === selectedType)?.name || 'Widget')}
           >
             Add Widget
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Edit Widget Modal
+function EditWidgetModal({ widget, onClose, onSave }: {
+  widget: DashboardWidget;
+  onClose: () => void;
+  onSave: (widget: DashboardWidget) => void
+}) {
+  const [title, setTitle] = useState(widget.title)
+  const [chartType, setChartType] = useState(widget.config.chartType || 'bar')
+  const [statKey, setStatKey] = useState(widget.config.statKey || 'totalRevenue')
+
+  const handleSave = () => {
+    const updatedWidget: DashboardWidget = {
+      ...widget,
+      title,
+      config: {
+        ...widget.config,
+        ...(widget.type === 'stat' ? { statKey } : { chartType })
+      }
+    }
+    onSave(updatedWidget)
+  }
+
+  const statOptions = [
+    { value: 'totalRevenue', label: 'Total Revenue' },
+    { value: 'totalUnits', label: 'Total Units' },
+    { value: 'avgDailyRevenue', label: 'Average Daily Revenue' },
+    { value: 'avgDailyUnits', label: 'Average Daily Units' },
+    { value: 'refundRate', label: 'Refund Rate' }
+  ]
+
+  const chartTypeOptions = [
+    { value: 'bar', label: 'Bar Chart' },
+    { value: 'line', label: 'Line Chart' },
+    { value: 'pie', label: 'Pie Chart' }
+  ]
+
+  return (
+    <div className={styles.modalOverlay} onClick={onClose}>
+      <div className={styles.modal} onClick={e => e.stopPropagation()}>
+        <div className={styles.modalHeader}>
+          <h2 className={styles.modalTitle}>Edit Widget</h2>
+          <button className={styles.modalClose} onClick={onClose}>
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div className={styles.modalContent}>
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>Widget Title</label>
+            <input
+              type="text"
+              className={styles.formInput}
+              placeholder="Enter widget title..."
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+            />
+          </div>
+
+          {widget.type === 'stat' && (
+            <div className={styles.formGroup}>
+              <label className={styles.formLabel}>Metric</label>
+              <select
+                className={styles.formInput}
+                value={statKey}
+                onChange={(e) => setStatKey(e.target.value)}
+              >
+                {statOptions.map(opt => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {(widget.type === 'chart' || widget.type === 'pie') && (
+            <div className={styles.formGroup}>
+              <label className={styles.formLabel}>Chart Type</label>
+              <select
+                className={styles.formInput}
+                value={chartType}
+                onChange={(e) => setChartType(e.target.value as 'bar' | 'line' | 'pie')}
+              >
+                {chartTypeOptions.map(opt => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>Widget Type</label>
+            <div className={styles.formInput} style={{ backgroundColor: '#f8fafc', cursor: 'not-allowed' }}>
+              {widget.type}
+            </div>
+            <p style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>
+              Widget type cannot be changed after creation
+            </p>
+          </div>
+        </div>
+
+        <div className={styles.modalFooter}>
+          <button className={styles.cancelButton} onClick={onClose}>Cancel</button>
+          <button className={styles.importSubmitButton} onClick={handleSave}>
+            Save Changes
           </button>
         </div>
       </div>
