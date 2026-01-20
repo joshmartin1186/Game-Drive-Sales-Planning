@@ -214,20 +214,21 @@ function AnalyticsSidebar() {
 
 // Default dashboard layout - comprehensive view
 const DEFAULT_WIDGETS: DashboardWidget[] = [
-  // Top stats row (4 columns grid - each stat takes 1 column)
+  // Top stats row - 5 compact cards
   { id: 'stat-revenue', type: 'stat', title: 'Total Revenue', config: { statKey: 'totalRevenue' }, position: { x: 0, y: 0 }, size: { w: 1, h: 1 } },
   { id: 'stat-units', type: 'stat', title: 'Total Units', config: { statKey: 'totalUnits' }, position: { x: 1, y: 0 }, size: { w: 1, h: 1 } },
   { id: 'stat-avg-rev', type: 'stat', title: 'Avg Daily Revenue', config: { statKey: 'avgDailyRevenue' }, position: { x: 2, y: 0 }, size: { w: 1, h: 1 } },
   { id: 'stat-avg-units', type: 'stat', title: 'Avg Daily Units', config: { statKey: 'avgDailyUnits' }, position: { x: 3, y: 0 }, size: { w: 1, h: 1 } },
-  // Second row - new visualizations (2 widgets each taking 2 columns)
-  { id: 'growth-line-chart', type: 'growth-line', title: 'Period Growth', config: { chartType: 'line' }, position: { x: 0, y: 1 }, size: { w: 2, h: 1 } },
-  { id: 'revenue-pie-chart', type: 'pie', title: 'Revenue by Product', config: { chartType: 'pie' }, position: { x: 2, y: 1 }, size: { w: 2, h: 1 } },
+  { id: 'stat-refund', type: 'stat', title: 'Refund Rate', config: { statKey: 'refundRate' }, position: { x: 4, y: 0 }, size: { w: 1, h: 1 } },
+  // Charts row - 2 column grid (Period Growth + Revenue by Product)
+  { id: 'growth-line-chart', type: 'growth-line', title: 'Period Growth', config: { chartType: 'line' }, position: { x: 0, y: 1 }, size: { w: 1, h: 1 } },
+  { id: 'revenue-pie-chart', type: 'pie', title: 'Revenue by Product', config: { chartType: 'pie' }, position: { x: 1, y: 1 }, size: { w: 1, h: 1 } },
   // Revenue Over Time chart - full width
-  { id: 'chart-revenue', type: 'chart', title: 'Revenue Over Time', config: { chartType: 'bar', dataSource: 'daily' }, position: { x: 0, y: 2 }, size: { w: 4, h: 1 } },
-  // World map - full width, 2 rows tall
-  { id: 'world-map', type: 'world-map', title: 'Revenue by Country', config: { mapType: 'choropleth' }, position: { x: 0, y: 3 }, size: { w: 4, h: 2 } },
+  { id: 'chart-revenue', type: 'chart', title: 'Revenue Over Time', config: { chartType: 'bar', dataSource: 'daily' }, position: { x: 0, y: 2 }, size: { w: 2, h: 1 } },
+  // World map - full width
+  { id: 'world-map', type: 'world-map', title: 'Revenue by Country', config: { mapType: 'choropleth' }, position: { x: 0, y: 3 }, size: { w: 2, h: 1 } },
   // Sale Performance comparison - full width
-  { id: 'sale-performance', type: 'sale-comparison', title: 'Sale Performance Analysis', config: { chartType: 'stacked-bar' }, position: { x: 0, y: 5 }, size: { w: 4, h: 1 } },
+  { id: 'sale-performance', type: 'sale-comparison', title: 'Sale Performance Analysis', config: { chartType: 'stacked-bar' }, position: { x: 0, y: 4 }, size: { w: 2, h: 1 } },
 ]
 
 export default function AnalyticsPage() {
@@ -1857,41 +1858,52 @@ export default function AnalyticsPage() {
           </div>
         ) : (
           <>
-            <div ref={gridRef} className={styles.dashboardGrid}>
-              {widgets.map(widget => {
-                // Determine grid column span based on widget size
-                const getWidgetClass = () => {
-                  if (widget.size.w === 4) return styles.widgetSpan4
-                  if (widget.size.w === 3) return styles.widgetSpan3
-                  if (widget.size.w === 2) return styles.widgetSpan2
-                  return styles.widgetSpan1
-                }
+            {/* Stats Grid - Compact row at top */}
+            <div className={styles.statsGrid}>
+              {widgets.filter(w => w.type === 'stat').map(widget => (
+                <div
+                  key={widget.id}
+                  className={`${styles.widgetWrapper} ${isEditMode ? styles.editableWidget : ''} ${draggedWidget === widget.id ? styles.dragging : ''}`}
+                  draggable={isEditMode}
+                  onDragStart={() => handleDragStart(widget.id)}
+                  onDragEnd={handleDragEnd}
+                >
+                  {isEditMode && (
+                    <div className={styles.widgetControls}>
+                      <button className={styles.widgetDeleteBtn} onClick={() => handleDeleteWidget(widget.id)} title="Delete widget">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
+                  )}
+                  {renderWidget(widget)}
+                </div>
+              ))}
+            </div>
 
-                const getRowSpanClass = () => {
-                  return widget.size.h === 2 ? styles.widgetRowSpan2 : ''
-                }
-
-                return (
-                  <div
-                    key={widget.id}
-                    className={`${styles.widgetWrapper} ${getWidgetClass()} ${getRowSpanClass()} ${isEditMode ? styles.editableWidget : ''} ${draggedWidget === widget.id ? styles.dragging : ''}`}
-                    draggable={isEditMode}
-                    onDragStart={() => handleDragStart(widget.id)}
-                    onDragEnd={handleDragEnd}
-                  >
-                    {isEditMode && (
-                      <div className={styles.widgetControls}>
-                        <button className={styles.widgetDeleteBtn} onClick={() => handleDeleteWidget(widget.id)} title="Delete widget">
-                          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                          </svg>
-                        </button>
-                      </div>
-                    )}
-                    {renderWidget(widget)}
-                  </div>
-                )
-              })}
+            {/* Charts Grid - Visualization widgets */}
+            <div ref={gridRef} className={styles.chartsGrid}>
+              {widgets.filter(w => w.type !== 'stat').map(widget => (
+                <div
+                  key={widget.id}
+                  className={`${styles.widgetWrapper} ${widget.size.w === 2 ? styles.fullWidthWidget : ''} ${isEditMode ? styles.editableWidget : ''} ${draggedWidget === widget.id ? styles.dragging : ''}`}
+                  draggable={isEditMode}
+                  onDragStart={() => handleDragStart(widget.id)}
+                  onDragEnd={handleDragEnd}
+                >
+                  {isEditMode && (
+                    <div className={styles.widgetControls}>
+                      <button className={styles.widgetDeleteBtn} onClick={() => handleDeleteWidget(widget.id)} title="Delete widget">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
+                  )}
+                  {renderWidget(widget)}
+                </div>
+              ))}
             </div>
 
             <div className={styles.dataInfo}>

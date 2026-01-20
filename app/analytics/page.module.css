@@ -470,25 +470,23 @@
 }
 
 /* Stats Grid */
-/* Unified Dashboard Grid Layout */
-.dashboardGrid {
+/* Stats Grid - Keep compact at top */
+.statsGrid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  grid-auto-rows: minmax(280px, auto);
-  gap: 16px;
-  padding: 0;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+  margin-bottom: 12px;
 }
 
 @media (max-width: 1400px) {
-  .dashboardGrid {
+  .statsGrid {
     grid-template-columns: repeat(3, 1fr);
   }
 }
 
 @media (max-width: 1024px) {
-  .dashboardGrid {
+  .statsGrid {
     grid-template-columns: repeat(2, 1fr);
-    grid-auto-rows: minmax(250px, auto);
   }
 
   .sidebar {
@@ -496,32 +494,23 @@
   }
 }
 
-@media (max-width: 768px) {
-  .dashboardGrid {
+/* Charts Grid - Symmetric layout for visualizations */
+.chartsGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+@media (max-width: 1200px) {
+  .chartsGrid {
     grid-template-columns: 1fr;
-    gap: 12px;
   }
 }
 
-/* Widget Size Classes */
-.widgetSpan1 {
-  grid-column: span 1;
-}
-
-.widgetSpan2 {
-  grid-column: span 2;
-}
-
-.widgetSpan3 {
-  grid-column: span 3;
-}
-
-.widgetSpan4 {
-  grid-column: span 4;
-}
-
-.widgetRowSpan2 {
-  grid-row: span 2;
+/* Full width widgets */
+.fullWidthWidget {
+  grid-column: 1 / -1;
 }
 
 .statCard {
@@ -529,9 +518,6 @@
   padding: 12px 14px;
   border-radius: 8px;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
-  height: 100%;
-  display: flex;
-  flex-direction: column;
 }
 
 .statHeader {
@@ -799,9 +785,6 @@
   padding: 12px 14px;
   border-radius: 8px;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
-  height: 100%;
-  display: flex;
-  flex-direction: column;
 }
 
 .chartTitle {
