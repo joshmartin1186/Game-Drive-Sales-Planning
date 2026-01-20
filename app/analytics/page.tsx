@@ -607,6 +607,57 @@ export default function AnalyticsPage() {
       .sort((a, b) => b.value - a.value)
   }, [performanceData])
 
+  // Memoize country revenue calculation for world map
+  const countryRevenueData = useMemo(() => {
+    if (!performanceData.length) return []
+
+    const countryRevenue = new Map<string, number>()
+    performanceData.forEach(row => {
+      const country = row.country_code || 'Unknown'
+      const revenue = toNumber(row.net_steam_sales_usd)
+      countryRevenue.set(country, (countryRevenue.get(country) || 0) + revenue)
+    })
+
+    return Array.from(countryRevenue.entries())
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 15) // Top 15 countries
+  }, [performanceData])
+
+  // Memoize sale vs regular performance data
+  const salePerformanceData = useMemo(() => {
+    if (!performanceData.length) return { saleData: null, regularData: null }
+
+    const saleData = { revenue: 0, units: 0, days: 0 }
+    const regularData = { revenue: 0, units: 0, days: 0 }
+    const seenDates = new Set<string>()
+
+    performanceData.forEach(row => {
+      const date = row.date
+      const isSale = isSalePrice(row.base_price_usd, row.sale_price_usd)
+      const revenue = toNumber(row.net_steam_sales_usd)
+      const units = toNumber(row.net_units_sold)
+
+      if (isSale) {
+        saleData.revenue += revenue
+        saleData.units += units
+        if (!seenDates.has(`sale-${date}`)) {
+          saleData.days++
+          seenDates.add(`sale-${date}`)
+        }
+      } else {
+        regularData.revenue += revenue
+        regularData.units += units
+        if (!seenDates.has(`regular-${date}`)) {
+          regularData.days++
+          seenDates.add(`regular-${date}`)
+        }
+      }
+    })
+
+    return { saleData, regularData }
+  }, [performanceData])
+
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
@@ -783,7 +834,7 @@ export default function AnalyticsPage() {
     if (chartType === 'line') {
       const width = 800
       const height = 300
-      const padding = { top: 20, right: 40, bottom: 60, left: 60 }
+      const padding = { top: 20, right: 40, bottom: 60, left: 40 }
       const chartWidth = width - padding.left - padding.right
       const chartHeight = height - padding.top - padding.bottom
 
@@ -799,30 +850,19 @@ export default function AnalyticsPage() {
           <h3 className={styles.chartTitle}>{widget.title}</h3>
           <div style={{ padding: '12px', overflowX: 'auto' }}>
             <svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="xMidYMid meet">
-              {/* Y-axis grid lines and labels */}
+              {/* Y-axis grid lines only - no numbers */}
               {[0, 0.25, 0.5, 0.75, 1].map((fraction, i) => {
                 const y = padding.top + chartHeight - fraction * chartHeight
-                const value = fraction * maxRevenue
                 return (
-                  <g key={i}>
-                    <line
-                      x1={padding.left}
-                      y1={y}
-                      x2={width - padding.right}
-                      y2={y}
-                      stroke="#e2e8f0"
-                      strokeWidth="1"
-                    />
-                    <text
-                      x={padding.left - 10}
-                      y={y + 4}
-                      fontSize="11"
-                      fill="#64748b"
-                      textAnchor="end"
-                    >
-                      {formatCurrency(value)}
-                    </text>
-                  </g>
+                  <line
+                    key={i}
+                    x1={padding.left}
+                    y1={y}
+                    x2={width - padding.right}
+                    y2={y}
+                    stroke="#e2e8f0"
+                    strokeWidth="1"
+                  />
                 )
               })}
 
@@ -1491,6 +1531,8 @@ export default function AnalyticsPage() {
 
   // Render pie chart for Revenue by Product
   const renderRevenuePieChart = (widget: DashboardWidget) => {
+    const [hoveredSlice, setHoveredSlice] = useState<number | null>(null)
+
     if (productRevenueData.length === 0) {
       return (
         <div className={styles.chartCard}>
@@ -1548,9 +1590,10 @@ export default function AnalyticsPage() {
                       d={path}
                       fill={color}
                       className={styles.pieSlice}
-                    >
-                      <title>{`${segment.name}: ${formatCurrency(segment.value)} (${percentage.toFixed(1)}%)`}</title>
-                    </path>
+                      onMouseEnter={() => setHoveredSlice(i)}
+                      onMouseLeave={() => setHoveredSlice(null)}
+                      style={{ cursor: 'pointer' }}
+                    />
                   </g>
                 )
 
@@ -1558,13 +1601,29 @@ export default function AnalyticsPage() {
                 return slice
               })}
 
-              {/* Center text */}
-              <text x={centerX} y={centerY - 5} fontSize="13" fill="#64748b" textAnchor="middle">
-                Total Revenue
-              </text>
-              <text x={centerX} y={centerY + 15} fontSize="20" fill="#1e293b" fontWeight="600" textAnchor="middle">
-                {formatCurrency(totalValue)}
-              </text>
+              {/* Center text - shows hovered slice or total */}
+              {hoveredSlice !== null ? (
+                <>
+                  <text x={centerX} y={centerY - 20} fontSize="12" fill="#64748b" textAnchor="middle">
+                    {productRevenueData[hoveredSlice].name}
+                  </text>
+                  <text x={centerX} y={centerY + 5} fontSize="18" fill="#1e293b" fontWeight="600" textAnchor="middle">
+                    {formatCurrency(productRevenueData[hoveredSlice].value)}
+                  </text>
+                  <text x={centerX} y={centerY + 25} fontSize="12" fill="#64748b" textAnchor="middle">
+                    {((productRevenueData[hoveredSlice].value / totalValue) * 100).toFixed(1)}%
+                  </text>
+                </>
+              ) : (
+                <>
+                  <text x={centerX} y={centerY - 5} fontSize="13" fill="#64748b" textAnchor="middle">
+                    Total Revenue
+                  </text>
+                  <text x={centerX} y={centerY + 15} fontSize="20" fill="#1e293b" fontWeight="600" textAnchor="middle">
+                    {formatCurrency(totalValue)}
+                  </text>
+                </>
+              )}
             </svg>
           </div>
 
@@ -1590,9 +1649,9 @@ export default function AnalyticsPage() {
     )
   }
 
-  // Render world map heatmap
+  // Render Revenue by Country - Horizontal bar chart
   const renderWorldMapWidget = (widget: DashboardWidget) => {
-    if (!performanceData.length) {
+    if (countryRevenueData.length === 0) {
       return (
         <div className={styles.chartCard}>
           <h3 className={styles.chartTitle}>{widget.title}</h3>
@@ -1601,107 +1660,43 @@ export default function AnalyticsPage() {
       )
     }
 
-    // Aggregate revenue by country
-    const countryRevenue = new Map<string, number>()
-    performanceData.forEach(row => {
-      const country = row.country_code || 'Unknown'
-      const revenue = toNumber(row.net_steam_sales_usd)
-      countryRevenue.set(country, (countryRevenue.get(country) || 0) + revenue)
-    })
-
-    const maxRevenue = Math.max(...Array.from(countryRevenue.values()))
-
-    const getCountryColor = (countryCode: string) => {
-      const revenue = countryRevenue.get(countryCode) || 0
-      if (revenue === 0) return '#e5e7eb'
-      const intensity = revenue / maxRevenue
-      if (intensity > 0.7) return '#1e40af'
-      if (intensity > 0.4) return '#3b82f6'
-      if (intensity > 0.2) return '#60a5fa'
-      return '#dbeafe'
-    }
-
-    // Simplified world map paths (major countries only)
-    const worldMapPaths: Record<string, string> = {
-      'US': 'M120,80 L180,75 L185,95 L180,110 L160,115 L140,105 L125,95 Z',
-      'GB': 'M250,60 L255,55 L260,60 L258,70 L252,72 Z',
-      'DE': 'M270,65 L278,63 L282,70 L280,78 L272,75 Z',
-      'FR': 'M260,75 L268,73 L270,82 L265,88 L258,85 Z',
-      'CN': 'M450,80 L490,75 L505,90 L500,110 L480,105 L470,95 Z',
-      'JP': 'M520,85 L535,82 L540,95 L535,105 L525,100 Z',
-      'AU': 'M500,160 L540,155 L555,175 L545,195 L520,190 Z',
-      'CA': 'M100,30 L180,25 L195,45 L190,60 L170,55 L150,50 L120,45 Z',
-      'BR': 'M200,140 L230,135 L245,155 L240,180 L220,185 L205,170 Z',
-      'IN': 'M400,95 L425,92 L435,110 L430,125 L415,122 L405,110 Z',
-      'RU': 'M280,25 L450,20 L480,40 L475,60 L450,55 L400,50 L350,45 L300,40 Z',
-      'MX': 'M90,100 L130,98 L135,115 L125,125 L105,120 Z',
-      'IT': 'M275,85 L282,83 L285,98 L280,105 L273,100 Z',
-      'ES': 'M245,90 L258,88 L262,98 L255,105 L248,100 Z',
-      'KR': 'M510,90 L520,88 L522,98 L518,105 L512,100 Z'
-    }
-
-    // Top countries list
-    const topCountries = Array.from(countryRevenue.entries())
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 10)
+    const maxRevenue = countryRevenueData[0]?.value || 1
 
     return (
       <div className={styles.chartCard}>
         <h3 className={styles.chartTitle}>{widget.title}</h3>
-        <div style={{ padding: '12px' }}>
-          <div className={styles.worldMap}>
-            <svg width="100%" height="100%" viewBox="0 0 600 220" preserveAspectRatio="xMidYMid meet">
-              {/* Ocean background */}
-              <rect width="600" height="220" fill="#f0f9ff" />
-
-              {/* Country paths */}
-              {Object.entries(worldMapPaths).map(([countryCode, path]) => (
-                <path
-                  key={countryCode}
-                  d={path}
-                  fill={getCountryColor(countryCode)}
-                  className={styles.countryPath}
-                >
-                  <title>
-                    {countryCode}: {formatCurrency(countryRevenue.get(countryCode) || 0)}
-                  </title>
-                </path>
-              ))}
-
-              {/* Legend */}
-              <g transform="translate(10, 180)">
-                <text x="0" y="0" fontSize="10" fill="#64748b" fontWeight="500">Revenue Intensity</text>
-                {[0, 0.2, 0.4, 0.7, 1].map((intensity, i) => {
-                  const colors = ['#e5e7eb', '#dbeafe', '#60a5fa', '#3b82f6', '#1e40af']
-                  return (
-                    <g key={i} transform={`translate(${i * 35}, 10)`}>
-                      <rect width="30" height="15" fill={colors[i]} stroke="#fff" strokeWidth="0.5" />
-                    </g>
-                  )
-                })}
-                <text x="0" y="32" fontSize="9" fill="#94a3b8">Low</text>
-                <text x="140" y="32" fontSize="9" fill="#94a3b8" textAnchor="end">High</text>
-              </g>
-            </svg>
-          </div>
-
-          {/* Top countries list */}
-          <div style={{ marginTop: '16px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '12px' }}>
-            {topCountries.map(([code, revenue], i) => (
-              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 8px', background: '#f8fafc', borderRadius: '4px' }}>
-                <span style={{ fontWeight: '500', color: '#1e293b' }}>{code}</span>
-                <span style={{ color: '#64748b' }}>{formatCurrency(revenue)}</span>
+        <div style={{ padding: '16px' }}>
+          {countryRevenueData.map((country, i) => {
+            const percentage = (country.value / maxRevenue) * 100
+            return (
+              <div key={i} style={{ marginBottom: '12px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px', fontSize: '12px' }}>
+                  <span style={{ fontWeight: '600', color: '#1e293b' }}>{country.name}</span>
+                  <span style={{ fontWeight: '600', color: '#64748b' }}>{formatCurrency(country.value)}</span>
+                </div>
+                <div style={{ width: '100%', height: '24px', backgroundColor: '#f1f5f9', borderRadius: '4px', overflow: 'hidden' }}>
+                  <div
+                    style={{
+                      width: `${percentage}%`,
+                      height: '100%',
+                      backgroundColor: i === 0 ? '#3b82f6' : '#60a5fa',
+                      transition: 'width 0.3s ease'
+                    }}
+                  />
+                </div>
               </div>
-            ))}
-          </div>
+            )
+          })}
         </div>
       </div>
     )
   }
 
-  // Render stacked bar chart for Sale Performance Analysis
+  // Render Sale Performance Analysis - Comparison card
   const renderSalePerformanceChart = (widget: DashboardWidget) => {
-    if (!performanceData.length) {
+    const { saleData, regularData } = salePerformanceData
+
+    if (!saleData || !regularData) {
       return (
         <div className={styles.chartCard}>
           <h3 className={styles.chartTitle}>{widget.title}</h3>
@@ -1710,35 +1705,9 @@ export default function AnalyticsPage() {
       )
     }
 
-    // Aggregate by sale vs regular
-    const saleData = { revenue: 0, units: 0, days: 0 }
-    const regularData = { revenue: 0, units: 0, days: 0 }
-    const seenDates = new Set<string>()
-
-    performanceData.forEach(row => {
-      const date = row.date
-      const isSale = isSalePrice(row.base_price_usd, row.sale_price_usd)
-      const revenue = toNumber(row.net_steam_sales_usd)
-      const units = toNumber(row.net_units_sold)
-
-      if (isSale) {
-        saleData.revenue += revenue
-        saleData.units += units
-        if (!seenDates.has(`sale-${date}`)) {
-          saleData.days++
-          seenDates.add(`sale-${date}`)
-        }
-      } else {
-        regularData.revenue += revenue
-        regularData.units += units
-        if (!seenDates.has(`regular-${date}`)) {
-          regularData.days++
-          seenDates.add(`regular-${date}`)
-        }
-      }
-    })
-
-    const maxValue = Math.max(saleData.revenue, regularData.revenue)
+    const saleAvgRev = saleData.days > 0 ? saleData.revenue / saleData.days : 0
+    const regularAvgRev = regularData.days > 0 ? regularData.revenue / regularData.days : 0
+    const uplift = regularAvgRev > 0 ? ((saleAvgRev - regularAvgRev) / regularAvgRev) * 100 : 0
     const width = 800
     const height = 160
     const barHeight = 50
@@ -1747,90 +1716,45 @@ export default function AnalyticsPage() {
     return (
       <div className={styles.chartCard}>
         <h3 className={styles.chartTitle}>{widget.title}</h3>
-        <div style={{ padding: '12px' }}>
-          <div className={styles.stackedBarChart}>
-            <svg width="100%" height="100%" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="xMidYMid meet">
-              {/* Sale Period Bar */}
-              <g transform="translate(0, 20)">
-                <text x="0" y={barHeight / 2 + 5} fontSize="13" fill="#1e293b" fontWeight="500">
-                  🏷️ Sale Periods
-                </text>
-                <rect
-                  x={labelWidth}
-                  y="0"
-                  width={(saleData.revenue / maxValue) * (width - labelWidth - 100)}
-                  height={barHeight}
-                  fill="#3b82f6"
-                  rx="4"
-                />
-                <text
-                  x={labelWidth + (saleData.revenue / maxValue) * (width - labelWidth - 100) + 10}
-                  y={barHeight / 2 + 5}
-                  fontSize="12"
-                  fill="#1e293b"
-                  fontWeight="500"
-                >
-                  {formatCurrency(saleData.revenue)}
-                </text>
-                <text
-                  x={labelWidth + 10}
-                  y={barHeight / 2 + 5}
-                  fontSize="11"
-                  fill="white"
-                  fontWeight="500"
-                >
-                  {formatNumber(saleData.units)} units · {saleData.days} days
-                </text>
-              </g>
-
-              {/* Regular Price Bar */}
-              <g transform="translate(0, 90)">
-                <text x="0" y={barHeight / 2 + 5} fontSize="13" fill="#1e293b" fontWeight="500">
-                  Regular Price
-                </text>
-                <rect
-                  x={labelWidth}
-                  y="0"
-                  width={(regularData.revenue / maxValue) * (width - labelWidth - 100)}
-                  height={barHeight}
-                  fill="#60a5fa"
-                  rx="4"
-                />
-                <text
-                  x={labelWidth + (regularData.revenue / maxValue) * (width - labelWidth - 100) + 10}
-                  y={barHeight / 2 + 5}
-                  fontSize="12"
-                  fill="#1e293b"
-                  fontWeight="500"
-                >
-                  {formatCurrency(regularData.revenue)}
-                </text>
-                <text
-                  x={labelWidth + 10}
-                  y={barHeight / 2 + 5}
-                  fontSize="11"
-                  fill="white"
-                  fontWeight="500"
-                >
-                  {formatNumber(regularData.units)} units · {regularData.days} days
-                </text>
-              </g>
-            </svg>
-          </div>
-
-          {/* Summary stats */}
-          <div style={{ display: 'flex', gap: '32px', marginTop: '16px', fontSize: '12px', color: '#64748b' }}>
-            <div>
-              <span style={{ fontWeight: '500' }}>Sale Avg/Day:</span> {formatCurrency(safeDivide(saleData.revenue, saleData.days))}
+        <div style={{ padding: '20px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px' }}>
+            {/* Sale Periods Card */}
+            <div style={{ padding: '16px', backgroundColor: '#eff6ff', borderRadius: '8px', border: '1px solid #bfdbfe' }}>
+              <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '8px', fontWeight: '500' }}>Sale Periods</div>
+              <div style={{ fontSize: '24px', fontWeight: '700', color: '#1e293b', marginBottom: '4px' }}>
+                {formatCurrency(saleData.revenue)}
+              </div>
+              <div style={{ fontSize: '11px', color: '#64748b' }}>
+                {formatNumber(saleData.units)} units · {saleData.days} days
+              </div>
+              <div style={{ fontSize: '11px', color: '#3b82f6', fontWeight: '600', marginTop: '8px' }}>
+                {formatCurrency(saleAvgRev)}/day
+              </div>
             </div>
-            <div>
-              <span style={{ fontWeight: '500' }}>Regular Avg/Day:</span> {formatCurrency(safeDivide(regularData.revenue, regularData.days))}
+
+            {/* Regular Periods Card */}
+            <div style={{ padding: '16px', backgroundColor: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+              <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '8px', fontWeight: '500' }}>Regular Price</div>
+              <div style={{ fontSize: '24px', fontWeight: '700', color: '#1e293b', marginBottom: '4px' }}>
+                {formatCurrency(regularData.revenue)}
+              </div>
+              <div style={{ fontSize: '11px', color: '#64748b' }}>
+                {formatNumber(regularData.units)} units · {regularData.days} days
+              </div>
+              <div style={{ fontSize: '11px', color: '#64748b', fontWeight: '600', marginTop: '8px' }}>
+                {formatCurrency(regularAvgRev)}/day
+              </div>
             </div>
-            <div>
-              <span style={{ fontWeight: '500' }}>Sale Uplift:</span>{' '}
-              <span style={{ color: '#16a34a', fontWeight: '600' }}>
-                {(safeDivide(saleData.revenue / saleData.days, regularData.revenue / regularData.days) * 100 - 100).toFixed(0)}%
-              </span>
+
+            {/* Uplift Card */}
+            <div style={{ padding: '16px', backgroundColor: uplift >= 0 ? '#f0fdf4' : '#fef2f2', borderRadius: '8px', border: `1px solid ${uplift >= 0 ? '#bbf7d0' : '#fecaca'}` }}>
+              <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '8px', fontWeight: '500' }}>Sale Uplift</div>
+              <div style={{ fontSize: '32px', fontWeight: '700', color: uplift >= 0 ? '#16a34a' : '#dc2626', marginBottom: '4px' }}>
+                {uplift >= 0 ? '+' : ''}{uplift.toFixed(0)}%
+              </div>
+              <div style={{ fontSize: '11px', color: '#64748b' }}>
+                vs regular pricing
+              </div>
             </div>
           </div>
         </div>
