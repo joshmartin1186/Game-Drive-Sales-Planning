@@ -239,6 +239,7 @@ export default function AnalyticsPage() {
   const [performanceData, setPerformanceData] = useState<PerformanceData[]>([])
   const [summaryStats, setSummaryStats] = useState<SummaryStats | null>(null)
   const [dateRange, setDateRange] = useState<DateRange>({ start: null, end: null })
+  const [selectedDatePreset, setSelectedDatePreset] = useState<string>('all')
   const [selectedProduct, setSelectedProduct] = useState<string>('all')
   const [selectedClient, setSelectedClient] = useState<string>('all')
   const [selectedRegion, setSelectedRegion] = useState<string>('all')
@@ -270,6 +271,9 @@ export default function AnalyticsPage() {
   const fetchPerformanceData = useCallback(async () => {
     setIsLoading(true)
     try {
+      // Only select the columns we actually need for better performance
+      const columns = 'date,product_name,platform,country_code,country,region,gross_units_sold,chargebacks_returns,net_units_sold,base_price_usd,sale_price_usd,net_steam_sales_usd,client_id'
+
       // Supabase has a hard 1000 row limit per query, so fetch in batches
       let allData: PerformanceData[] = []
       let hasMore = true
@@ -279,7 +283,7 @@ export default function AnalyticsPage() {
       while (hasMore) {
         let query = supabase
           .from('steam_performance_data_view')
-          .select('*', { count: 'exact' })
+          .select(columns)
           .order('date', { ascending: true })
           .range(offset, offset + batchSize - 1)
 
@@ -306,7 +310,7 @@ export default function AnalyticsPage() {
 
         if (error) throw error
 
-        allData = allData.concat(data || [])
+        allData = allData.concat((data || []) as PerformanceData[])
         hasMore = (data?.length || 0) === batchSize
         offset += batchSize
       }
@@ -607,11 +611,12 @@ export default function AnalyticsPage() {
     const [year, month, day] = dateStr.split('-').map(Number)
     const date = new Date(Date.UTC(year, month - 1, day))
 
-    // Check if this is monthly aggregated data
-    // Monthly grouped data will have day=1 AND there will be more than 45 days worth of data
-    const isMonthlyAggregated = day === 1 && dailyData.length > 45
+    // Determine if we're showing daily or monthly data based on the selected date range
+    // 7D and 30D show daily bars, everything else (90D, YTD, All Time) shows monthly aggregated bars
+    const isDailyView = selectedDatePreset === '7d' || selectedDatePreset === '30d'
+    const isMonthlyAggregated = !isDailyView || (day === 1 && dailyData.length > 45)
 
-    // For monthly aggregated data
+    // For monthly aggregated data (90D, YTD, All Time)
     if (isMonthlyAggregated) {
       if (forLabel) {
         // Bar labels: show just "Jan" for cleaner look
@@ -621,12 +626,12 @@ export default function AnalyticsPage() {
       return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' })
     }
 
-    // For daily view data (not aggregated by month)
+    // For daily view data (7D, 30D)
     if (includeDay) {
       // Tooltips with full date and year
       return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })
     }
-    // Bar labels in daily view - show day number
+    // Bar labels in daily view - show day number only
     if (forLabel) {
       return date.toLocaleDateString('en-US', { day: 'numeric', timeZone: 'UTC' })
     }
@@ -660,6 +665,7 @@ export default function AnalyticsPage() {
         break
     }
 
+    setSelectedDatePreset(preset)
     setDateRange({ start, end })
   }
 
@@ -1279,11 +1285,11 @@ export default function AnalyticsPage() {
           <div className={styles.filterGroup}>
             <label className={styles.filterLabel}>Date Range</label>
             <div className={styles.datePresets}>
-              <button className={`${styles.presetButton} ${!dateRange.start && !dateRange.end ? styles.presetActive : ''}`} onClick={() => setPresetDateRange('all')}>All Time</button>
-              <button className={styles.presetButton} onClick={() => setPresetDateRange('7d')}>7D</button>
-              <button className={styles.presetButton} onClick={() => setPresetDateRange('30d')}>30D</button>
-              <button className={styles.presetButton} onClick={() => setPresetDateRange('90d')}>90D</button>
-              <button className={styles.presetButton} onClick={() => setPresetDateRange('ytd')}>YTD</button>
+              <button className={`${styles.presetButton} ${selectedDatePreset === 'all' ? styles.presetActive : ''}`} onClick={() => setPresetDateRange('all')}>All Time</button>
+              <button className={`${styles.presetButton} ${selectedDatePreset === '7d' ? styles.presetActive : ''}`} onClick={() => setPresetDateRange('7d')}>7D</button>
+              <button className={`${styles.presetButton} ${selectedDatePreset === '30d' ? styles.presetActive : ''}`} onClick={() => setPresetDateRange('30d')}>30D</button>
+              <button className={`${styles.presetButton} ${selectedDatePreset === '90d' ? styles.presetActive : ''}`} onClick={() => setPresetDateRange('90d')}>90D</button>
+              <button className={`${styles.presetButton} ${selectedDatePreset === 'ytd' ? styles.presetActive : ''}`} onClick={() => setPresetDateRange('ytd')}>YTD</button>
             </div>
           </div>
 

@@ -11,7 +11,9 @@
 
 ### Revenue Over Time Chart Improvements
 - [x] Fixed month labels to show "Jan" instead of "Jan 1" for monthly aggregated views
-- [x] Fixed daily view labels to show day numbers (1, 2, 3...) instead of "Jan 1"
+- [x] Fixed daily view labels based on date range selection:
+  - 7D/30D: Shows day numbers (1, 2, 3...) with month labels at month boundaries
+  - 90D/YTD/All Time: Shows only month labels (Jan, Feb, Mar...)
 - [x] Added month labels in daily view at the start of each month
 - [x] Added year range display in chart header (e.g., "2024 - 2025")
 - [x] Redesigned year indicators as clean badge dividers between years
@@ -23,6 +25,15 @@
 - [x] Tooltips now properly positioned above bars without being cut off
 - [x] Improved overall chart readability for multi-year data
 - [x] Verified database has no sale price data (all base_price/sale_price fields are null)
+
+### Dashboard Performance & UX Improvements
+- [x] Added active state highlighting to date range buttons
+  - Currently selected range stays highlighted
+  - Uses `presetActive` CSS class for visual feedback
+- [x] Optimized data loading performance
+  - Only select necessary columns instead of '*' (13 columns vs all)
+  - Removed count: 'exact' parameter (not needed)
+  - Should significantly reduce load time from 20-30 seconds
 
 ## ✅ Completed (Session: 2026-01-19)
 
