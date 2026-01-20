@@ -609,13 +609,13 @@ export default function AnalyticsPage() {
 
     // Check if this is monthly data by looking at the day component
     // Monthly grouped data will have day=1
-    const isMonthlyData = day === 1 && dailyData.length <= 12
+    const isMonthlyData = day === 1 && dailyData.length > 45
 
     // For monthly aggregated data
     if (isMonthlyData || dailyData.length > 45) {
       if (forLabel) {
-        // Bar labels: show "Jan 2024" with year
-        return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' })
+        // Bar labels: show just "Jan" for cleaner look
+        return date.toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' })
       }
       // Tooltips: show "Jan 2024" with year
       return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' })
@@ -746,8 +746,14 @@ export default function AnalyticsPage() {
   // Render chart widget
   const renderChartWidget = (widget: DashboardWidget) => {
     const isMonthlyView = dailyData.length > 45
-    // Get year from first data point
-    const yearLabel = dailyData.length > 0 ? dailyData[0].date.substring(0, 4) : ''
+
+    // Detect year range for year indicators
+    const yearSet = new Set(dailyData.map(d => d.date.substring(0, 4)))
+    const yearsArray = Array.from(yearSet).sort()
+    const hasMultipleYears = yearsArray.length > 1
+    const yearRange = yearsArray.length > 0
+      ? (yearsArray.length === 1 ? yearsArray[0] : `${yearsArray[0]} - ${yearsArray[yearsArray.length - 1]}`)
+      : ''
 
     return (
       <div className={styles.chartCard}>
@@ -756,7 +762,7 @@ export default function AnalyticsPage() {
             {widget.title}
             {isMonthlyView && <span style={{ fontSize: '0.875rem', fontWeight: 400, color: '#64748b', marginLeft: '8px' }}>(Monthly)</span>}
           </h3>
-          {yearLabel && <span style={{ fontSize: '0.875rem', fontWeight: 500, color: '#64748b' }}>{yearLabel}</span>}
+          {yearRange && <span style={{ fontSize: '0.875rem', fontWeight: 500, color: '#64748b' }}>{yearRange}</span>}
         </div>
         <div className={styles.chartLegend}>
           <span className={styles.legendItem}>
@@ -779,8 +785,24 @@ export default function AnalyticsPage() {
                   intensity > 0.6 ? '#60a5fa' :
                   intensity > 0.4 ? '#93c5fd' : '#cbd5e1'
 
+                // Show year on label when crossing year boundary in multi-year views
+                const currentYear = day.date.substring(0, 4)
+                const previousYear = idx > 0 ? dailyData[idx - 1].date.substring(0, 4) : null
+                const showYearOnLabel = hasMultipleYears && currentYear !== previousYear
+
                 return (
-                  <div key={idx} className={styles.barColumn}>
+                  <div
+                    key={idx}
+                    className={styles.barColumn}
+                    onMouseMove={(e) => {
+                      const tooltip = e.currentTarget.querySelector(`.${styles.barTooltip}`) as HTMLElement
+                      if (tooltip) {
+                        const rect = e.currentTarget.getBoundingClientRect()
+                        tooltip.style.left = `${rect.left + rect.width / 2}px`
+                        tooltip.style.top = `${rect.top}px`
+                      }
+                    }}
+                  >
                     <div className={styles.barTooltip}>
                       <div style={{ fontWeight: 700, marginBottom: '6px', fontSize: '15px' }}>{formatDate(day.date)}</div>
                       <div style={{ fontSize: '14px', marginBottom: '2px' }}><strong>Revenue:</strong> {formatCurrency(day.revenue)}</div>
@@ -796,7 +818,10 @@ export default function AnalyticsPage() {
                         }}
                       />
                     </div>
-                    <span className={styles.barLabel}>{formatDate(day.date, false, true)}</span>
+                    <span className={styles.barLabel}>
+                      {formatDate(day.date, false, true)}
+                      {showYearOnLabel && <div style={{ fontSize: '10px', color: '#3b82f6', fontWeight: 600, marginTop: '2px' }}>{currentYear}</div>}
+                    </span>
                   </div>
                 )
               })}

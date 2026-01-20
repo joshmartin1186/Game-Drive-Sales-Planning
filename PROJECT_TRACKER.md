@@ -6,7 +6,17 @@
   - Add export functionality for charts/data
   - Improve visual polish (animations, hover states)
   - Add filtering controls within charts
-  - Consider adding sale period detection algorithm if base_price/sale_price data is unreliable
+
+## ✅ Completed (Session: 2026-01-20)
+
+### Revenue Over Time Chart Improvements
+- [x] Fixed month labels to show "Jan" instead of "Jan 1" for cleaner appearance
+- [x] Added year range display in chart header (e.g., "2024 - 2025")
+- [x] Added year indicators on X-axis when data crosses year boundaries
+- [x] Made bars thinner for better visualization (max-width: 20px, min-width: 24px)
+- [x] Fixed tooltip positioning to use fixed positioning and stay within viewport
+- [x] Tooltips now properly positioned above bars without being cut off
+- [x] Improved overall chart readability for multi-year data
 
 ## ✅ Completed (Session: 2026-01-19)
 
