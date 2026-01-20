@@ -10,16 +10,19 @@
 ## ✅ Completed (Session: 2026-01-20)
 
 ### Revenue Over Time Chart Improvements
-- [x] Fixed month labels to show "Jan" instead of "Jan 1" for all views (monthly and daily)
+- [x] Fixed month labels to show "Jan" instead of "Jan 1" for monthly aggregated views
+- [x] Fixed daily view labels to show day numbers (1, 2, 3...) instead of "Jan 1"
+- [x] Added month labels in daily view at the start of each month
 - [x] Added year range display in chart header (e.g., "2024 - 2025")
 - [x] Redesigned year indicators as clean badge dividers between years
-  - Year badges appear between data points when crossing year boundaries
+  - Year badges appear between data points when crossing year boundaries (including first year)
   - Blue highlighted badges with subtle border (not stacked below months)
   - Cleaner, less cluttered appearance
 - [x] Made bars thinner for better visualization (max-width: 20px, min-width: 24px)
 - [x] Fixed tooltip positioning to use fixed positioning and stay within viewport
 - [x] Tooltips now properly positioned above bars without being cut off
 - [x] Improved overall chart readability for multi-year data
+- [x] Verified database has no sale price data (all base_price/sale_price fields are null)
 
 ## ✅ Completed (Session: 2026-01-19)
 

@@ -607,12 +607,12 @@ export default function AnalyticsPage() {
     const [year, month, day] = dateStr.split('-').map(Number)
     const date = new Date(Date.UTC(year, month - 1, day))
 
-    // Check if this is monthly data by looking at the day component
-    // Monthly grouped data will have day=1
-    const isMonthlyData = day === 1 && dailyData.length > 45
+    // Check if this is monthly aggregated data
+    // Monthly grouped data will have day=1 AND there will be more than 45 days worth of data
+    const isMonthlyAggregated = day === 1 && dailyData.length > 45
 
     // For monthly aggregated data
-    if (isMonthlyData || dailyData.length > 45) {
+    if (isMonthlyAggregated) {
       if (forLabel) {
         // Bar labels: show just "Jan" for cleaner look
         return date.toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' })
@@ -621,14 +621,14 @@ export default function AnalyticsPage() {
       return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' })
     }
 
-    // For daily view data
+    // For daily view data (not aggregated by month)
     if (includeDay) {
       // Tooltips with full date and year
       return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })
     }
-    // Bar labels in daily view - show just month for cleaner look
+    // Bar labels in daily view - show day number
     if (forLabel) {
-      return date.toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' })
+      return date.toLocaleDateString('en-US', { day: 'numeric', timeZone: 'UTC' })
     }
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
   }
@@ -793,10 +793,15 @@ export default function AnalyticsPage() {
                 const previousYear = idx > 0 ? dailyData[idx - 1].date.substring(0, 4) : null
                 const isFirstOfYear = hasMultipleYears && (idx === 0 || currentYear !== previousYear)
 
+                // For daily views, show month label when crossing month boundary
+                const currentMonth = day.date.substring(0, 7) // YYYY-MM
+                const previousMonth = idx > 0 ? dailyData[idx - 1].date.substring(0, 7) : null
+                const isFirstOfMonth = !isMonthlyView && (idx === 0 || currentMonth !== previousMonth)
+
                 return (
                   <React.Fragment key={idx}>
-                    {/* Year divider marker when crossing year boundary (but not first item) */}
-                    {isFirstOfYear && idx > 0 && (
+                    {/* Year divider marker when crossing year boundary or first item */}
+                    {isFirstOfYear && (
                       <div style={{
                         display: 'flex',
                         flexDirection: 'column',
@@ -845,6 +850,11 @@ export default function AnalyticsPage() {
                         />
                       </div>
                       <span className={styles.barLabel}>
+                        {isFirstOfMonth && (
+                          <div style={{ fontSize: '10px', fontWeight: 600, color: '#64748b', marginBottom: '2px' }}>
+                            {new Date(day.date + 'T00:00:00Z').toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' })}
+                          </div>
+                        )}
                         {formatDate(day.date, false, true)}
                       </span>
                     </div>
