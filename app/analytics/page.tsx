@@ -104,12 +104,13 @@ interface CurrentPeriodState {
 // Widget Types for editable dashboard
 interface DashboardWidget {
   id: string
-  type: 'stat' | 'chart' | 'table' | 'region' | 'countries' | 'growth' | 'avg-price' | 'heatmap'
+  type: 'stat' | 'chart' | 'table' | 'region' | 'countries' | 'growth' | 'growth-line' | 'avg-price' | 'pie' | 'world-map' | 'heatmap' | 'sale-comparison'
   title: string
   config: {
     statKey?: string
-    chartType?: 'bar' | 'line' | 'pie'
+    chartType?: 'bar' | 'line' | 'pie' | 'choropleth' | 'stacked-bar'
     dataSource?: string
+    mapType?: string
   }
   position: { x: number; y: number }
   size: { w: number; h: number }
@@ -213,22 +214,20 @@ function AnalyticsSidebar() {
 
 // Default dashboard layout - comprehensive view
 const DEFAULT_WIDGETS: DashboardWidget[] = [
-  // Top stats row
+  // Top stats row (4 columns grid - each stat takes 1 column)
   { id: 'stat-revenue', type: 'stat', title: 'Total Revenue', config: { statKey: 'totalRevenue' }, position: { x: 0, y: 0 }, size: { w: 1, h: 1 } },
   { id: 'stat-units', type: 'stat', title: 'Total Units', config: { statKey: 'totalUnits' }, position: { x: 1, y: 0 }, size: { w: 1, h: 1 } },
   { id: 'stat-avg-rev', type: 'stat', title: 'Avg Daily Revenue', config: { statKey: 'avgDailyRevenue' }, position: { x: 2, y: 0 }, size: { w: 1, h: 1 } },
   { id: 'stat-avg-units', type: 'stat', title: 'Avg Daily Units', config: { statKey: 'avgDailyUnits' }, position: { x: 3, y: 0 }, size: { w: 1, h: 1 } },
-  { id: 'stat-refund', type: 'stat', title: 'Refund Rate', config: { statKey: 'refundRate' }, position: { x: 4, y: 0 }, size: { w: 1, h: 1 } },
-  // Growth indicators row
-  { id: 'growth-metrics', type: 'growth', title: 'Period Growth', config: { dataSource: 'growth' }, position: { x: 0, y: 1 }, size: { w: 2, h: 1 } },
-  { id: 'avg-price', type: 'avg-price', title: 'Revenue Per Unit', config: { dataSource: 'avgPrice' }, position: { x: 2, y: 1 }, size: { w: 3, h: 1 } },
-  // Charts row - wider revenue chart, regions on right
-  { id: 'chart-revenue', type: 'chart', title: 'Revenue Over Time', config: { chartType: 'bar', dataSource: 'daily' }, position: { x: 0, y: 2 }, size: { w: 3, h: 2 } },
-  { id: 'chart-region', type: 'region', title: 'Revenue by Region', config: { dataSource: 'region' }, position: { x: 3, y: 2 }, size: { w: 2, h: 2 } },
-  // Countries full width
-  { id: 'top-countries', type: 'countries', title: 'Top Countries', config: { dataSource: 'countries' }, position: { x: 0, y: 4 }, size: { w: 2, h: 2 } },
-  // Period table
-  { id: 'table-periods', type: 'table', title: 'Sale Performance Analysis', config: { dataSource: 'periods' }, position: { x: 0, y: 6 }, size: { w: 5, h: 2 } },
+  // Second row - new visualizations (2 widgets each taking 2 columns)
+  { id: 'growth-line-chart', type: 'growth-line', title: 'Period Growth', config: { chartType: 'line' }, position: { x: 0, y: 1 }, size: { w: 2, h: 1 } },
+  { id: 'revenue-pie-chart', type: 'pie', title: 'Revenue by Product', config: { chartType: 'pie' }, position: { x: 2, y: 1 }, size: { w: 2, h: 1 } },
+  // Revenue Over Time chart - full width
+  { id: 'chart-revenue', type: 'chart', title: 'Revenue Over Time', config: { chartType: 'bar', dataSource: 'daily' }, position: { x: 0, y: 2 }, size: { w: 4, h: 1 } },
+  // World map - full width, 2 rows tall
+  { id: 'world-map', type: 'world-map', title: 'Revenue by Country', config: { mapType: 'choropleth' }, position: { x: 0, y: 3 }, size: { w: 4, h: 2 } },
+  // Sale Performance comparison - full width
+  { id: 'sale-performance', type: 'sale-comparison', title: 'Sale Performance Analysis', config: { chartType: 'stacked-bar' }, position: { x: 0, y: 5 }, size: { w: 4, h: 1 } },
 ]
 
 export default function AnalyticsPage() {
@@ -1188,6 +1187,515 @@ export default function AnalyticsPage() {
     )
   }
 
+  // Render line chart for Period Growth
+  const renderGrowthLineChart = (widget: DashboardWidget) => {
+    if (!dailyData.length || !growthData) {
+      return (
+        <div className={styles.chartCard}>
+          <h3 className={styles.chartTitle}>{widget.title}</h3>
+          <div className={styles.noChartData}>Insufficient data for growth visualization</div>
+        </div>
+      )
+    }
+
+    // Group daily data into 8-10 periods for cleaner visualization
+    const numPeriods = Math.min(10, Math.max(7, Math.floor(dailyData.length / 3)))
+    const periodSize = Math.ceil(dailyData.length / numPeriods)
+    const periods = []
+
+    for (let i = 0; i < dailyData.length; i += periodSize) {
+      const slice = dailyData.slice(i, i + periodSize)
+      const totalRevenue = slice.reduce((sum, d) => sum + toNumber(d.revenue), 0)
+      const totalUnits = slice.reduce((sum, d) => sum + toNumber(d.units), 0)
+      periods.push({
+        date: slice[Math.floor(slice.length / 2)].date,
+        revenue: totalRevenue,
+        units: totalUnits
+      })
+    }
+
+    const maxRevenue = Math.max(...periods.map(p => p.revenue))
+    const maxUnits = Math.max(...periods.map(p => p.units))
+    const width = 500
+    const height = 180
+    const padding = { top: 20, right: 40, bottom: 30, left: 40 }
+    const chartWidth = width - padding.left - padding.right
+    const chartHeight = height - padding.top - padding.bottom
+
+    const revenuePositive = growthData.revenueGrowth >= 0
+    const unitsPositive = growthData.unitsGrowth >= 0
+
+    return (
+      <div className={styles.chartCard}>
+        <h3 className={styles.chartTitle}>{widget.title}</h3>
+        <div style={{ padding: '12px' }}>
+          {/* Growth Summary */}
+          <div style={{ display: 'flex', gap: '24px', marginBottom: '16px', fontSize: '13px' }}>
+            <div>
+              <span style={{ color: '#64748b', marginRight: '8px' }}>Revenue:</span>
+              <span style={{ color: revenuePositive ? '#16a34a' : '#dc2626', fontWeight: '600' }}>
+                {revenuePositive ? '↑' : '↓'} {Math.abs(growthData.revenueGrowth).toFixed(1)}%
+              </span>
+            </div>
+            <div>
+              <span style={{ color: '#64748b', marginRight: '8px' }}>Units:</span>
+              <span style={{ color: unitsPositive ? '#16a34a' : '#dc2626', fontWeight: '600' }}>
+                {unitsPositive ? '↑' : '↓'} {Math.abs(growthData.unitsGrowth).toFixed(1)}%
+              </span>
+            </div>
+          </div>
+
+          {/* Line Chart */}
+          <div className={styles.lineChart}>
+            <svg width="100%" height="100%" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="xMidYMid meet">
+              {/* Grid lines */}
+              {[0, 0.25, 0.5, 0.75, 1].map((fraction, i) => {
+                const y = padding.top + chartHeight - fraction * chartHeight
+                return (
+                  <line
+                    key={i}
+                    x1={padding.left}
+                    y1={y}
+                    x2={width - padding.right}
+                    y2={y}
+                    stroke="#e2e8f0"
+                    strokeWidth="1"
+                  />
+                )
+              })}
+
+              {/* Revenue line */}
+              <polyline
+                fill="none"
+                stroke="#3b82f6"
+                strokeWidth="2.5"
+                points={periods.map((p, i) => {
+                  const x = padding.left + (i / (periods.length - 1)) * chartWidth
+                  const y = padding.top + chartHeight - (p.revenue / maxRevenue) * chartHeight
+                  return `${x},${y}`
+                }).join(' ')}
+              />
+
+              {/* Revenue points */}
+              {periods.map((p, i) => {
+                const x = padding.left + (i / (periods.length - 1)) * chartWidth
+                const y = padding.top + chartHeight - (p.revenue / maxRevenue) * chartHeight
+                return (
+                  <circle key={`rev-${i}`} cx={x} cy={y} r="3" fill="#3b82f6">
+                    <title>{`${new Date(p.date).toLocaleDateString()}: ${formatCurrency(p.revenue)}`}</title>
+                  </circle>
+                )
+              })}
+
+              {/* Units line */}
+              <polyline
+                fill="none"
+                stroke="#10b981"
+                strokeWidth="2.5"
+                points={periods.map((p, i) => {
+                  const x = padding.left + (i / (periods.length - 1)) * chartWidth
+                  const y = padding.top + chartHeight - (p.units / maxUnits) * chartHeight
+                  return `${x},${y}`
+                }).join(' ')}
+              />
+
+              {/* Units points */}
+              {periods.map((p, i) => {
+                const x = padding.left + (i / (periods.length - 1)) * chartWidth
+                const y = padding.top + chartHeight - (p.units / maxUnits) * chartHeight
+                return (
+                  <circle key={`units-${i}`} cx={x} cy={y} r="3" fill="#10b981">
+                    <title>{`${new Date(p.date).toLocaleDateString()}: ${formatNumber(p.units)} units`}</title>
+                  </circle>
+                )
+              })}
+
+              {/* Legend */}
+              <g transform={`translate(${padding.left}, ${height - 10})`}>
+                <line x1="0" y1="0" x2="20" y2="0" stroke="#3b82f6" strokeWidth="2.5" />
+                <text x="25" y="4" fontSize="11" fill="#64748b">Revenue</text>
+                <line x1="100" y1="0" x2="120" y2="0" stroke="#10b981" strokeWidth="2.5" />
+                <text x="125" y="4" fontSize="11" fill="#64748b">Units</text>
+              </g>
+            </svg>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Render pie chart for Revenue by Product
+  const renderRevenuePieChart = (widget: DashboardWidget) => {
+    if (!performanceData.length) {
+      return (
+        <div className={styles.chartCard}>
+          <h3 className={styles.chartTitle}>{widget.title}</h3>
+          <div className={styles.noChartData}>No product data available</div>
+        </div>
+      )
+    }
+
+    // Aggregate revenue by product
+    const productRevenue = new Map<string, { revenue: number; units: number }>()
+    performanceData.forEach(row => {
+      const product = row.product_name || 'Unknown'
+      const revenue = toNumber(row.net_steam_sales_usd)
+      const units = toNumber(row.net_units_sold)
+      const existing = productRevenue.get(product) || { revenue: 0, units: 0 }
+      productRevenue.set(product, {
+        revenue: existing.revenue + revenue,
+        units: existing.units + units
+      })
+    })
+
+    const products = Array.from(productRevenue.entries())
+      .map(([name, data]) => ({ name, ...data }))
+      .sort((a, b) => b.revenue - a.revenue)
+      .slice(0, 8) // Top 8 products
+
+    const totalRevenue = products.reduce((sum, p) => sum + p.revenue, 0)
+
+    const pieColors = [
+      '#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b',
+      '#10b981', '#06b6d4', '#6366f1', '#f43f5e'
+    ]
+
+    const polarToCartesian = (centerX: number, centerY: number, radius: number, angleInDegrees: number) => {
+      const angleInRadians = (angleInDegrees - 90) * Math.PI / 180.0
+      return {
+        x: centerX + (radius * Math.cos(angleInRadians)),
+        y: centerY + (radius * Math.sin(angleInRadians))
+      }
+    }
+
+    const createArc = (x: number, y: number, radius: number, startAngle: number, endAngle: number) => {
+      const start = polarToCartesian(x, y, radius, endAngle)
+      const end = polarToCartesian(x, y, radius, startAngle)
+      const largeArc = endAngle - startAngle <= 180 ? '0' : '1'
+      return `M ${x} ${y} L ${start.x} ${start.y} A ${radius} ${radius} 0 ${largeArc} 0 ${end.x} ${end.y} Z`
+    }
+
+    const centerX = 120
+    const centerY = 120
+    const radius = 80
+    let currentAngle = 0
+
+    return (
+      <div className={styles.chartCard}>
+        <h3 className={styles.chartTitle}>{widget.title}</h3>
+        <div style={{ padding: '12px' }}>
+          <div className={styles.pieChart} style={{ height: '240px' }}>
+            <svg width="240" height="240" viewBox="0 0 240 240">
+              {products.map((product, i) => {
+                const percentage = (product.revenue / totalRevenue) * 100
+                const sliceAngle = (percentage / 100) * 360
+                const endAngle = currentAngle + sliceAngle
+                const path = createArc(centerX, centerY, radius, currentAngle, endAngle)
+                const midAngle = currentAngle + sliceAngle / 2
+                const labelPos = polarToCartesian(centerX, centerY, radius + 30, midAngle)
+
+                const slice = (
+                  <g key={i}>
+                    <path
+                      d={path}
+                      fill={pieColors[i % pieColors.length]}
+                      className={styles.pieSlice}
+                    >
+                      <title>{`${product.name}: ${formatCurrency(product.revenue)} (${percentage.toFixed(1)}%) - ${formatNumber(product.units)} units`}</title>
+                    </path>
+                    {percentage > 5 && (
+                      <text
+                        x={labelPos.x}
+                        y={labelPos.y}
+                        fontSize="10"
+                        fill="#1e293b"
+                        textAnchor="middle"
+                        dominantBaseline="middle"
+                      >
+                        {percentage.toFixed(0)}%
+                      </text>
+                    )}
+                  </g>
+                )
+
+                currentAngle = endAngle
+                return slice
+              })}
+
+              {/* Center text */}
+              <text x={centerX} y={centerY - 5} fontSize="11" fill="#64748b" textAnchor="middle">
+                Total Revenue
+              </text>
+              <text x={centerX} y={centerY + 10} fontSize="16" fill="#1e293b" fontWeight="600" textAnchor="middle">
+                {formatCurrency(totalRevenue)}
+              </text>
+            </svg>
+          </div>
+
+          {/* Product legend */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', fontSize: '11px', marginTop: '12px' }}>
+            {products.map((product, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <div style={{ width: '12px', height: '12px', backgroundColor: pieColors[i % pieColors.length], borderRadius: '2px', flexShrink: 0 }} />
+                <span style={{ color: '#64748b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {product.name}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Render world map heatmap
+  const renderWorldMapWidget = (widget: DashboardWidget) => {
+    if (!performanceData.length) {
+      return (
+        <div className={styles.chartCard}>
+          <h3 className={styles.chartTitle}>{widget.title}</h3>
+          <div className={styles.noChartData}>No country data available</div>
+        </div>
+      )
+    }
+
+    // Aggregate revenue by country
+    const countryRevenue = new Map<string, number>()
+    performanceData.forEach(row => {
+      const country = row.country_code || 'Unknown'
+      const revenue = toNumber(row.net_steam_sales_usd)
+      countryRevenue.set(country, (countryRevenue.get(country) || 0) + revenue)
+    })
+
+    const maxRevenue = Math.max(...Array.from(countryRevenue.values()))
+
+    const getCountryColor = (countryCode: string) => {
+      const revenue = countryRevenue.get(countryCode) || 0
+      if (revenue === 0) return '#e5e7eb'
+      const intensity = revenue / maxRevenue
+      if (intensity > 0.7) return '#1e40af'
+      if (intensity > 0.4) return '#3b82f6'
+      if (intensity > 0.2) return '#60a5fa'
+      return '#dbeafe'
+    }
+
+    // Simplified world map paths (major countries only)
+    const worldMapPaths: Record<string, string> = {
+      'US': 'M120,80 L180,75 L185,95 L180,110 L160,115 L140,105 L125,95 Z',
+      'GB': 'M250,60 L255,55 L260,60 L258,70 L252,72 Z',
+      'DE': 'M270,65 L278,63 L282,70 L280,78 L272,75 Z',
+      'FR': 'M260,75 L268,73 L270,82 L265,88 L258,85 Z',
+      'CN': 'M450,80 L490,75 L505,90 L500,110 L480,105 L470,95 Z',
+      'JP': 'M520,85 L535,82 L540,95 L535,105 L525,100 Z',
+      'AU': 'M500,160 L540,155 L555,175 L545,195 L520,190 Z',
+      'CA': 'M100,30 L180,25 L195,45 L190,60 L170,55 L150,50 L120,45 Z',
+      'BR': 'M200,140 L230,135 L245,155 L240,180 L220,185 L205,170 Z',
+      'IN': 'M400,95 L425,92 L435,110 L430,125 L415,122 L405,110 Z',
+      'RU': 'M280,25 L450,20 L480,40 L475,60 L450,55 L400,50 L350,45 L300,40 Z',
+      'MX': 'M90,100 L130,98 L135,115 L125,125 L105,120 Z',
+      'IT': 'M275,85 L282,83 L285,98 L280,105 L273,100 Z',
+      'ES': 'M245,90 L258,88 L262,98 L255,105 L248,100 Z',
+      'KR': 'M510,90 L520,88 L522,98 L518,105 L512,100 Z'
+    }
+
+    // Top countries list
+    const topCountries = Array.from(countryRevenue.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10)
+
+    return (
+      <div className={styles.chartCard}>
+        <h3 className={styles.chartTitle}>{widget.title}</h3>
+        <div style={{ padding: '12px' }}>
+          <div className={styles.worldMap}>
+            <svg width="100%" height="100%" viewBox="0 0 600 220" preserveAspectRatio="xMidYMid meet">
+              {/* Ocean background */}
+              <rect width="600" height="220" fill="#f0f9ff" />
+
+              {/* Country paths */}
+              {Object.entries(worldMapPaths).map(([countryCode, path]) => (
+                <path
+                  key={countryCode}
+                  d={path}
+                  fill={getCountryColor(countryCode)}
+                  className={styles.countryPath}
+                >
+                  <title>
+                    {countryCode}: {formatCurrency(countryRevenue.get(countryCode) || 0)}
+                  </title>
+                </path>
+              ))}
+
+              {/* Legend */}
+              <g transform="translate(10, 180)">
+                <text x="0" y="0" fontSize="10" fill="#64748b" fontWeight="500">Revenue Intensity</text>
+                {[0, 0.2, 0.4, 0.7, 1].map((intensity, i) => {
+                  const colors = ['#e5e7eb', '#dbeafe', '#60a5fa', '#3b82f6', '#1e40af']
+                  return (
+                    <g key={i} transform={`translate(${i * 35}, 10)`}>
+                      <rect width="30" height="15" fill={colors[i]} stroke="#fff" strokeWidth="0.5" />
+                    </g>
+                  )
+                })}
+                <text x="0" y="32" fontSize="9" fill="#94a3b8">Low</text>
+                <text x="140" y="32" fontSize="9" fill="#94a3b8" textAnchor="end">High</text>
+              </g>
+            </svg>
+          </div>
+
+          {/* Top countries list */}
+          <div style={{ marginTop: '16px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '12px' }}>
+            {topCountries.map(([code, revenue], i) => (
+              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 8px', background: '#f8fafc', borderRadius: '4px' }}>
+                <span style={{ fontWeight: '500', color: '#1e293b' }}>{code}</span>
+                <span style={{ color: '#64748b' }}>{formatCurrency(revenue)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Render stacked bar chart for Sale Performance Analysis
+  const renderSalePerformanceChart = (widget: DashboardWidget) => {
+    if (!performanceData.length) {
+      return (
+        <div className={styles.chartCard}>
+          <h3 className={styles.chartTitle}>{widget.title}</h3>
+          <div className={styles.noChartData}>No performance data available</div>
+        </div>
+      )
+    }
+
+    // Aggregate by sale vs regular
+    const saleData = { revenue: 0, units: 0, days: 0 }
+    const regularData = { revenue: 0, units: 0, days: 0 }
+    const seenDates = new Set<string>()
+
+    performanceData.forEach(row => {
+      const date = row.date
+      const isSale = isSalePrice(row.base_price_usd, row.sale_price_usd)
+      const revenue = toNumber(row.net_steam_sales_usd)
+      const units = toNumber(row.net_units_sold)
+
+      if (isSale) {
+        saleData.revenue += revenue
+        saleData.units += units
+        if (!seenDates.has(`sale-${date}`)) {
+          saleData.days++
+          seenDates.add(`sale-${date}`)
+        }
+      } else {
+        regularData.revenue += revenue
+        regularData.units += units
+        if (!seenDates.has(`regular-${date}`)) {
+          regularData.days++
+          seenDates.add(`regular-${date}`)
+        }
+      }
+    })
+
+    const maxValue = Math.max(saleData.revenue, regularData.revenue)
+    const width = 800
+    const height = 160
+    const barHeight = 50
+    const labelWidth = 120
+
+    return (
+      <div className={styles.chartCard}>
+        <h3 className={styles.chartTitle}>{widget.title}</h3>
+        <div style={{ padding: '12px' }}>
+          <div className={styles.stackedBarChart}>
+            <svg width="100%" height="100%" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="xMidYMid meet">
+              {/* Sale Period Bar */}
+              <g transform="translate(0, 20)">
+                <text x="0" y={barHeight / 2 + 5} fontSize="13" fill="#1e293b" fontWeight="500">
+                  🏷️ Sale Periods
+                </text>
+                <rect
+                  x={labelWidth}
+                  y="0"
+                  width={(saleData.revenue / maxValue) * (width - labelWidth - 100)}
+                  height={barHeight}
+                  fill="#3b82f6"
+                  rx="4"
+                />
+                <text
+                  x={labelWidth + (saleData.revenue / maxValue) * (width - labelWidth - 100) + 10}
+                  y={barHeight / 2 + 5}
+                  fontSize="12"
+                  fill="#1e293b"
+                  fontWeight="500"
+                >
+                  {formatCurrency(saleData.revenue)}
+                </text>
+                <text
+                  x={labelWidth + 10}
+                  y={barHeight / 2 + 5}
+                  fontSize="11"
+                  fill="white"
+                  fontWeight="500"
+                >
+                  {formatNumber(saleData.units)} units · {saleData.days} days
+                </text>
+              </g>
+
+              {/* Regular Price Bar */}
+              <g transform="translate(0, 90)">
+                <text x="0" y={barHeight / 2 + 5} fontSize="13" fill="#1e293b" fontWeight="500">
+                  Regular Price
+                </text>
+                <rect
+                  x={labelWidth}
+                  y="0"
+                  width={(regularData.revenue / maxValue) * (width - labelWidth - 100)}
+                  height={barHeight}
+                  fill="#60a5fa"
+                  rx="4"
+                />
+                <text
+                  x={labelWidth + (regularData.revenue / maxValue) * (width - labelWidth - 100) + 10}
+                  y={barHeight / 2 + 5}
+                  fontSize="12"
+                  fill="#1e293b"
+                  fontWeight="500"
+                >
+                  {formatCurrency(regularData.revenue)}
+                </text>
+                <text
+                  x={labelWidth + 10}
+                  y={barHeight / 2 + 5}
+                  fontSize="11"
+                  fill="white"
+                  fontWeight="500"
+                >
+                  {formatNumber(regularData.units)} units · {regularData.days} days
+                </text>
+              </g>
+            </svg>
+          </div>
+
+          {/* Summary stats */}
+          <div style={{ display: 'flex', gap: '32px', marginTop: '16px', fontSize: '12px', color: '#64748b' }}>
+            <div>
+              <span style={{ fontWeight: '500' }}>Sale Avg/Day:</span> {formatCurrency(safeDivide(saleData.revenue, saleData.days))}
+            </div>
+            <div>
+              <span style={{ fontWeight: '500' }}>Regular Avg/Day:</span> {formatCurrency(safeDivide(regularData.revenue, regularData.days))}
+            </div>
+            <div>
+              <span style={{ fontWeight: '500' }}>Sale Uplift:</span>{' '}
+              <span style={{ color: '#16a34a', fontWeight: '600' }}>
+                {(safeDivide(saleData.revenue / saleData.days, regularData.revenue / regularData.days) * 100 - 100).toFixed(0)}%
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   // Render widget based on type
   const renderWidget = (widget: DashboardWidget) => {
     switch (widget.type) {
@@ -1196,9 +1704,13 @@ export default function AnalyticsPage() {
       case 'region': return renderRegionWidget(widget)
       case 'countries': return renderCountriesWidget(widget)
       case 'growth': return renderGrowthWidget(widget)
+      case 'growth-line': return renderGrowthLineChart(widget)
       case 'avg-price': return renderAvgPriceWidget(widget)
+      case 'pie': return renderRevenuePieChart(widget)
+      case 'world-map': return renderWorldMapWidget(widget)
       case 'heatmap': return renderHeatmapWidget(widget)
       case 'table': return renderTableWidget(widget)
+      case 'sale-comparison': return renderSalePerformanceChart(widget)
       default: return null
     }
   }
@@ -1344,169 +1856,48 @@ export default function AnalyticsPage() {
             </button>
           </div>
         ) : (
-          <div ref={gridRef} className={`${styles.dashboardGrid} ${isEditMode ? styles.editableGrid : ''}`}>
-            {/* Stats Row */}
-            <div className={styles.statsGrid}>
-              {widgets.filter(w => w.type === 'stat').map(widget => (
-                <div 
-                  key={widget.id} 
-                  className={`${styles.widgetWrapper} ${isEditMode ? styles.editableWidget : ''} ${draggedWidget === widget.id ? styles.dragging : ''}`}
-                  draggable={isEditMode}
-                  onDragStart={() => handleDragStart(widget.id)}
-                  onDragEnd={handleDragEnd}
-                >
-                  {isEditMode && (
-                    <div className={styles.widgetControls}>
-                      <button className={styles.widgetDeleteBtn} onClick={() => handleDeleteWidget(widget.id)} title="Delete widget">
-                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                      </button>
-                    </div>
-                  )}
-                  {renderWidget(widget)}
-                </div>
-              ))}
-            </div>
+          <>
+            <div ref={gridRef} className={styles.dashboardGrid}>
+              {widgets.map(widget => {
+                // Determine grid column span based on widget size
+                const getWidgetClass = () => {
+                  if (widget.size.w === 4) return styles.widgetSpan4
+                  if (widget.size.w === 3) return styles.widgetSpan3
+                  if (widget.size.w === 2) return styles.widgetSpan2
+                  return styles.widgetSpan1
+                }
 
-            {/* Growth and Price Metrics Row */}
-            <div className={styles.metricsSection}>
-              {widgets.filter(w => w.type === 'growth' || w.type === 'avg-price').map(widget => (
-                <div
-                  key={widget.id}
-                  className={`${styles.widgetWrapper} ${isEditMode ? styles.editableWidget : ''}`}
-                  draggable={isEditMode}
-                  onDragStart={() => handleDragStart(widget.id)}
-                  onDragEnd={handleDragEnd}
-                >
-                  {isEditMode && (
-                    <div className={styles.widgetControls}>
-                      <button className={styles.widgetDeleteBtn} onClick={() => handleDeleteWidget(widget.id)} title="Delete widget">
-                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                      </button>
-                    </div>
-                  )}
-                  {renderWidget(widget)}
-                </div>
-              ))}
-            </div>
+                const getRowSpanClass = () => {
+                  return widget.size.h === 2 ? styles.widgetRowSpan2 : ''
+                }
 
-            {/* Charts Row */}
-            <div className={styles.chartsSection}>
-              {widgets.filter(w => w.type === 'chart').map(widget => (
-                <div 
-                  key={widget.id} 
-                  className={`${styles.widgetWrapper} ${isEditMode ? styles.editableWidget : ''}`}
-                  draggable={isEditMode}
-                  onDragStart={() => handleDragStart(widget.id)}
-                  onDragEnd={handleDragEnd}
-                >
-                  {isEditMode && (
-                    <div className={styles.widgetControls}>
-                      <button className={styles.widgetDeleteBtn} onClick={() => handleDeleteWidget(widget.id)} title="Delete widget">
-                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                      </button>
-                    </div>
-                  )}
-                  {renderWidget(widget)}
-                </div>
-              ))}
-              {widgets.filter(w => w.type === 'region').map(widget => (
-                <div 
-                  key={widget.id} 
-                  className={`${styles.widgetWrapper} ${isEditMode ? styles.editableWidget : ''}`}
-                  draggable={isEditMode}
-                  onDragStart={() => handleDragStart(widget.id)}
-                  onDragEnd={handleDragEnd}
-                >
-                  {isEditMode && (
-                    <div className={styles.widgetControls}>
-                      <button className={styles.widgetDeleteBtn} onClick={() => handleDeleteWidget(widget.id)} title="Delete widget">
-                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                      </button>
-                    </div>
-                  )}
-                  {renderWidget(widget)}
-                </div>
-              ))}
-            </div>
-
-            {/* Heatmap and Countries Section */}
-            <div className={styles.bottomSection}>
-              {widgets.filter(w => w.type === 'heatmap').map(widget => (
-                <div
-                  key={widget.id}
-                  className={`${styles.widgetWrapper} ${isEditMode ? styles.editableWidget : ''}`}
-                  draggable={isEditMode}
-                  onDragStart={() => handleDragStart(widget.id)}
-                  onDragEnd={handleDragEnd}
-                >
-                  {isEditMode && (
-                    <div className={styles.widgetControls}>
-                      <button className={styles.widgetDeleteBtn} onClick={() => handleDeleteWidget(widget.id)} title="Delete widget">
-                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                      </button>
-                    </div>
-                  )}
-                  {renderWidget(widget)}
-                </div>
-              ))}
-              {widgets.filter(w => w.type === 'countries').map(widget => (
-                <div
-                  key={widget.id}
-                  className={`${styles.widgetWrapper} ${isEditMode ? styles.editableWidget : ''}`}
-                  draggable={isEditMode}
-                  onDragStart={() => handleDragStart(widget.id)}
-                  onDragEnd={handleDragEnd}
-                >
-                  {isEditMode && (
-                    <div className={styles.widgetControls}>
-                      <button className={styles.widgetDeleteBtn} onClick={() => handleDeleteWidget(widget.id)} title="Delete widget">
-                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                      </button>
-                    </div>
-                  )}
-                  {renderWidget(widget)}
-                </div>
-              ))}
-
-            {/* Table Section */}
-            {widgets.filter(w => w.type === 'table').map(widget => (
-              <div 
-                key={widget.id} 
-                className={`${styles.widgetWrapper} ${isEditMode ? styles.editableWidget : ''}`}
-                draggable={isEditMode}
-                onDragStart={() => handleDragStart(widget.id)}
-                onDragEnd={handleDragEnd}
-              >
-                {isEditMode && (
-                  <div className={styles.widgetControls}>
-                    <button className={styles.widgetDeleteBtn} onClick={() => handleDeleteWidget(widget.id)} title="Delete widget">
-                      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
+                return (
+                  <div
+                    key={widget.id}
+                    className={`${styles.widgetWrapper} ${getWidgetClass()} ${getRowSpanClass()} ${isEditMode ? styles.editableWidget : ''} ${draggedWidget === widget.id ? styles.dragging : ''}`}
+                    draggable={isEditMode}
+                    onDragStart={() => handleDragStart(widget.id)}
+                    onDragEnd={handleDragEnd}
+                  >
+                    {isEditMode && (
+                      <div className={styles.widgetControls}>
+                        <button className={styles.widgetDeleteBtn} onClick={() => handleDeleteWidget(widget.id)} title="Delete widget">
+                          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+                    )}
+                    {renderWidget(widget)}
                   </div>
-                )}
-                {renderWidget(widget)}
-              </div>
-            ))}
+                )
+              })}
             </div>
 
             <div className={styles.dataInfo}>
               <span className={styles.dataInfoText}>Showing {formatNumber(performanceData.length)} records across {summaryStats?.totalDays || 0} days</span>
             </div>
-          </div>
+          </>
         )}
 
         {showImportModal && (
