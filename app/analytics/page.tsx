@@ -225,9 +225,8 @@ const DEFAULT_WIDGETS: DashboardWidget[] = [
   // Charts row - wider revenue chart, regions on right
   { id: 'chart-revenue', type: 'chart', title: 'Revenue Over Time', config: { chartType: 'bar', dataSource: 'daily' }, position: { x: 0, y: 2 }, size: { w: 3, h: 2 } },
   { id: 'chart-region', type: 'region', title: 'Revenue by Region', config: { dataSource: 'region' }, position: { x: 3, y: 2 }, size: { w: 2, h: 2 } },
-  // Heatmap and countries
-  { id: 'revenue-heatmap', type: 'heatmap', title: 'Revenue Heatmap', config: { dataSource: 'daily' }, position: { x: 0, y: 4 }, size: { w: 3, h: 2 } },
-  { id: 'top-countries', type: 'countries', title: 'Top Countries', config: { dataSource: 'countries' }, position: { x: 3, y: 4 }, size: { w: 2, h: 2 } },
+  // Countries full width
+  { id: 'top-countries', type: 'countries', title: 'Top Countries', config: { dataSource: 'countries' }, position: { x: 0, y: 4 }, size: { w: 2, h: 2 } },
   // Period table
   { id: 'table-periods', type: 'table', title: 'Sale Performance Analysis', config: { dataSource: 'periods' }, position: { x: 0, y: 6 }, size: { w: 5, h: 2 } },
 ]
@@ -615,8 +614,8 @@ export default function AnalyticsPage() {
     // For monthly aggregated data
     if (isMonthlyData || dailyData.length > 45) {
       if (forLabel) {
-        // Bar labels: show just "Jan" without year
-        return date.toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' })
+        // Bar labels: show "Jan 2024" with year
+        return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' })
       }
       // Tooltips: show "Jan 2024" with year
       return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' })
