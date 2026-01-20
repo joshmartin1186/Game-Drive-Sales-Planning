@@ -635,16 +635,6 @@ export default function AnalyticsPage() {
     const regularData = { revenue: 0, units: 0, days: 0 }
     const seenDates = new Set<string>()
 
-    // Debug: Check sample data
-    const sampleRows = performanceData.slice(0, 5)
-    console.log('[Sale Performance Debug] Sample rows:', sampleRows.map(row => ({
-      date: row.date,
-      base_price: row.base_price_usd,
-      sale_price: row.sale_price_usd,
-      isSale: isSalePrice(row.base_price_usd, row.sale_price_usd),
-      revenue: toNumber(row.net_steam_sales_usd)
-    })))
-
     performanceData.forEach(row => {
       const date = row.date
       const isSale = isSalePrice(row.base_price_usd, row.sale_price_usd)
@@ -668,7 +658,6 @@ export default function AnalyticsPage() {
       }
     })
 
-    console.log('[Sale Performance Debug] Results:', { saleData, regularData })
     return { saleData, regularData }
   }, [performanceData])
 
@@ -2142,6 +2131,7 @@ function EditWidgetModal({ widget, onClose, onSave }: {
   const [title, setTitle] = useState(widget.title)
   const [chartType, setChartType] = useState(widget.config.chartType || 'bar')
   const [statKey, setStatKey] = useState(widget.config.statKey || 'totalRevenue')
+  const [dataSource, setDataSource] = useState(widget.config.dataSource || 'daily')
 
   const handleSave = () => {
     const updatedWidget: DashboardWidget = {
@@ -2149,7 +2139,9 @@ function EditWidgetModal({ widget, onClose, onSave }: {
       title,
       config: {
         ...widget.config,
-        ...(widget.type === 'stat' ? { statKey } : { chartType })
+        ...(widget.type === 'stat' ? { statKey } : {}),
+        ...(widget.type === 'chart' || widget.type === 'pie' ? { chartType, dataSource } : {}),
+        ...(widget.type === 'region' || widget.type === 'countries' || widget.type === 'world-map' ? { dataSource } : {})
       }
     }
     onSave(updatedWidget)
@@ -2167,6 +2159,12 @@ function EditWidgetModal({ widget, onClose, onSave }: {
     { value: 'bar', label: 'Bar Chart' },
     { value: 'line', label: 'Line Chart' },
     { value: 'pie', label: 'Pie Chart' }
+  ]
+
+  const dataSourceOptions = [
+    { value: 'daily', label: 'Daily Data' },
+    { value: 'monthly', label: 'Monthly Data' },
+    { value: 'quarterly', label: 'Quarterly Data' }
   ]
 
   return (
@@ -2209,14 +2207,44 @@ function EditWidgetModal({ widget, onClose, onSave }: {
           )}
 
           {(widget.type === 'chart' || widget.type === 'pie') && (
+            <>
+              <div className={styles.formGroup}>
+                <label className={styles.formLabel}>Chart Type</label>
+                <select
+                  className={styles.formInput}
+                  value={chartType}
+                  onChange={(e) => setChartType(e.target.value as 'bar' | 'line' | 'pie')}
+                >
+                  {chartTypeOptions.map(opt => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className={styles.formGroup}>
+                <label className={styles.formLabel}>Data Source</label>
+                <select
+                  className={styles.formInput}
+                  value={dataSource}
+                  onChange={(e) => setDataSource(e.target.value)}
+                >
+                  {dataSourceOptions.map(opt => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </div>
+            </>
+          )}
+
+          {(widget.type === 'region' || widget.type === 'countries' || widget.type === 'world-map') && (
             <div className={styles.formGroup}>
-              <label className={styles.formLabel}>Chart Type</label>
+              <label className={styles.formLabel}>Data Source</label>
               <select
                 className={styles.formInput}
-                value={chartType}
-                onChange={(e) => setChartType(e.target.value as 'bar' | 'line' | 'pie')}
+                value={dataSource}
+                onChange={(e) => setDataSource(e.target.value)}
               >
-                {chartTypeOptions.map(opt => (
+                {dataSourceOptions.map(opt => (
                   <option key={opt.value} value={opt.value}>{opt.label}</option>
                 ))}
               </select>
