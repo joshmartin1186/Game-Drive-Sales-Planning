@@ -701,7 +701,7 @@ export default function AnalyticsPage() {
 
   const saveLayout = () => {
     // Save to localStorage for now (could save to Supabase later)
-    localStorage.setItem('gamedrive-dashboard-layout', JSON.stringify(widgets))
+    localStorage.setItem('gamedrive-dashboard-layout-v2', JSON.stringify(widgets))
     setIsEditMode(false)
   }
 
@@ -711,7 +711,7 @@ export default function AnalyticsPage() {
 
   // Load saved layout
   useEffect(() => {
-    const saved = localStorage.getItem('gamedrive-dashboard-layout')
+    const saved = localStorage.getItem('gamedrive-dashboard-layout-v2')
     if (saved) {
       try {
         setWidgets(JSON.parse(saved))
