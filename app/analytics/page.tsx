@@ -237,7 +237,7 @@ export default function AnalyticsPage() {
   const [performanceData, setPerformanceData] = useState<PerformanceData[]>([])
   const [summaryStats, setSummaryStats] = useState<SummaryStats | null>(null)
   const [dateRange, setDateRange] = useState<DateRange>({ start: null, end: null })
-  const [selectedDatePreset, setSelectedDatePreset] = useState<string>('all')
+  const [selectedDatePreset, setSelectedDatePreset] = useState<string>('60d')
   const [selectedProduct, setSelectedProduct] = useState<string>('all')
   const [selectedClient, setSelectedClient] = useState<string>('all')
   const [selectedRegion, setSelectedRegion] = useState<string>('all')
@@ -680,8 +680,8 @@ export default function AnalyticsPage() {
     const date = new Date(Date.UTC(year, month - 1, day))
 
     // Determine if we're showing daily or monthly data based on the selected date range
-    // 7D and 30D show daily bars, everything else (90D, YTD, All Time) shows monthly aggregated bars
-    const isDailyView = selectedDatePreset === '7d' || selectedDatePreset === '30d'
+    // 7D, 30D, and 60D show daily bars, everything else (90D, YTD, All Time) shows monthly aggregated bars
+    const isDailyView = selectedDatePreset === '7d' || selectedDatePreset === '30d' || selectedDatePreset === '60d'
     const isMonthlyAggregated = !isDailyView || (day === 1 && dailyData.length > 45)
 
     // For monthly aggregated data (90D, YTD, All Time)
@@ -719,6 +719,10 @@ export default function AnalyticsPage() {
       case '30d':
         start = new Date(today)
         start.setDate(start.getDate() - 30)
+        break
+      case '60d':
+        start = new Date(today)
+        start.setDate(start.getDate() - 60)
         break
       case '90d':
         start = new Date(today)
@@ -795,6 +799,11 @@ export default function AnalyticsPage() {
         console.error('Failed to load saved layout', e)
       }
     }
+  }, [])
+
+  // Set initial date range to 60D on mount
+  useEffect(() => {
+    setPresetDateRange('60d')
   }, [])
 
   // Render stat widget
@@ -1897,6 +1906,7 @@ export default function AnalyticsPage() {
               <button className={`${styles.presetButton} ${selectedDatePreset === 'all' ? styles.presetActive : ''}`} onClick={() => setPresetDateRange('all')}>All Time</button>
               <button className={`${styles.presetButton} ${selectedDatePreset === '7d' ? styles.presetActive : ''}`} onClick={() => setPresetDateRange('7d')}>7D</button>
               <button className={`${styles.presetButton} ${selectedDatePreset === '30d' ? styles.presetActive : ''}`} onClick={() => setPresetDateRange('30d')}>30D</button>
+              <button className={`${styles.presetButton} ${selectedDatePreset === '60d' ? styles.presetActive : ''}`} onClick={() => setPresetDateRange('60d')}>60D</button>
               <button className={`${styles.presetButton} ${selectedDatePreset === '90d' ? styles.presetActive : ''}`} onClick={() => setPresetDateRange('90d')}>90D</button>
               <button className={`${styles.presetButton} ${selectedDatePreset === 'ytd' ? styles.presetActive : ''}`} onClick={() => setPresetDateRange('ytd')}>YTD</button>
             </div>
