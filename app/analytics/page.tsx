@@ -231,7 +231,7 @@ const DEFAULT_WIDGETS: DashboardWidget[] = [
 
 export default function AnalyticsPage() {
   const supabase = createClientComponentClient()
-  
+
   // State
   const [isLoading, setIsLoading] = useState(true)
   const [performanceData, setPerformanceData] = useState<PerformanceData[]>([])
@@ -242,6 +242,7 @@ export default function AnalyticsPage() {
   const [selectedClient, setSelectedClient] = useState<string>('all')
   const [selectedRegion, setSelectedRegion] = useState<string>('all')
   const [selectedPlatform, setSelectedPlatform] = useState<string>('all')
+  const [hoveredPieSlice, setHoveredPieSlice] = useState<number | null>(null)
   const [products, setProducts] = useState<string[]>([])
   const [clients, setClients] = useState<{id: string, name: string}[]>([])
   const [regions, setRegions] = useState<string[]>([])
@@ -1531,8 +1532,6 @@ export default function AnalyticsPage() {
 
   // Render pie chart for Revenue by Product
   const renderRevenuePieChart = (widget: DashboardWidget) => {
-    const [hoveredSlice, setHoveredSlice] = useState<number | null>(null)
-
     if (productRevenueData.length === 0) {
       return (
         <div className={styles.chartCard}>
@@ -1590,8 +1589,8 @@ export default function AnalyticsPage() {
                       d={path}
                       fill={color}
                       className={styles.pieSlice}
-                      onMouseEnter={() => setHoveredSlice(i)}
-                      onMouseLeave={() => setHoveredSlice(null)}
+                      onMouseEnter={() => setHoveredPieSlice(i)}
+                      onMouseLeave={() => setHoveredPieSlice(null)}
                       style={{ cursor: 'pointer' }}
                     />
                   </g>
@@ -1602,16 +1601,16 @@ export default function AnalyticsPage() {
               })}
 
               {/* Center text - shows hovered slice or total */}
-              {hoveredSlice !== null ? (
+              {hoveredPieSlice !== null ? (
                 <>
                   <text x={centerX} y={centerY - 20} fontSize="12" fill="#64748b" textAnchor="middle">
-                    {productRevenueData[hoveredSlice].name}
+                    {productRevenueData[hoveredPieSlice].name}
                   </text>
                   <text x={centerX} y={centerY + 5} fontSize="18" fill="#1e293b" fontWeight="600" textAnchor="middle">
-                    {formatCurrency(productRevenueData[hoveredSlice].value)}
+                    {formatCurrency(productRevenueData[hoveredPieSlice].value)}
                   </text>
                   <text x={centerX} y={centerY + 25} fontSize="12" fill="#64748b" textAnchor="middle">
-                    {((productRevenueData[hoveredSlice].value / totalValue) * 100).toFixed(1)}%
+                    {((productRevenueData[hoveredPieSlice].value / totalValue) * 100).toFixed(1)}%
                   </text>
                 </>
               ) : (
