@@ -220,15 +220,13 @@ const DEFAULT_WIDGETS: DashboardWidget[] = [
   { id: 'stat-avg-rev', type: 'stat', title: 'Avg Daily Revenue', config: { statKey: 'avgDailyRevenue' }, position: { x: 2, y: 0 }, size: { w: 1, h: 1 } },
   { id: 'stat-avg-units', type: 'stat', title: 'Avg Daily Units', config: { statKey: 'avgDailyUnits' }, position: { x: 3, y: 0 }, size: { w: 1, h: 1 } },
   { id: 'stat-refund', type: 'stat', title: 'Refund Rate', config: { statKey: 'refundRate' }, position: { x: 4, y: 0 }, size: { w: 1, h: 1 } },
-  // Charts row - 2 column grid (Period Growth + Revenue by Product)
-  { id: 'growth-line-chart', type: 'growth-line', title: 'Period Growth', config: { chartType: 'line' }, position: { x: 0, y: 1 }, size: { w: 1, h: 1 } },
-  { id: 'revenue-pie-chart', type: 'pie', title: 'Revenue by Product', config: { chartType: 'pie' }, position: { x: 1, y: 1 }, size: { w: 1, h: 1 } },
-  // Revenue Over Time chart - full width
-  { id: 'chart-revenue', type: 'chart', title: 'Revenue Over Time', config: { chartType: 'bar', dataSource: 'daily' }, position: { x: 0, y: 2 }, size: { w: 2, h: 1 } },
+  // Charts row - Revenue Per Unit as pie chart, Revenue Over Time as line chart
+  { id: 'revenue-pie-chart', type: 'pie', title: 'Revenue Per Unit', config: { chartType: 'pie' }, position: { x: 0, y: 1 }, size: { w: 1, h: 1 } },
+  { id: 'chart-revenue', type: 'chart', title: 'Revenue Over Time', config: { chartType: 'line', dataSource: 'daily' }, position: { x: 1, y: 1 }, size: { w: 1, h: 1 } },
   // World map - full width
-  { id: 'world-map', type: 'world-map', title: 'Revenue by Country', config: { mapType: 'choropleth' }, position: { x: 0, y: 3 }, size: { w: 2, h: 1 } },
+  { id: 'world-map', type: 'world-map', title: 'Revenue by Country', config: { mapType: 'choropleth' }, position: { x: 0, y: 2 }, size: { w: 2, h: 1 } },
   // Sale Performance comparison - full width
-  { id: 'sale-performance', type: 'sale-comparison', title: 'Sale Performance Analysis', config: { chartType: 'stacked-bar' }, position: { x: 0, y: 4 }, size: { w: 2, h: 1 } },
+  { id: 'sale-performance', type: 'sale-comparison', title: 'Sale Performance Analysis', config: { chartType: 'stacked-bar' }, position: { x: 0, y: 3 }, size: { w: 2, h: 1 } },
 ]
 
 export default function AnalyticsPage() {
@@ -755,6 +753,7 @@ export default function AnalyticsPage() {
   // Render chart widget
   const renderChartWidget = (widget: DashboardWidget) => {
     const isMonthlyView = dailyData.length > 45
+    const chartType = widget.config.chartType || 'bar'
 
     // Detect year range for year indicators
     const yearSet = new Set(dailyData.map(d => d.date.substring(0, 4)))
@@ -764,6 +763,147 @@ export default function AnalyticsPage() {
       ? (yearsArray.length === 1 ? yearsArray[0] : `${yearsArray[0]} - ${yearsArray[yearsArray.length - 1]}`)
       : ''
 
+    // Line chart rendering
+    if (chartType === 'line') {
+      const width = 800
+      const height = 300
+      const padding = { top: 20, right: 40, bottom: 60, left: 60 }
+      const chartWidth = width - padding.left - padding.right
+      const chartHeight = height - padding.top - padding.bottom
+
+      const maxRevenue = Math.max(...dailyData.map(d => d.revenue))
+
+      // Sample data points for cleaner visualization
+      const sampleSize = Math.min(dailyData.length, 30)
+      const sampleInterval = Math.max(1, Math.floor(dailyData.length / sampleSize))
+      const sampledData = dailyData.filter((_, i) => i % sampleInterval === 0 || i === dailyData.length - 1)
+
+      return (
+        <div className={styles.chartCard}>
+          <h3 className={styles.chartTitle}>{widget.title}</h3>
+          <div style={{ padding: '12px', overflowX: 'auto' }}>
+            <svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="xMidYMid meet">
+              {/* Y-axis grid lines and labels */}
+              {[0, 0.25, 0.5, 0.75, 1].map((fraction, i) => {
+                const y = padding.top + chartHeight - fraction * chartHeight
+                const value = fraction * maxRevenue
+                return (
+                  <g key={i}>
+                    <line
+                      x1={padding.left}
+                      y1={y}
+                      x2={width - padding.right}
+                      y2={y}
+                      stroke="#e2e8f0"
+                      strokeWidth="1"
+                    />
+                    <text
+                      x={padding.left - 10}
+                      y={y + 4}
+                      fontSize="11"
+                      fill="#64748b"
+                      textAnchor="end"
+                    >
+                      {formatCurrency(value)}
+                    </text>
+                  </g>
+                )
+              })}
+
+              {/* X-axis line */}
+              <line
+                x1={padding.left}
+                y1={padding.top + chartHeight}
+                x2={width - padding.right}
+                y2={padding.top + chartHeight}
+                stroke="#94a3b8"
+                strokeWidth="2"
+              />
+
+              {/* Y-axis line */}
+              <line
+                x1={padding.left}
+                y1={padding.top}
+                x2={padding.left}
+                y2={padding.top + chartHeight}
+                stroke="#94a3b8"
+                strokeWidth="2"
+              />
+
+              {/* Line path */}
+              <polyline
+                fill="none"
+                stroke="#3b82f6"
+                strokeWidth="3"
+                points={sampledData.map((d, i) => {
+                  const x = padding.left + (i / (sampledData.length - 1)) * chartWidth
+                  const y = padding.top + chartHeight - (d.revenue / maxRevenue) * chartHeight
+                  return `${x},${y}`
+                }).join(' ')}
+              />
+
+              {/* Data points */}
+              {sampledData.map((d, i) => {
+                const x = padding.left + (i / (sampledData.length - 1)) * chartWidth
+                const y = padding.top + chartHeight - (d.revenue / maxRevenue) * chartHeight
+                return (
+                  <circle key={i} cx={x} cy={y} r="4" fill="#3b82f6">
+                    <title>{`${formatDate(d.date)}: ${formatCurrency(d.revenue)}`}</title>
+                  </circle>
+                )
+              })}
+
+              {/* X-axis labels */}
+              {sampledData.map((d, i) => {
+                if (i % Math.max(1, Math.floor(sampledData.length / 8)) === 0 || i === sampledData.length - 1) {
+                  const x = padding.left + (i / (sampledData.length - 1)) * chartWidth
+                  const y = padding.top + chartHeight + 20
+                  return (
+                    <text
+                      key={i}
+                      x={x}
+                      y={y}
+                      fontSize="11"
+                      fill="#64748b"
+                      textAnchor="middle"
+                      transform={`rotate(-45, ${x}, ${y})`}
+                    >
+                      {formatDate(d.date, false, true)}
+                    </text>
+                  )
+                }
+                return null
+              })}
+
+              {/* Axis labels */}
+              <text
+                x={padding.left / 2}
+                y={padding.top + chartHeight / 2}
+                fontSize="12"
+                fill="#1e293b"
+                fontWeight="600"
+                textAnchor="middle"
+                transform={`rotate(-90, ${padding.left / 2}, ${padding.top + chartHeight / 2})`}
+              >
+                Revenue
+              </text>
+              <text
+                x={padding.left + chartWidth / 2}
+                y={height - 10}
+                fontSize="12"
+                fill="#1e293b"
+                fontWeight="600"
+                textAnchor="middle"
+              >
+                Date
+              </text>
+            </svg>
+          </div>
+        </div>
+      )
+    }
+
+    // Bar chart rendering (existing code)
     return (
       <div className={styles.chartCard}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '8px' }}>
@@ -1327,39 +1467,28 @@ export default function AnalyticsPage() {
 
   // Render pie chart for Revenue by Product
   const renderRevenuePieChart = (widget: DashboardWidget) => {
-    if (!performanceData.length) {
+    if (!avgPriceData.length) {
       return (
         <div className={styles.chartCard}>
           <h3 className={styles.chartTitle}>{widget.title}</h3>
-          <div className={styles.noChartData}>No product data available</div>
+          <div className={styles.noChartData}>No pricing data available</div>
         </div>
       )
     }
 
-    // Aggregate revenue by product
-    const productRevenue = new Map<string, { revenue: number; units: number }>()
-    performanceData.forEach(row => {
-      const product = row.product_name || 'Unknown'
-      const revenue = toNumber(row.net_steam_sales_usd)
-      const units = toNumber(row.net_units_sold)
-      const existing = productRevenue.get(product) || { revenue: 0, units: 0 }
-      productRevenue.set(product, {
-        revenue: existing.revenue + revenue,
-        units: existing.units + units
-      })
-    })
+    // Calculate average, min, max prices
+    const avgPrice = avgPriceData.reduce((sum, d) => sum + d.avgPrice, 0) / avgPriceData.length
+    const minPrice = Math.min(...avgPriceData.map(d => d.avgPrice))
+    const maxPrice = Math.max(...avgPriceData.map(d => d.avgPrice))
 
-    const products = Array.from(productRevenue.entries())
-      .map(([name, data]) => ({ name, ...data }))
-      .sort((a, b) => b.revenue - a.revenue)
-      .slice(0, 8) // Top 8 products
-
-    const totalRevenue = products.reduce((sum, p) => sum + p.revenue, 0)
-
-    const pieColors = [
-      '#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b',
-      '#10b981', '#06b6d4', '#6366f1', '#f43f5e'
+    // Create pie segments for price distribution
+    const priceSegments = [
+      { name: 'Average Price', value: avgPrice, color: '#3b82f6', label: formatCurrency(avgPrice) },
+      { name: 'Min Price', value: minPrice, color: '#10b981', label: formatCurrency(minPrice) },
+      { name: 'Max Price', value: maxPrice, color: '#ef4444', label: formatCurrency(maxPrice) }
     ]
+
+    const totalValue = priceSegments.reduce((sum, s) => sum + s.value, 0)
 
     const polarToCartesian = (centerX: number, centerY: number, radius: number, angleInDegrees: number) => {
       const angleInRadians = (angleInDegrees - 90) * Math.PI / 180.0
@@ -1387,35 +1516,21 @@ export default function AnalyticsPage() {
         <div style={{ padding: '12px' }}>
           <div className={styles.pieChart} style={{ height: '240px' }}>
             <svg width="240" height="240" viewBox="0 0 240 240">
-              {products.map((product, i) => {
-                const percentage = (product.revenue / totalRevenue) * 100
+              {priceSegments.map((segment, i) => {
+                const percentage = (segment.value / totalValue) * 100
                 const sliceAngle = (percentage / 100) * 360
                 const endAngle = currentAngle + sliceAngle
                 const path = createArc(centerX, centerY, radius, currentAngle, endAngle)
-                const midAngle = currentAngle + sliceAngle / 2
-                const labelPos = polarToCartesian(centerX, centerY, radius + 30, midAngle)
 
                 const slice = (
                   <g key={i}>
                     <path
                       d={path}
-                      fill={pieColors[i % pieColors.length]}
+                      fill={segment.color}
                       className={styles.pieSlice}
                     >
-                      <title>{`${product.name}: ${formatCurrency(product.revenue)} (${percentage.toFixed(1)}%) - ${formatNumber(product.units)} units`}</title>
+                      <title>{`${segment.name}: ${segment.label} (${percentage.toFixed(1)}%)`}</title>
                     </path>
-                    {percentage > 5 && (
-                      <text
-                        x={labelPos.x}
-                        y={labelPos.y}
-                        fontSize="10"
-                        fill="#1e293b"
-                        textAnchor="middle"
-                        dominantBaseline="middle"
-                      >
-                        {percentage.toFixed(0)}%
-                      </text>
-                    )}
                   </g>
                 )
 
@@ -1425,21 +1540,24 @@ export default function AnalyticsPage() {
 
               {/* Center text */}
               <text x={centerX} y={centerY - 5} fontSize="11" fill="#64748b" textAnchor="middle">
-                Total Revenue
+                Avg Price
               </text>
               <text x={centerX} y={centerY + 10} fontSize="16" fill="#1e293b" fontWeight="600" textAnchor="middle">
-                {formatCurrency(totalRevenue)}
+                {formatCurrency(avgPrice)}
               </text>
             </svg>
           </div>
 
-          {/* Product legend */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', fontSize: '11px', marginTop: '12px' }}>
-            {products.map((product, i) => (
-              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <div style={{ width: '12px', height: '12px', backgroundColor: pieColors[i % pieColors.length], borderRadius: '2px', flexShrink: 0 }} />
-                <span style={{ color: '#64748b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {product.name}
+          {/* Price legend */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '12px', marginTop: '16px' }}>
+            {priceSegments.map((segment, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div style={{ width: '14px', height: '14px', backgroundColor: segment.color, borderRadius: '3px', flexShrink: 0 }} />
+                <span style={{ color: '#64748b', flex: 1 }}>
+                  {segment.name}
+                </span>
+                <span style={{ color: '#1e293b', fontWeight: '600' }}>
+                  {segment.label}
                 </span>
               </div>
             ))}
