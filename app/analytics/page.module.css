@@ -1256,9 +1256,15 @@
 /* Widget Type Grid for Add Widget Modal */
 .widgetTypeGrid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 12px;
   margin-bottom: 20px;
+}
+
+@media (max-width: 768px) {
+  .widgetTypeGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }
 
 .widgetTypeCard {

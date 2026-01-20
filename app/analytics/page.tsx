@@ -2103,9 +2103,14 @@ function AddWidgetModal({ onClose, onAdd }: { onClose: () => void; onAdd: (type:
 
   const widgetTypes = [
     { type: 'stat' as const, name: 'Stat Card', description: 'Display a single metric', icon: 'M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z' },
-    { type: 'chart' as const, name: 'Bar Chart', description: 'Revenue or units over time', icon: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z' },
+    { type: 'chart' as const, name: 'Chart', description: 'Revenue or units over time', icon: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z' },
+    { type: 'pie' as const, name: 'Pie Chart', description: 'Revenue breakdown by product', icon: 'M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z' },
     { type: 'region' as const, name: 'Region Breakdown', description: 'Revenue by geographic region', icon: 'M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z' },
+    { type: 'countries' as const, name: 'Top Countries', description: 'Revenue by top countries', icon: 'M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6h-8.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9' },
+    { type: 'world-map' as const, name: 'World Map', description: 'Geographic revenue heatmap', icon: 'M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z' },
     { type: 'table' as const, name: 'Period Table', description: 'Compare sale vs regular periods', icon: 'M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z' },
+    { type: 'sale-comparison' as const, name: 'Sale Performance', description: 'Sale vs regular analysis', icon: 'M13 7h8m0 0v8m0-8l-8 8-4-4-6 6' },
+    { type: 'heatmap' as const, name: 'Heatmap', description: 'Activity heatmap visualization', icon: 'M4 5a1 1 0 011-1h4a1 1 0 011 1v7a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h4a1 1 0 011 1v7a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 16a1 1 0 011-1h4a1 1 0 011 1v3a1 1 0 01-1 1H5a1 1 0 01-1-1v-3zM14 16a1 1 0 011-1h4a1 1 0 011 1v3a1 1 0 01-1 1h-4a1 1 0 01-1-1v-3z' },
   ]
 
   return (
@@ -2174,6 +2179,7 @@ function EditWidgetModal({ widget, onClose, onSave, products, clients, regions, 
   platforms: string[];
 }) {
   const [title, setTitle] = useState(widget.title)
+  const [widgetType, setWidgetType] = useState(widget.type)
   const [chartType, setChartType] = useState(widget.config.chartType || 'bar')
   const [statKey, setStatKey] = useState(widget.config.statKey || 'totalRevenue')
   const [dataSource, setDataSource] = useState(widget.config.dataSource || 'daily')
@@ -2196,12 +2202,13 @@ function EditWidgetModal({ widget, onClose, onSave, products, clients, regions, 
   const handleSave = () => {
     const updatedWidget: DashboardWidget = {
       ...widget,
+      type: widgetType,
       title,
       config: {
         ...widget.config,
-        ...(widget.type === 'stat' ? { statKey } : {}),
-        ...(widget.type === 'chart' || widget.type === 'pie' ? { chartType, dataSource } : {}),
-        ...(widget.type === 'region' || widget.type === 'countries' || widget.type === 'world-map' ? { dataSource } : {}),
+        ...(widgetType === 'stat' ? { statKey } : {}),
+        ...(widgetType === 'chart' || widgetType === 'pie' ? { chartType, dataSource } : {}),
+        ...(widgetType === 'region' || widgetType === 'countries' || widgetType === 'world-map' ? { dataSource } : {}),
         // Always save filter options
         filterProduct: filterProduct === 'all' ? undefined : filterProduct,
         filterClient: filterClient === 'all' ? undefined : filterClient,
@@ -2218,6 +2225,18 @@ function EditWidgetModal({ widget, onClose, onSave, products, clients, regions, 
     }
     onSave(updatedWidget)
   }
+
+  const widgetTypeOptions = [
+    { value: 'stat', label: 'Stat Card', description: 'Display a single metric' },
+    { value: 'chart', label: 'Chart', description: 'Revenue or units over time' },
+    { value: 'pie', label: 'Pie Chart', description: 'Revenue breakdown by product' },
+    { value: 'region', label: 'Region Breakdown', description: 'Revenue by geographic region' },
+    { value: 'countries', label: 'Top Countries', description: 'Revenue by country' },
+    { value: 'world-map', label: 'World Map', description: 'Geographic revenue heatmap' },
+    { value: 'table', label: 'Period Table', description: 'Compare sale vs regular periods' },
+    { value: 'sale-comparison', label: 'Sale Performance', description: 'Sale vs regular analysis' },
+    { value: 'heatmap', label: 'Heatmap', description: 'Activity heatmap visualization' }
+  ]
 
   const statOptions = [
     { value: 'totalRevenue', label: 'Total Revenue' },
@@ -2289,7 +2308,7 @@ function EditWidgetModal({ widget, onClose, onSave, products, clients, regions, 
             />
           </div>
 
-          {widget.type === 'stat' && (
+          {widgetType === 'stat' && (
             <div className={styles.formGroup}>
               <label className={styles.formLabel}>Metric</label>
               <select
@@ -2304,7 +2323,7 @@ function EditWidgetModal({ widget, onClose, onSave, products, clients, regions, 
             </div>
           )}
 
-          {(widget.type === 'chart' || widget.type === 'pie') && (
+          {(widgetType === 'chart' || widgetType === 'pie') && (
             <>
               <div className={styles.formGroup}>
                 <label className={styles.formLabel}>Chart Type</label>
@@ -2334,7 +2353,7 @@ function EditWidgetModal({ widget, onClose, onSave, products, clients, regions, 
             </>
           )}
 
-          {(widget.type === 'region' || widget.type === 'countries' || widget.type === 'world-map') && (
+          {(widgetType === 'region' || widgetType === 'countries' || widgetType === 'world-map') && (
             <div className={styles.formGroup}>
               <label className={styles.formLabel}>Data Source</label>
               <select
@@ -2413,7 +2432,7 @@ function EditWidgetModal({ widget, onClose, onSave, products, clients, regions, 
           </div>
 
           {/* Display Options Section */}
-          {(widget.type === 'chart' || widget.type === 'pie') && (
+          {(widgetType === 'chart' || widgetType === 'pie') && (
             <div style={{ marginTop: '24px', paddingTop: '24px', borderTop: '1px solid #e2e8f0' }}>
               <h3 style={{ fontSize: '14px', fontWeight: '600', color: '#1e293b', marginBottom: '12px' }}>
                 Display Options
@@ -2459,7 +2478,7 @@ function EditWidgetModal({ widget, onClose, onSave, products, clients, regions, 
           )}
 
           {/* Aggregation Options Section */}
-          {(widget.type === 'chart' || widget.type === 'stat') && (
+          {(widgetType === 'chart' || widgetType === 'stat') && (
             <div style={{ marginTop: '24px', paddingTop: '24px', borderTop: '1px solid #e2e8f0' }}>
               <h3 style={{ fontSize: '14px', fontWeight: '600', color: '#1e293b', marginBottom: '12px' }}>
                 Aggregation Options
@@ -2495,11 +2514,19 @@ function EditWidgetModal({ widget, onClose, onSave, products, clients, regions, 
 
           <div className={styles.formGroup} style={{ marginTop: '24px' }}>
             <label className={styles.formLabel}>Widget Type</label>
-            <div className={styles.formInput} style={{ backgroundColor: '#f8fafc', cursor: 'not-allowed' }}>
-              {widget.type}
-            </div>
+            <select
+              className={styles.formInput}
+              value={widgetType}
+              onChange={(e) => setWidgetType(e.target.value as any)}
+            >
+              {widgetTypeOptions.map(opt => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label} - {opt.description}
+                </option>
+              ))}
+            </select>
             <p style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>
-              Widget type cannot be changed after creation
+              Change the widget type to convert between different visualizations
             </p>
           </div>
         </div>
