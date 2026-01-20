@@ -420,8 +420,44 @@
   transition: opacity 0.2s;
 }
 
-.editableWidget:hover .widgetControls {
+.resizeControls {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  display: flex;
+  gap: 4px;
+  z-index: 10;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.editableWidget:hover .widgetControls,
+.editableWidget:hover .resizeControls {
   opacity: 1;
+}
+
+.resizeBtn {
+  width: 32px;
+  height: 28px;
+  border-radius: 6px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  color: #2563eb;
+}
+
+.resizeBtn:hover {
+  background: #dbeafe;
+  border-color: #93c5fd;
+}
+
+.dragging {
+  opacity: 0.5;
+  cursor: grabbing !important;
 }
 
 .widgetEditBtn {

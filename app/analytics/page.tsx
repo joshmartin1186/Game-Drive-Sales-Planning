@@ -772,8 +772,35 @@ export default function AnalyticsPage() {
     setDraggedWidget(null)
   }
 
+  const handleDrop = (targetWidgetId: string) => {
+    if (!draggedWidget || draggedWidget === targetWidgetId) return
+
+    setWidgets(prev => {
+      const draggedIdx = prev.findIndex(w => w.id === draggedWidget)
+      const targetIdx = prev.findIndex(w => w.id === targetWidgetId)
+
+      if (draggedIdx === -1 || targetIdx === -1) return prev
+
+      const newWidgets = [...prev]
+      const [removed] = newWidgets.splice(draggedIdx, 1)
+      newWidgets.splice(targetIdx, 0, removed)
+
+      return newWidgets
+    })
+  }
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+  }
+
   const handleDeleteWidget = (widgetId: string) => {
     setWidgets(prev => prev.filter(w => w.id !== widgetId))
+  }
+
+  const handleResizeWidget = (widgetId: string, newSize: { w: number; h: number }) => {
+    setWidgets(prev => prev.map(w =>
+      w.id === widgetId ? { ...w, size: newSize } : w
+    ))
   }
 
   const handleAddWidget = (type: DashboardWidget['type'], title: string) => {
@@ -2008,6 +2035,8 @@ export default function AnalyticsPage() {
                   draggable={isEditMode}
                   onDragStart={() => handleDragStart(widget.id)}
                   onDragEnd={handleDragEnd}
+                  onDrop={() => handleDrop(widget.id)}
+                  onDragOver={handleDragOver}
                 >
                   {isEditMode && (
                     <div className={styles.widgetControls}>
@@ -2037,20 +2066,46 @@ export default function AnalyticsPage() {
                   draggable={isEditMode}
                   onDragStart={() => handleDragStart(widget.id)}
                   onDragEnd={handleDragEnd}
+                  onDrop={() => handleDrop(widget.id)}
+                  onDragOver={handleDragOver}
+                  style={{ gridColumn: widget.size.w === 2 ? 'span 2' : 'span 1' }}
                 >
                   {isEditMode && (
-                    <div className={styles.widgetControls}>
-                      <button className={styles.widgetEditBtn} onClick={() => setEditingWidget(widget)} title="Edit widget">
-                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="16" height="16">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                        </svg>
-                      </button>
-                      <button className={styles.widgetDeleteBtn} onClick={() => handleDeleteWidget(widget.id)} title="Delete widget">
-                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="16" height="16">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                      </button>
-                    </div>
+                    <>
+                      <div className={styles.widgetControls}>
+                        <button className={styles.widgetEditBtn} onClick={() => setEditingWidget(widget)} title="Edit widget">
+                          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="16" height="16">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                        </button>
+                        <button className={styles.widgetDeleteBtn} onClick={() => handleDeleteWidget(widget.id)} title="Delete widget">
+                          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="16" height="16">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+                      <div className={styles.resizeControls}>
+                        <button
+                          className={styles.resizeBtn}
+                          onClick={() => handleResizeWidget(widget.id, { w: 1, h: 1 })}
+                          title="Half width"
+                        >
+                          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                            <rect x="1" y="1" width="6" height="14" stroke="currentColor" strokeWidth="1.5" />
+                            <rect x="9" y="1" width="6" height="14" stroke="currentColor" strokeWidth="1.5" opacity="0.3" />
+                          </svg>
+                        </button>
+                        <button
+                          className={styles.resizeBtn}
+                          onClick={() => handleResizeWidget(widget.id, { w: 2, h: 1 })}
+                          title="Full width"
+                        >
+                          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                            <rect x="1" y="1" width="14" height="14" stroke="currentColor" strokeWidth="1.5" />
+                          </svg>
+                        </button>
+                      </div>
+                    </>
                   )}
                   {renderWidget(widget)}
                 </div>
