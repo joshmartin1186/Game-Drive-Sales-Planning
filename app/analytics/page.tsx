@@ -855,7 +855,11 @@ export default function AnalyticsPage() {
 
               {/* X-axis labels */}
               {sampledData.map((d, i) => {
-                if (i % Math.max(1, Math.floor(sampledData.length / 8)) === 0 || i === sampledData.length - 1) {
+                // Show fewer labels to prevent overlap - max 6 labels
+                const maxLabels = 6
+                const labelInterval = Math.max(1, Math.floor(sampledData.length / (maxLabels - 1)))
+
+                if (i % labelInterval === 0 || i === sampledData.length - 1) {
                   const x = padding.left + (i / (sampledData.length - 1)) * chartWidth
                   const y = padding.top + chartHeight + 20
                   return (
@@ -863,9 +867,9 @@ export default function AnalyticsPage() {
                       key={i}
                       x={x}
                       y={y}
-                      fontSize="11"
+                      fontSize="10"
                       fill="#64748b"
-                      textAnchor="middle"
+                      textAnchor="end"
                       transform={`rotate(-45, ${x}, ${y})`}
                     >
                       {formatDate(d.date, false, true)}
@@ -1467,28 +1471,45 @@ export default function AnalyticsPage() {
 
   // Render pie chart for Revenue by Product
   const renderRevenuePieChart = (widget: DashboardWidget) => {
-    if (!avgPriceData.length) {
+    if (!performanceData.length) {
       return (
         <div className={styles.chartCard}>
           <h3 className={styles.chartTitle}>{widget.title}</h3>
-          <div className={styles.noChartData}>No pricing data available</div>
+          <div className={styles.noChartData}>No product data available</div>
         </div>
       )
     }
 
-    // Calculate average, min, max prices
-    const avgPrice = avgPriceData.reduce((sum, d) => sum + d.avgPrice, 0) / avgPriceData.length
-    const minPrice = Math.min(...avgPriceData.map(d => d.avgPrice))
-    const maxPrice = Math.max(...avgPriceData.map(d => d.avgPrice))
+    // Aggregate revenue by product
+    const productRevenue = new Map<string, number>()
+    performanceData.forEach(row => {
+      const product = row.product_name || 'Unknown'
+      const revenue = toNumber(row.net_steam_sales_usd)
+      productRevenue.set(product, (productRevenue.get(product) || 0) + revenue)
+    })
 
-    // Create pie segments for price distribution
-    const priceSegments = [
-      { name: 'Average Price', value: avgPrice, color: '#3b82f6', label: formatCurrency(avgPrice) },
-      { name: 'Min Price', value: minPrice, color: '#10b981', label: formatCurrency(minPrice) },
-      { name: 'Max Price', value: maxPrice, color: '#ef4444', label: formatCurrency(maxPrice) }
+    // Convert to array and sort by revenue
+    const productSegments = Array.from(productRevenue.entries())
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value)
+
+    if (productSegments.length === 0) {
+      return (
+        <div className={styles.chartCard}>
+          <h3 className={styles.chartTitle}>{widget.title}</h3>
+          <div className={styles.noChartData}>No product revenue data available</div>
+        </div>
+      )
+    }
+
+    // Color palette for products
+    const pieColors = [
+      '#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b',
+      '#10b981', '#06b6d4', '#6366f1', '#f43f5e',
+      '#14b8a6', '#a855f7', '#f97316', '#22c55e'
     ]
 
-    const totalValue = priceSegments.reduce((sum, s) => sum + s.value, 0)
+    const totalValue = productSegments.reduce((sum, s) => sum + s.value, 0)
 
     const polarToCartesian = (centerX: number, centerY: number, radius: number, angleInDegrees: number) => {
       const angleInRadians = (angleInDegrees - 90) * Math.PI / 180.0
@@ -1505,31 +1526,32 @@ export default function AnalyticsPage() {
       return `M ${x} ${y} L ${start.x} ${start.y} A ${radius} ${radius} 0 ${largeArc} 0 ${end.x} ${end.y} Z`
     }
 
-    const centerX = 120
-    const centerY = 120
-    const radius = 80
+    const centerX = 200
+    const centerY = 200
+    const radius = 140
     let currentAngle = 0
 
     return (
       <div className={styles.chartCard}>
         <h3 className={styles.chartTitle}>{widget.title}</h3>
         <div style={{ padding: '12px' }}>
-          <div className={styles.pieChart} style={{ height: '240px' }}>
-            <svg width="240" height="240" viewBox="0 0 240 240">
-              {priceSegments.map((segment, i) => {
+          <div className={styles.pieChart} style={{ height: '400px' }}>
+            <svg width="400" height="400" viewBox="0 0 400 400">
+              {productSegments.map((segment, i) => {
                 const percentage = (segment.value / totalValue) * 100
                 const sliceAngle = (percentage / 100) * 360
                 const endAngle = currentAngle + sliceAngle
                 const path = createArc(centerX, centerY, radius, currentAngle, endAngle)
+                const color = pieColors[i % pieColors.length]
 
                 const slice = (
                   <g key={i}>
                     <path
                       d={path}
-                      fill={segment.color}
+                      fill={color}
                       className={styles.pieSlice}
                     >
-                      <title>{`${segment.name}: ${segment.label} (${percentage.toFixed(1)}%)`}</title>
+                      <title>{`${segment.name}: ${formatCurrency(segment.value)} (${percentage.toFixed(1)}%)`}</title>
                     </path>
                   </g>
                 )
@@ -1539,28 +1561,31 @@ export default function AnalyticsPage() {
               })}
 
               {/* Center text */}
-              <text x={centerX} y={centerY - 5} fontSize="11" fill="#64748b" textAnchor="middle">
-                Avg Price
+              <text x={centerX} y={centerY - 5} fontSize="13" fill="#64748b" textAnchor="middle">
+                Total Revenue
               </text>
-              <text x={centerX} y={centerY + 10} fontSize="16" fill="#1e293b" fontWeight="600" textAnchor="middle">
-                {formatCurrency(avgPrice)}
+              <text x={centerX} y={centerY + 15} fontSize="20" fill="#1e293b" fontWeight="600" textAnchor="middle">
+                {formatCurrency(totalValue)}
               </text>
             </svg>
           </div>
 
-          {/* Price legend */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '12px', marginTop: '16px' }}>
-            {priceSegments.map((segment, i) => (
-              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <div style={{ width: '14px', height: '14px', backgroundColor: segment.color, borderRadius: '3px', flexShrink: 0 }} />
-                <span style={{ color: '#64748b', flex: 1 }}>
-                  {segment.name}
-                </span>
-                <span style={{ color: '#1e293b', fontWeight: '600' }}>
-                  {segment.label}
-                </span>
-              </div>
-            ))}
+          {/* Product legend */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '12px', marginTop: '16px', maxHeight: '150px', overflowY: 'auto' }}>
+            {productSegments.map((segment, i) => {
+              const percentage = (segment.value / totalValue) * 100
+              return (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{ width: '14px', height: '14px', backgroundColor: pieColors[i % pieColors.length], borderRadius: '3px', flexShrink: 0 }} />
+                  <span style={{ color: '#64748b', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {segment.name}
+                  </span>
+                  <span style={{ color: '#1e293b', fontWeight: '600' }}>
+                    {formatCurrency(segment.value)} ({percentage.toFixed(1)}%)
+                  </span>
+                </div>
+              )
+            })}
           </div>
         </div>
       </div>
