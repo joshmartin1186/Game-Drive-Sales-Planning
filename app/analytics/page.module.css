@@ -557,6 +557,7 @@
 .chartsGrid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
+  grid-auto-rows: 350px;
   gap: 16px;
   margin-bottom: 16px;
 }
@@ -719,7 +720,8 @@
 /* Line Chart for Period Growth */
 .lineChart {
   width: 100%;
-  height: 200px;
+  flex: 1;
+  min-height: 200px;
   position: relative;
 }
 
@@ -750,7 +752,8 @@
 /* Pie Chart for Revenue Per Unit */
 .pieChart {
   width: 100%;
-  height: 240px;
+  flex: 1;
+  min-height: 240px;
   position: relative;
   display: flex;
   align-items: center;
@@ -844,6 +847,9 @@
   padding: 12px 14px;
   border-radius: 8px;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 .chartTitle {
@@ -877,6 +883,9 @@
 .barChartContainer {
   width: 100%;
   overflow-x: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
 }
 
 /* Bar Chart */
@@ -884,7 +893,8 @@
   display: flex;
   align-items: flex-end;
   gap: 8px;
-  height: 200px;
+  flex: 1;
+  min-height: 200px;
   min-width: fit-content;
   padding: 0 4px;
 }
@@ -970,6 +980,9 @@
 /* Heatmap */
 .heatmapContainer {
   padding: 16px 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
 }
 
 .heatmapGrid {
@@ -1020,6 +1033,8 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
+  flex: 1;
+  overflow-y: auto;
 }
 
 .horizontalBarRow {
@@ -1096,6 +1111,9 @@
   border-radius: 12px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
   margin-bottom: 24px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 .sectionHeader {
@@ -1118,6 +1136,9 @@
 /* Period Table */
 .periodTable {
   overflow-x: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
 }
 
 .periodTable table {

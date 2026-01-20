@@ -2068,7 +2068,10 @@ export default function AnalyticsPage() {
                   onDragEnd={handleDragEnd}
                   onDrop={() => handleDrop(widget.id)}
                   onDragOver={handleDragOver}
-                  style={{ gridColumn: widget.size.w === 2 ? 'span 2' : 'span 1' }}
+                  style={{
+                    gridColumn: widget.size.w === 2 ? 'span 2' : 'span 1',
+                    gridRow: widget.size.h === 2 ? 'span 2' : 'span 1'
+                  }}
                 >
                   {isEditMode && (
                     <>
@@ -2087,7 +2090,7 @@ export default function AnalyticsPage() {
                       <div className={styles.resizeControls}>
                         <button
                           className={styles.resizeBtn}
-                          onClick={() => handleResizeWidget(widget.id, { w: 1, h: 1 })}
+                          onClick={() => handleResizeWidget(widget.id, { w: 1, h: widget.size.h })}
                           title="Half width"
                         >
                           <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -2097,8 +2100,26 @@ export default function AnalyticsPage() {
                         </button>
                         <button
                           className={styles.resizeBtn}
-                          onClick={() => handleResizeWidget(widget.id, { w: 2, h: 1 })}
+                          onClick={() => handleResizeWidget(widget.id, { w: 2, h: widget.size.h })}
                           title="Full width"
+                        >
+                          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                            <rect x="1" y="1" width="14" height="14" stroke="currentColor" strokeWidth="1.5" />
+                          </svg>
+                        </button>
+                        <button
+                          className={styles.resizeBtn}
+                          onClick={() => handleResizeWidget(widget.id, { w: widget.size.w, h: 1 })}
+                          title="Normal height"
+                        >
+                          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                            <rect x="1" y="5" width="14" height="6" stroke="currentColor" strokeWidth="1.5" />
+                          </svg>
+                        </button>
+                        <button
+                          className={styles.resizeBtn}
+                          onClick={() => handleResizeWidget(widget.id, { w: widget.size.w, h: 2 })}
+                          title="Tall height"
                         >
                           <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                             <rect x="1" y="1" width="14" height="14" stroke="currentColor" strokeWidth="1.5" />
