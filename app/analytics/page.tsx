@@ -587,8 +587,24 @@ export default function AnalyticsPage() {
     if (currentPeriod) {
       pushPeriod(periods, currentPeriod)
     }
-    
+
     return periods
+  }, [performanceData])
+
+  // Memoize product revenue calculation for pie chart
+  const productRevenueData = useMemo(() => {
+    if (!performanceData.length) return []
+
+    const productRevenue = new Map<string, number>()
+    performanceData.forEach(row => {
+      const product = row.product_name || 'Unknown'
+      const revenue = toNumber(row.net_steam_sales_usd)
+      productRevenue.set(product, (productRevenue.get(product) || 0) + revenue)
+    })
+
+    return Array.from(productRevenue.entries())
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value)
   }, [performanceData])
 
   const formatCurrency = (value: number) => {
@@ -855,19 +871,23 @@ export default function AnalyticsPage() {
 
               {/* X-axis labels */}
               {sampledData.map((d, i) => {
-                // Show fewer labels to prevent overlap - max 6 labels
-                const maxLabels = 6
-                const labelInterval = Math.max(1, Math.floor(sampledData.length / (maxLabels - 1)))
+                // Show only 4 labels to prevent overlap - first, last, and 2 in between
+                const maxLabels = 4
+                const shouldShowLabel =
+                  i === 0 ||
+                  i === sampledData.length - 1 ||
+                  i === Math.floor(sampledData.length / 3) ||
+                  i === Math.floor((2 * sampledData.length) / 3)
 
-                if (i % labelInterval === 0 || i === sampledData.length - 1) {
+                if (shouldShowLabel) {
                   const x = padding.left + (i / (sampledData.length - 1)) * chartWidth
-                  const y = padding.top + chartHeight + 20
+                  const y = padding.top + chartHeight + 25
                   return (
                     <text
                       key={i}
                       x={x}
                       y={y}
-                      fontSize="10"
+                      fontSize="9"
                       fill="#64748b"
                       textAnchor="end"
                       transform={`rotate(-45, ${x}, ${y})`}
@@ -1471,29 +1491,7 @@ export default function AnalyticsPage() {
 
   // Render pie chart for Revenue by Product
   const renderRevenuePieChart = (widget: DashboardWidget) => {
-    if (!performanceData.length) {
-      return (
-        <div className={styles.chartCard}>
-          <h3 className={styles.chartTitle}>{widget.title}</h3>
-          <div className={styles.noChartData}>No product data available</div>
-        </div>
-      )
-    }
-
-    // Aggregate revenue by product
-    const productRevenue = new Map<string, number>()
-    performanceData.forEach(row => {
-      const product = row.product_name || 'Unknown'
-      const revenue = toNumber(row.net_steam_sales_usd)
-      productRevenue.set(product, (productRevenue.get(product) || 0) + revenue)
-    })
-
-    // Convert to array and sort by revenue
-    const productSegments = Array.from(productRevenue.entries())
-      .map(([name, value]) => ({ name, value }))
-      .sort((a, b) => b.value - a.value)
-
-    if (productSegments.length === 0) {
+    if (productRevenueData.length === 0) {
       return (
         <div className={styles.chartCard}>
           <h3 className={styles.chartTitle}>{widget.title}</h3>
@@ -1509,7 +1507,7 @@ export default function AnalyticsPage() {
       '#14b8a6', '#a855f7', '#f97316', '#22c55e'
     ]
 
-    const totalValue = productSegments.reduce((sum, s) => sum + s.value, 0)
+    const totalValue = productRevenueData.reduce((sum, s) => sum + s.value, 0)
 
     const polarToCartesian = (centerX: number, centerY: number, radius: number, angleInDegrees: number) => {
       const angleInRadians = (angleInDegrees - 90) * Math.PI / 180.0
@@ -1537,7 +1535,7 @@ export default function AnalyticsPage() {
         <div style={{ padding: '12px' }}>
           <div className={styles.pieChart} style={{ height: '400px' }}>
             <svg width="400" height="400" viewBox="0 0 400 400">
-              {productSegments.map((segment, i) => {
+              {productRevenueData.map((segment, i) => {
                 const percentage = (segment.value / totalValue) * 100
                 const sliceAngle = (percentage / 100) * 360
                 const endAngle = currentAngle + sliceAngle
@@ -1572,7 +1570,7 @@ export default function AnalyticsPage() {
 
           {/* Product legend */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '12px', marginTop: '16px', maxHeight: '150px', overflowY: 'auto' }}>
-            {productSegments.map((segment, i) => {
+            {productRevenueData.map((segment, i) => {
               const percentage = (segment.value / totalValue) * 100
               return (
                 <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
