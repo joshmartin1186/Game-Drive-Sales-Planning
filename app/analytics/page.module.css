@@ -392,6 +392,8 @@
   position: relative;
   min-height: 0;
   min-width: 0;
+  overflow: hidden;
+  contain: layout style paint;
 }
 
 .editableWidget {
