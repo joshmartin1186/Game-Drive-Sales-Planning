@@ -108,9 +108,21 @@ interface DashboardWidget {
   title: string
   config: {
     statKey?: string
-    chartType?: 'bar' | 'line' | 'pie' | 'choropleth' | 'stacked-bar'
+    chartType?: 'bar' | 'line' | 'pie' | 'area' | 'donut' | 'choropleth' | 'stacked-bar' | 'horizontal-bar'
     dataSource?: string
     mapType?: string
+    // Filter options
+    filterProduct?: string
+    filterClient?: string
+    filterRegion?: string
+    filterPlatform?: string
+    // Display options
+    showLegend?: boolean
+    showGrid?: boolean
+    colorScheme?: 'blue' | 'green' | 'purple' | 'multi'
+    // Aggregation options
+    aggregateBy?: 'sum' | 'avg' | 'min' | 'max'
+    groupBy?: 'day' | 'week' | 'month' | 'quarter' | 'year'
   }
   position: { x: number; y: number }
   size: { w: number; h: number }
@@ -2073,6 +2085,10 @@ export default function AnalyticsPage() {
             widget={editingWidget}
             onClose={() => setEditingWidget(null)}
             onSave={handleSaveWidget}
+            products={products}
+            clients={clients}
+            regions={regions}
+            platforms={['Steam', 'Epic', 'GOG', 'Itch.io']}
           />
         )}
       </div>
@@ -2148,15 +2164,34 @@ function AddWidgetModal({ onClose, onAdd }: { onClose: () => void; onAdd: (type:
 }
 
 // Edit Widget Modal
-function EditWidgetModal({ widget, onClose, onSave }: {
+function EditWidgetModal({ widget, onClose, onSave, products, clients, regions, platforms }: {
   widget: DashboardWidget;
   onClose: () => void;
-  onSave: (widget: DashboardWidget) => void
+  onSave: (widget: DashboardWidget) => void;
+  products: string[];
+  clients: { id: string; name: string }[];
+  regions: string[];
+  platforms: string[];
 }) {
   const [title, setTitle] = useState(widget.title)
   const [chartType, setChartType] = useState(widget.config.chartType || 'bar')
   const [statKey, setStatKey] = useState(widget.config.statKey || 'totalRevenue')
   const [dataSource, setDataSource] = useState(widget.config.dataSource || 'daily')
+
+  // Filter states
+  const [filterProduct, setFilterProduct] = useState(widget.config.filterProduct || 'all')
+  const [filterClient, setFilterClient] = useState(widget.config.filterClient || 'all')
+  const [filterRegion, setFilterRegion] = useState(widget.config.filterRegion || 'all')
+  const [filterPlatform, setFilterPlatform] = useState(widget.config.filterPlatform || 'all')
+
+  // Display states
+  const [showLegend, setShowLegend] = useState(widget.config.showLegend ?? true)
+  const [showGrid, setShowGrid] = useState(widget.config.showGrid ?? true)
+  const [colorScheme, setColorScheme] = useState(widget.config.colorScheme || 'blue')
+
+  // Aggregation states
+  const [aggregateBy, setAggregateBy] = useState(widget.config.aggregateBy || 'sum')
+  const [groupBy, setGroupBy] = useState(widget.config.groupBy || 'day')
 
   const handleSave = () => {
     const updatedWidget: DashboardWidget = {
@@ -2166,7 +2201,19 @@ function EditWidgetModal({ widget, onClose, onSave }: {
         ...widget.config,
         ...(widget.type === 'stat' ? { statKey } : {}),
         ...(widget.type === 'chart' || widget.type === 'pie' ? { chartType, dataSource } : {}),
-        ...(widget.type === 'region' || widget.type === 'countries' || widget.type === 'world-map' ? { dataSource } : {})
+        ...(widget.type === 'region' || widget.type === 'countries' || widget.type === 'world-map' ? { dataSource } : {}),
+        // Always save filter options
+        filterProduct: filterProduct === 'all' ? undefined : filterProduct,
+        filterClient: filterClient === 'all' ? undefined : filterClient,
+        filterRegion: filterRegion === 'all' ? undefined : filterRegion,
+        filterPlatform: filterPlatform === 'all' ? undefined : filterPlatform,
+        // Display options
+        showLegend,
+        showGrid,
+        colorScheme,
+        // Aggregation options
+        aggregateBy,
+        groupBy
       }
     }
     onSave(updatedWidget)
@@ -2183,13 +2230,39 @@ function EditWidgetModal({ widget, onClose, onSave }: {
   const chartTypeOptions = [
     { value: 'bar', label: 'Bar Chart' },
     { value: 'line', label: 'Line Chart' },
-    { value: 'pie', label: 'Pie Chart' }
+    { value: 'pie', label: 'Pie Chart' },
+    { value: 'area', label: 'Area Chart' },
+    { value: 'donut', label: 'Donut Chart' },
+    { value: 'horizontal-bar', label: 'Horizontal Bar' },
+    { value: 'stacked-bar', label: 'Stacked Bar' }
   ]
 
   const dataSourceOptions = [
     { value: 'daily', label: 'Daily Data' },
     { value: 'monthly', label: 'Monthly Data' },
     { value: 'quarterly', label: 'Quarterly Data' }
+  ]
+
+  const colorSchemeOptions = [
+    { value: 'blue', label: 'Blue' },
+    { value: 'green', label: 'Green' },
+    { value: 'purple', label: 'Purple' },
+    { value: 'multi', label: 'Multi-Color' }
+  ]
+
+  const aggregateByOptions = [
+    { value: 'sum', label: 'Sum' },
+    { value: 'avg', label: 'Average' },
+    { value: 'min', label: 'Minimum' },
+    { value: 'max', label: 'Maximum' }
+  ]
+
+  const groupByOptions = [
+    { value: 'day', label: 'Daily' },
+    { value: 'week', label: 'Weekly' },
+    { value: 'month', label: 'Monthly' },
+    { value: 'quarter', label: 'Quarterly' },
+    { value: 'year', label: 'Yearly' }
   ]
 
   return (
@@ -2276,7 +2349,151 @@ function EditWidgetModal({ widget, onClose, onSave }: {
             </div>
           )}
 
-          <div className={styles.formGroup}>
+          {/* Filters Section */}
+          <div style={{ marginTop: '24px', paddingTop: '24px', borderTop: '1px solid #e2e8f0' }}>
+            <h3 style={{ fontSize: '14px', fontWeight: '600', color: '#1e293b', marginBottom: '12px' }}>
+              Data Filters
+            </h3>
+
+            <div className={styles.formGroup}>
+              <label className={styles.formLabel}>Filter by Product</label>
+              <select
+                className={styles.formInput}
+                value={filterProduct}
+                onChange={(e) => setFilterProduct(e.target.value)}
+              >
+                <option value="all">All Products</option>
+                {products.map(product => (
+                  <option key={product} value={product}>{product}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className={styles.formGroup}>
+              <label className={styles.formLabel}>Filter by Client</label>
+              <select
+                className={styles.formInput}
+                value={filterClient}
+                onChange={(e) => setFilterClient(e.target.value)}
+              >
+                <option value="all">All Clients</option>
+                {clients.map(client => (
+                  <option key={client.id} value={client.id}>{client.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className={styles.formGroup}>
+              <label className={styles.formLabel}>Filter by Region</label>
+              <select
+                className={styles.formInput}
+                value={filterRegion}
+                onChange={(e) => setFilterRegion(e.target.value)}
+              >
+                <option value="all">All Regions</option>
+                {regions.map(region => (
+                  <option key={region} value={region}>{region}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className={styles.formGroup}>
+              <label className={styles.formLabel}>Filter by Platform</label>
+              <select
+                className={styles.formInput}
+                value={filterPlatform}
+                onChange={(e) => setFilterPlatform(e.target.value)}
+              >
+                <option value="all">All Platforms</option>
+                {platforms.map(platform => (
+                  <option key={platform} value={platform}>{platform}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Display Options Section */}
+          {(widget.type === 'chart' || widget.type === 'pie') && (
+            <div style={{ marginTop: '24px', paddingTop: '24px', borderTop: '1px solid #e2e8f0' }}>
+              <h3 style={{ fontSize: '14px', fontWeight: '600', color: '#1e293b', marginBottom: '12px' }}>
+                Display Options
+              </h3>
+
+              <div className={styles.formGroup}>
+                <label className={styles.formLabel}>Color Scheme</label>
+                <select
+                  className={styles.formInput}
+                  value={colorScheme}
+                  onChange={(e) => setColorScheme(e.target.value as any)}
+                >
+                  {colorSchemeOptions.map(opt => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className={styles.formGroup}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={showLegend}
+                    onChange={(e) => setShowLegend(e.target.checked)}
+                    style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                  />
+                  <span className={styles.formLabel} style={{ marginBottom: 0 }}>Show Legend</span>
+                </label>
+              </div>
+
+              <div className={styles.formGroup}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={showGrid}
+                    onChange={(e) => setShowGrid(e.target.checked)}
+                    style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                  />
+                  <span className={styles.formLabel} style={{ marginBottom: 0 }}>Show Grid Lines</span>
+                </label>
+              </div>
+            </div>
+          )}
+
+          {/* Aggregation Options Section */}
+          {(widget.type === 'chart' || widget.type === 'stat') && (
+            <div style={{ marginTop: '24px', paddingTop: '24px', borderTop: '1px solid #e2e8f0' }}>
+              <h3 style={{ fontSize: '14px', fontWeight: '600', color: '#1e293b', marginBottom: '12px' }}>
+                Aggregation Options
+              </h3>
+
+              <div className={styles.formGroup}>
+                <label className={styles.formLabel}>Aggregate By</label>
+                <select
+                  className={styles.formInput}
+                  value={aggregateBy}
+                  onChange={(e) => setAggregateBy(e.target.value as any)}
+                >
+                  {aggregateByOptions.map(opt => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className={styles.formGroup}>
+                <label className={styles.formLabel}>Group By</label>
+                <select
+                  className={styles.formInput}
+                  value={groupBy}
+                  onChange={(e) => setGroupBy(e.target.value as any)}
+                >
+                  {groupByOptions.map(opt => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          )}
+
+          <div className={styles.formGroup} style={{ marginTop: '24px' }}>
             <label className={styles.formLabel}>Widget Type</label>
             <div className={styles.formInput} style={{ backgroundColor: '#f8fafc', cursor: 'not-allowed' }}>
               {widget.type}
