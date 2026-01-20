@@ -392,8 +392,7 @@
   position: relative;
   min-height: 0;
   min-width: 0;
-  overflow: hidden;
-  contain: layout style paint;
+  contain: layout style;
 }
 
 .editableWidget {
@@ -860,6 +859,7 @@
   height: 100%;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .chartTitle {

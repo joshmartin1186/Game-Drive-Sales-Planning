@@ -1676,9 +1676,8 @@ export default function AnalyticsPage() {
     return (
       <div className={styles.chartCard}>
         <h3 className={styles.chartTitle}>{widget.title}</h3>
-        <div style={{ padding: '12px' }}>
-          <div className={styles.pieChart} style={{ height: '400px', position: 'relative' }}>
-            <svg width="400" height="400" viewBox="0 0 400 400">
+        <div className={styles.pieChart}>
+          <svg viewBox="0 0 400 400" style={{ width: '100%', height: '100%' }}>
               {productRevenueData.map((segment, i) => {
                 const percentage = (segment.value / totalValue) * 100
                 const sliceAngle = (percentage / 100) * 360
@@ -1729,23 +1728,22 @@ export default function AnalyticsPage() {
             )}
           </div>
 
-          {/* Product legend */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '12px', marginTop: '16px', maxHeight: '150px', overflowY: 'auto' }}>
-            {productRevenueData.map((segment, i) => {
-              const percentage = (segment.value / totalValue) * 100
-              return (
-                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <div style={{ width: '14px', height: '14px', backgroundColor: pieColors[i % pieColors.length], borderRadius: '3px', flexShrink: 0 }} />
-                  <span style={{ color: '#64748b', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {segment.name}
-                  </span>
-                  <span style={{ color: '#1e293b', fontWeight: '600' }}>
-                    {formatCurrency(segment.value)} ({percentage.toFixed(1)}%)
-                  </span>
-                </div>
-              )
-            })}
-          </div>
+        {/* Product legend */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '12px', marginTop: '8px', maxHeight: '120px', overflowY: 'auto', flexShrink: 0 }}>
+          {productRevenueData.map((segment, i) => {
+            const percentage = (segment.value / totalValue) * 100
+            return (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div style={{ width: '14px', height: '14px', backgroundColor: pieColors[i % pieColors.length], borderRadius: '3px', flexShrink: 0 }} />
+                <span style={{ color: '#64748b', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {segment.name}
+                </span>
+                <span style={{ color: '#1e293b', fontWeight: '600' }}>
+                  {formatCurrency(segment.value)} ({percentage.toFixed(1)}%)
+                </span>
+              </div>
+            )
+          })}
         </div>
       </div>
     )
