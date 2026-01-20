@@ -2,7 +2,7 @@
 
 // Cache invalidation: 2026-01-16T12:00:00Z - Editable dashboard with drag-drop widgets
 
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
@@ -626,7 +626,10 @@ export default function AnalyticsPage() {
       // Tooltips with full date and year
       return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })
     }
-    // Bar labels in daily view
+    // Bar labels in daily view - show just month for cleaner look
+    if (forLabel) {
+      return date.toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' })
+    }
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
   }
 
@@ -785,44 +788,67 @@ export default function AnalyticsPage() {
                   intensity > 0.6 ? '#60a5fa' :
                   intensity > 0.4 ? '#93c5fd' : '#cbd5e1'
 
-                // Show year on label when crossing year boundary in multi-year views
+                // Show year on first occurrence and when crossing year boundary
                 const currentYear = day.date.substring(0, 4)
                 const previousYear = idx > 0 ? dailyData[idx - 1].date.substring(0, 4) : null
-                const showYearOnLabel = hasMultipleYears && currentYear !== previousYear
+                const isFirstOfYear = hasMultipleYears && (idx === 0 || currentYear !== previousYear)
 
                 return (
-                  <div
-                    key={idx}
-                    className={styles.barColumn}
-                    onMouseMove={(e) => {
-                      const tooltip = e.currentTarget.querySelector(`.${styles.barTooltip}`) as HTMLElement
-                      if (tooltip) {
-                        const rect = e.currentTarget.getBoundingClientRect()
-                        tooltip.style.left = `${rect.left + rect.width / 2}px`
-                        tooltip.style.top = `${rect.top}px`
-                      }
-                    }}
-                  >
-                    <div className={styles.barTooltip}>
-                      <div style={{ fontWeight: 700, marginBottom: '6px', fontSize: '15px' }}>{formatDate(day.date)}</div>
-                      <div style={{ fontSize: '14px', marginBottom: '2px' }}><strong>Revenue:</strong> {formatCurrency(day.revenue)}</div>
-                      <div style={{ fontSize: '14px' }}><strong>Units:</strong> {formatNumber(day.units)}</div>
-                      {day.isSale && <div style={{ marginTop: '6px', color: '#10b981', fontWeight: 600 }}>🏷️ Sale Period</div>}
+                  <React.Fragment key={idx}>
+                    {/* Year divider marker when crossing year boundary (but not first item) */}
+                    {isFirstOfYear && idx > 0 && (
+                      <div style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'flex-end',
+                        minWidth: '40px',
+                        paddingBottom: '24px'
+                      }}>
+                        <div style={{
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          color: '#3b82f6',
+                          backgroundColor: '#eff6ff',
+                          padding: '4px 8px',
+                          borderRadius: '4px',
+                          border: '1px solid #bfdbfe'
+                        }}>
+                          {currentYear}
+                        </div>
+                      </div>
+                    )}
+                    <div
+                      className={styles.barColumn}
+                      onMouseMove={(e) => {
+                        const tooltip = e.currentTarget.querySelector(`.${styles.barTooltip}`) as HTMLElement
+                        if (tooltip) {
+                          const rect = e.currentTarget.getBoundingClientRect()
+                          tooltip.style.left = `${rect.left + rect.width / 2}px`
+                          tooltip.style.top = `${rect.top}px`
+                        }
+                      }}
+                    >
+                      <div className={styles.barTooltip}>
+                        <div style={{ fontWeight: 700, marginBottom: '6px', fontSize: '15px' }}>{formatDate(day.date)}</div>
+                        <div style={{ fontSize: '14px', marginBottom: '2px' }}><strong>Revenue:</strong> {formatCurrency(day.revenue)}</div>
+                        <div style={{ fontSize: '14px' }}><strong>Units:</strong> {formatNumber(day.units)}</div>
+                        {day.isSale && <div style={{ marginTop: '6px', color: '#10b981', fontWeight: 600 }}>🏷️ Sale Period</div>}
+                      </div>
+                      <div className={styles.barWrapper}>
+                        <div
+                          className={styles.bar}
+                          style={{
+                            height: `${Math.max((day.revenue / maxDailyRevenue) * 100, 2)}%`,
+                            backgroundColor: barColor
+                          }}
+                        />
+                      </div>
+                      <span className={styles.barLabel}>
+                        {formatDate(day.date, false, true)}
+                      </span>
                     </div>
-                    <div className={styles.barWrapper}>
-                      <div
-                        className={styles.bar}
-                        style={{
-                          height: `${Math.max((day.revenue / maxDailyRevenue) * 100, 2)}%`,
-                          backgroundColor: barColor
-                        }}
-                      />
-                    </div>
-                    <span className={styles.barLabel}>
-                      {formatDate(day.date, false, true)}
-                      {showYearOnLabel && <div style={{ fontSize: '10px', color: '#3b82f6', fontWeight: 600, marginTop: '2px' }}>{currentYear}</div>}
-                    </span>
-                  </div>
+                  </React.Fragment>
                 )
               })}
             </div>

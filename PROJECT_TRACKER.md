@@ -10,9 +10,12 @@
 ## ✅ Completed (Session: 2026-01-20)
 
 ### Revenue Over Time Chart Improvements
-- [x] Fixed month labels to show "Jan" instead of "Jan 1" for cleaner appearance
+- [x] Fixed month labels to show "Jan" instead of "Jan 1" for all views (monthly and daily)
 - [x] Added year range display in chart header (e.g., "2024 - 2025")
-- [x] Added year indicators on X-axis when data crosses year boundaries
+- [x] Redesigned year indicators as clean badge dividers between years
+  - Year badges appear between data points when crossing year boundaries
+  - Blue highlighted badges with subtle border (not stacked below months)
+  - Cleaner, less cluttered appearance
 - [x] Made bars thinner for better visualization (max-width: 20px, min-width: 24px)
 - [x] Fixed tooltip positioning to use fixed positioning and stay within viewport
 - [x] Tooltips now properly positioned above bars without being cut off
