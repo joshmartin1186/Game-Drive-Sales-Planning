@@ -243,6 +243,7 @@ export default function AnalyticsPage() {
   const [selectedRegion, setSelectedRegion] = useState<string>('all')
   const [selectedPlatform, setSelectedPlatform] = useState<string>('all')
   const [hoveredPieSlice, setHoveredPieSlice] = useState<number | null>(null)
+  const [hoveredLinePoint, setHoveredLinePoint] = useState<{ index: number; x: number; y: number } | null>(null)
   const [products, setProducts] = useState<string[]>([])
   const [clients, setClients] = useState<{id: string, name: string}[]>([])
   const [regions, setRegions] = useState<string[]>([])
@@ -633,6 +634,16 @@ export default function AnalyticsPage() {
     const regularData = { revenue: 0, units: 0, days: 0 }
     const seenDates = new Set<string>()
 
+    // Debug: Check sample data
+    const sampleRows = performanceData.slice(0, 5)
+    console.log('[Sale Performance Debug] Sample rows:', sampleRows.map(row => ({
+      date: row.date,
+      base_price: row.base_price_usd,
+      sale_price: row.sale_price_usd,
+      isSale: isSalePrice(row.base_price_usd, row.sale_price_usd),
+      revenue: toNumber(row.net_steam_sales_usd)
+    })))
+
     performanceData.forEach(row => {
       const date = row.date
       const isSale = isSalePrice(row.base_price_usd, row.sale_price_usd)
@@ -656,6 +667,7 @@ export default function AnalyticsPage() {
       }
     })
 
+    console.log('[Sale Performance Debug] Results:', { saleData, regularData })
     return { saleData, regularData }
   }, [performanceData])
 
@@ -849,7 +861,7 @@ export default function AnalyticsPage() {
       return (
         <div className={styles.chartCard}>
           <h3 className={styles.chartTitle}>{widget.title}</h3>
-          <div style={{ padding: '12px', overflowX: 'auto' }}>
+          <div style={{ padding: '12px', overflowX: 'auto', position: 'relative' }}>
             <svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="xMidYMid meet">
               {/* Y-axis grid lines only - no numbers */}
               {[0, 0.25, 0.5, 0.75, 1].map((fraction, i) => {
@@ -904,9 +916,16 @@ export default function AnalyticsPage() {
                 const x = padding.left + (i / (sampledData.length - 1)) * chartWidth
                 const y = padding.top + chartHeight - (d.revenue / maxRevenue) * chartHeight
                 return (
-                  <circle key={i} cx={x} cy={y} r="4" fill="#3b82f6">
-                    <title>{`${formatDate(d.date)}: ${formatCurrency(d.revenue)}`}</title>
-                  </circle>
+                  <circle
+                    key={i}
+                    cx={x}
+                    cy={y}
+                    r="6"
+                    fill="#3b82f6"
+                    onMouseEnter={() => setHoveredLinePoint({ index: i, x, y })}
+                    onMouseLeave={() => setHoveredLinePoint(null)}
+                    style={{ cursor: 'pointer' }}
+                  />
                 )
               })}
 
@@ -963,6 +982,31 @@ export default function AnalyticsPage() {
                 Date
               </text>
             </svg>
+
+            {/* Hover tooltip */}
+            {hoveredLinePoint !== null && (
+              <div style={{
+                position: 'absolute',
+                left: `${(hoveredLinePoint.x / width) * 100}%`,
+                top: `${(hoveredLinePoint.y / height) * 100 - 10}%`,
+                transform: 'translate(-50%, -100%)',
+                backgroundColor: 'white',
+                padding: '8px 12px',
+                borderRadius: '6px',
+                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+                border: '1px solid #e2e8f0',
+                pointerEvents: 'none',
+                zIndex: 10,
+                whiteSpace: 'nowrap'
+              }}>
+                <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '2px' }}>
+                  {formatDate(sampledData[hoveredLinePoint.index].date)}
+                </div>
+                <div style={{ fontSize: '16px', fontWeight: '700', color: '#1e293b' }}>
+                  {formatCurrency(sampledData[hoveredLinePoint.index].revenue)}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )
@@ -1574,7 +1618,7 @@ export default function AnalyticsPage() {
       <div className={styles.chartCard}>
         <h3 className={styles.chartTitle}>{widget.title}</h3>
         <div style={{ padding: '12px' }}>
-          <div className={styles.pieChart} style={{ height: '400px' }}>
+          <div className={styles.pieChart} style={{ height: '400px', position: 'relative' }}>
             <svg width="400" height="400" viewBox="0 0 400 400">
               {productRevenueData.map((segment, i) => {
                 const percentage = (segment.value / totalValue) * 100
@@ -1599,31 +1643,31 @@ export default function AnalyticsPage() {
                 currentAngle = endAngle
                 return slice
               })}
-
-              {/* Center text - shows hovered slice or total */}
-              {hoveredPieSlice !== null ? (
-                <>
-                  <text x={centerX} y={centerY - 20} fontSize="12" fill="#64748b" textAnchor="middle">
-                    {productRevenueData[hoveredPieSlice].name}
-                  </text>
-                  <text x={centerX} y={centerY + 5} fontSize="18" fill="#1e293b" fontWeight="600" textAnchor="middle">
-                    {formatCurrency(productRevenueData[hoveredPieSlice].value)}
-                  </text>
-                  <text x={centerX} y={centerY + 25} fontSize="12" fill="#64748b" textAnchor="middle">
-                    {((productRevenueData[hoveredPieSlice].value / totalValue) * 100).toFixed(1)}%
-                  </text>
-                </>
-              ) : (
-                <>
-                  <text x={centerX} y={centerY - 5} fontSize="13" fill="#64748b" textAnchor="middle">
-                    Total Revenue
-                  </text>
-                  <text x={centerX} y={centerY + 15} fontSize="20" fill="#1e293b" fontWeight="600" textAnchor="middle">
-                    {formatCurrency(totalValue)}
-                  </text>
-                </>
-              )}
             </svg>
+
+            {/* Popup tooltip */}
+            {hoveredPieSlice !== null && (
+              <div style={{
+                position: 'absolute',
+                top: '50%',
+                left: '50%',
+                transform: 'translate(-50%, -50%)',
+                backgroundColor: 'white',
+                padding: '12px 16px',
+                borderRadius: '8px',
+                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+                border: '1px solid #e2e8f0',
+                pointerEvents: 'none',
+                zIndex: 10
+              }}>
+                <div style={{ fontSize: '13px', color: '#64748b', marginBottom: '4px', fontWeight: '500' }}>
+                  {productRevenueData[hoveredPieSlice].name}
+                </div>
+                <div style={{ fontSize: '20px', fontWeight: '700', color: '#1e293b' }}>
+                  {formatCurrency(productRevenueData[hoveredPieSlice].value)}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Product legend */}
