@@ -2062,16 +2062,12 @@ export default function AnalyticsPage() {
               {widgets.filter(w => w.type !== 'stat').map(widget => (
                 <div
                   key={widget.id}
-                  className={`${styles.widgetWrapper} ${widget.size.w === 2 ? styles.fullWidthWidget : ''} ${isEditMode ? styles.editableWidget : ''} ${draggedWidget === widget.id ? styles.dragging : ''}`}
+                  className={`${styles.widgetWrapper} ${widget.size.w === 2 ? styles.fullWidthWidget : ''} ${widget.size.h === 2 ? styles.tallWidget : ''} ${isEditMode ? styles.editableWidget : ''} ${draggedWidget === widget.id ? styles.dragging : ''}`}
                   draggable={isEditMode}
                   onDragStart={() => handleDragStart(widget.id)}
                   onDragEnd={handleDragEnd}
                   onDrop={() => handleDrop(widget.id)}
                   onDragOver={handleDragOver}
-                  style={{
-                    gridColumn: widget.size.w === 2 ? 'span 2' : 'span 1',
-                    gridRow: widget.size.h === 2 ? 'span 2' : 'span 1'
-                  }}
                 >
                   {isEditMode && (
                     <>
