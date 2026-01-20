@@ -1,0 +1,83 @@
+# GameDrive Project Tracker
+
+## 🚀 Next Priority
+- [ ] **Optimize default dashboard for client presentation**
+  - Make charts interactive/clickable for drill-down
+  - Add export functionality for charts/data
+  - Improve visual polish (animations, hover states)
+  - Add filtering controls within charts
+  - Consider adding sale period detection algorithm if base_price/sale_price data is unreliable
+
+## ✅ Completed (Session: 2026-01-19)
+
+### Analytics Dashboard Improvements
+- [x] Fixed Revenue Over Time chart labels
+  - Added year to X-axis labels (Jan 2024, Feb 2024, etc.)
+  - Month labels now clearly indicate data year
+
+- [x] Implemented revenue intensity gradient for bars
+  - Bars now show color gradient based on revenue (high = dark blue, low = light blue)
+  - Replaces sale/regular period coloring (no sale data in current dataset)
+
+- [x] Fixed tooltip visibility and positioning
+  - Tooltips now properly positioned above bars
+  - Won't cut off or render off-screen
+  - Dark background with white text for better contrast
+  - Shows date, revenue, units on hover
+
+- [x] Removed Revenue Heatmap widget
+  - Calendar heatmap provided no clear value to clients
+  - Removed to reduce clutter
+
+- [x] Significantly compacted layout
+  - Reduced gaps from 12-16px to 8px
+  - Reduced padding from 16-20px to 12-14px
+  - Reduced margins from 16-24px to 12px
+  - Smaller border-radius (8px vs 12px) for modern look
+  - Professional, compact appearance
+
+- [x] Added comprehensive default widgets
+  - 5 stat cards (Revenue, Units, Avg Daily Revenue/Units, Refund Rate)
+  - Period Growth widget
+  - Revenue Per Unit widget
+  - Revenue Over Time chart
+  - Revenue by Region chart
+  - Top Countries widget
+  - Sale Performance Analysis table
+
+- [x] Dashboard Builder mode functional
+  - All widgets support drag-and-drop
+  - Can add/remove widgets
+  - Layout persists in localStorage
+
+## 🐛 Known Issues
+- Sale period green bars not showing (data issue: base_price equals sale_price for all records)
+- Charts are not clickable/interactive beyond tooltips
+- No export functionality
+
+## 📝 Technical Notes
+- All changes deployed via Vercel
+- Build passes successfully
+- Uses Next.js 14.0.4
+- Client-side rendering for analytics page
+- Supabase for data storage
+
+## 🔄 Recent Commits
+- `b986bb3d` - Critical dashboard fixes: year labels, tooltip visibility, remove heatmap, tighter spacing
+- `ff872478` - Actually fix dashboard: gradient bars, darker heatmap, tighter spacing, better tooltips
+- `adf08d14` - Make heatmap colors more vivid and tooltips more obvious
+- `e32f2c8d` - Fix TypeScript error in heatmap widget type definitions
+- `c386e7d6` - Fix analytics dashboard: compact spacing, proper calendar heatmap, visible tooltips, year label
+- `ed4132b9` - Add 'heatmap' to DashboardWidget type definition
+- `ee6aa0da` - Fix analytics dashboard: proper month labels, visible tooltips, and add heatmap
+- `2badb162` - Enhance analytics dashboard: Fix chart labels, add comprehensive default widgets
+
+## 💡 Future Enhancements
+- [ ] Add interactive chart drill-downs
+- [ ] Export to Excel/CSV functionality
+- [ ] Real-time data updates
+- [ ] Custom date range picker with presets
+- [ ] Comparison mode (compare periods side-by-side)
+- [ ] Forecasting/trend projections
+- [ ] Alert system for anomalies
+- [ ] Mobile-responsive optimizations
