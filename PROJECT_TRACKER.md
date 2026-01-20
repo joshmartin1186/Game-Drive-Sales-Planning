@@ -12,9 +12,8 @@
 ### Revenue Over Time Chart Improvements
 - [x] Fixed month labels to show "Jan" instead of "Jan 1" for monthly aggregated views
 - [x] Fixed daily view labels based on date range selection:
-  - 7D/30D: Shows day numbers (1, 2, 3...) with month labels at month boundaries
+  - 7D/30D: Shows "Jan 13" format (month + day) for every bar
   - 90D/YTD/All Time: Shows only month labels (Jan, Feb, Mar...)
-- [x] Added month labels in daily view at the start of each month
 - [x] Added year range display in chart header (e.g., "2024 - 2025")
 - [x] Redesigned year indicators as clean badge dividers between years
   - Year badges appear between data points when crossing year boundaries (including first year)

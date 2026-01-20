@@ -631,9 +631,9 @@ export default function AnalyticsPage() {
       // Tooltips with full date and year
       return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })
     }
-    // Bar labels in daily view - show day number only
+    // Bar labels in daily view - show "Jan 13" format (month + day)
     if (forLabel) {
-      return date.toLocaleDateString('en-US', { day: 'numeric', timeZone: 'UTC' })
+      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
     }
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
   }
@@ -799,10 +799,7 @@ export default function AnalyticsPage() {
                 const previousYear = idx > 0 ? dailyData[idx - 1].date.substring(0, 4) : null
                 const isFirstOfYear = hasMultipleYears && (idx === 0 || currentYear !== previousYear)
 
-                // For daily views, show month label when crossing month boundary
-                const currentMonth = day.date.substring(0, 7) // YYYY-MM
-                const previousMonth = idx > 0 ? dailyData[idx - 1].date.substring(0, 7) : null
-                const isFirstOfMonth = !isMonthlyView && (idx === 0 || currentMonth !== previousMonth)
+                // Month label no longer needed since we show "Jan 13" format in daily views
 
                 return (
                   <React.Fragment key={idx}>
@@ -856,11 +853,6 @@ export default function AnalyticsPage() {
                         />
                       </div>
                       <span className={styles.barLabel}>
-                        {isFirstOfMonth && (
-                          <div style={{ fontSize: '10px', fontWeight: 600, color: '#64748b', marginBottom: '2px' }}>
-                            {new Date(day.date + 'T00:00:00Z').toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' })}
-                          </div>
-                        )}
                         {formatDate(day.date, false, true)}
                       </span>
                     </div>
