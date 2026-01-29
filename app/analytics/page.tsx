@@ -432,6 +432,85 @@ export default function AnalyticsPage() {
     return dailyEntries
   }, [performanceData, selectedDatePreset])
 
+  // Compute monthly aggregated data (always grouped by month regardless of date preset)
+  const monthlyData = useMemo((): DailyData[] => {
+    if (!performanceData.length) return []
+
+    const byDate = new Map<string, { revenue: number; units: number; hasSale: boolean }>()
+    performanceData.forEach(row => {
+      const existing = byDate.get(row.date) || { revenue: 0, units: 0, hasSale: false }
+      const rowIsSale = isSalePrice(row.base_price_usd, row.sale_price_usd)
+      byDate.set(row.date, {
+        revenue: existing.revenue + toNumber(row.net_steam_sales_usd),
+        units: existing.units + toNumber(row.net_units_sold),
+        hasSale: existing.hasSale || rowIsSale
+      })
+    })
+
+    const byMonth = new Map<string, { revenue: number; units: number; hasSale: boolean }>()
+    byDate.forEach((data, date) => {
+      const monthKey = date.substring(0, 7) + '-01'
+      const existing = byMonth.get(monthKey) || { revenue: 0, units: 0, hasSale: false }
+      byMonth.set(monthKey, {
+        revenue: existing.revenue + data.revenue,
+        units: existing.units + data.units,
+        hasSale: existing.hasSale || data.hasSale
+      })
+    })
+
+    return Array.from(byMonth.entries())
+      .map(([date, data]) => ({ date, revenue: data.revenue, units: data.units, isSale: data.hasSale }))
+      .sort((a, b) => a.date.localeCompare(b.date))
+  }, [performanceData])
+
+  // Compute quarterly aggregated data
+  const quarterlyData = useMemo((): DailyData[] => {
+    if (!performanceData.length) return []
+
+    const byDate = new Map<string, { revenue: number; units: number; hasSale: boolean }>()
+    performanceData.forEach(row => {
+      const existing = byDate.get(row.date) || { revenue: 0, units: 0, hasSale: false }
+      const rowIsSale = isSalePrice(row.base_price_usd, row.sale_price_usd)
+      byDate.set(row.date, {
+        revenue: existing.revenue + toNumber(row.net_steam_sales_usd),
+        units: existing.units + toNumber(row.net_units_sold),
+        hasSale: existing.hasSale || rowIsSale
+      })
+    })
+
+    const getQuarterKey = (date: string) => {
+      const month = parseInt(date.substring(5, 7), 10)
+      const year = date.substring(0, 4)
+      const quarter = Math.ceil(month / 3)
+      const quarterStartMonth = ((quarter - 1) * 3 + 1).toString().padStart(2, '0')
+      return `${year}-${quarterStartMonth}-01`
+    }
+
+    const byQuarter = new Map<string, { revenue: number; units: number; hasSale: boolean }>()
+    byDate.forEach((data, date) => {
+      const qKey = getQuarterKey(date)
+      const existing = byQuarter.get(qKey) || { revenue: 0, units: 0, hasSale: false }
+      byQuarter.set(qKey, {
+        revenue: existing.revenue + data.revenue,
+        units: existing.units + data.units,
+        hasSale: existing.hasSale || data.hasSale
+      })
+    })
+
+    return Array.from(byQuarter.entries())
+      .map(([date, data]) => ({ date, revenue: data.revenue, units: data.units, isSale: data.hasSale }))
+      .sort((a, b) => a.date.localeCompare(b.date))
+  }, [performanceData])
+
+  // Get chart data based on widget's data source config
+  const getDataForSource = (dataSource: string): DailyData[] => {
+    switch (dataSource) {
+      case 'monthly': return monthlyData
+      case 'quarterly': return quarterlyData
+      default: return dailyData
+    }
+  }
+
   // Compute regional breakdown
   const regionData = useMemo((): RegionData[] => {
     if (!performanceData.length) return []
@@ -812,7 +891,7 @@ export default function AnalyticsPage() {
       id: `widget-${Date.now()}`,
       type,
       title,
-      config: type === 'stat' ? { statKey: 'totalRevenue' } : { chartType: 'bar', dataSource: 'daily' },
+      config: type === 'stat' ? { statKey: 'totalRevenue' } : { chartType: type === 'pie' ? 'pie' : 'bar', dataSource: 'daily' },
       position: { x: 0, y: widgets.reduce((max, w) => Math.max(max, w.position.y + w.size.h), 0) },
       size: type === 'stat' ? { w: 1, h: 1 } : { w: 2, h: 2 }
     }
@@ -884,11 +963,13 @@ export default function AnalyticsPage() {
 
   // Render chart widget
   const renderChartWidget = (widget: DashboardWidget) => {
-    const isMonthlyView = dailyData.length > 45
+    const widgetDataSource = widget.config.dataSource || 'daily'
+    const chartData = getDataForSource(widgetDataSource)
+    const isMonthlyView = widgetDataSource === 'monthly' || widgetDataSource === 'quarterly' || chartData.length > 45
     const chartType = widget.config.chartType || 'bar'
 
     // Detect year range for year indicators
-    const yearSet = new Set(dailyData.map(d => d.date.substring(0, 4)))
+    const yearSet = new Set(chartData.map(d => d.date.substring(0, 4)))
     const yearsArray = Array.from(yearSet).sort()
     const hasMultipleYears = yearsArray.length > 1
     const yearRange = yearsArray.length > 0
@@ -903,12 +984,12 @@ export default function AnalyticsPage() {
       const chartWidth = width - padding.left - padding.right
       const chartHeight = height - padding.top - padding.bottom
 
-      const maxRevenue = Math.max(...dailyData.map(d => d.revenue))
+      const maxRevenue = Math.max(...chartData.map(d => d.revenue))
 
       // Sample data points for cleaner visualization
-      const sampleSize = Math.min(dailyData.length, 30)
-      const sampleInterval = Math.max(1, Math.floor(dailyData.length / sampleSize))
-      const sampledData = dailyData.filter((_, i) => i % sampleInterval === 0 || i === dailyData.length - 1)
+      const sampleSize = Math.min(chartData.length, 30)
+      const sampleInterval = Math.max(1, Math.floor(chartData.length / sampleSize))
+      const sampledData = chartData.filter((_, i) => i % sampleInterval === 0 || i === chartData.length - 1)
 
       return (
         <div className={styles.chartCard}>
@@ -1075,7 +1156,294 @@ export default function AnalyticsPage() {
       )
     }
 
-    // Bar chart rendering (existing code)
+    // Area chart rendering
+    if (chartType === 'area') {
+      const width = 800
+      const height = 300
+      const padding = { top: 20, right: 40, bottom: 60, left: 40 }
+      const chartWidth = width - padding.left - padding.right
+      const chartHeight = height - padding.top - padding.bottom
+
+      const maxRevenue = Math.max(...chartData.map(d => d.revenue), 1)
+
+      const sampleSize = Math.min(chartData.length, 30)
+      const sampleInterval = Math.max(1, Math.floor(chartData.length / sampleSize))
+      const sampledData = chartData.filter((_, i) => i % sampleInterval === 0 || i === chartData.length - 1)
+
+      const areaPoints = sampledData.map((d, i) => {
+        const x = padding.left + (i / (sampledData.length - 1)) * chartWidth
+        const y = padding.top + chartHeight - (d.revenue / maxRevenue) * chartHeight
+        return { x, y, data: d }
+      })
+
+      const areaPath = `M ${padding.left} ${padding.top + chartHeight} ` +
+        areaPoints.map(p => `L ${p.x} ${p.y}`).join(' ') +
+        ` L ${padding.left + chartWidth} ${padding.top + chartHeight} Z`
+
+      const linePath = areaPoints.map(p => `${p.x},${p.y}`).join(' ')
+
+      return (
+        <div className={styles.chartCard}>
+          <h3 className={styles.chartTitle}>{widget.title}</h3>
+          <div style={{ padding: '12px', overflowX: 'auto', position: 'relative' }}>
+            <svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="xMidYMid meet">
+              {[0, 0.25, 0.5, 0.75, 1].map((fraction, i) => {
+                const y = padding.top + chartHeight - fraction * chartHeight
+                return <line key={i} x1={padding.left} y1={y} x2={width - padding.right} y2={y} stroke="#e2e8f0" strokeWidth="1" />
+              })}
+              <line x1={padding.left} y1={padding.top + chartHeight} x2={width - padding.right} y2={padding.top + chartHeight} stroke="#94a3b8" strokeWidth="2" />
+              <line x1={padding.left} y1={padding.top} x2={padding.left} y2={padding.top + chartHeight} stroke="#94a3b8" strokeWidth="2" />
+
+              <defs>
+                <linearGradient id={`areaGrad-${widget.id}`} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.3" />
+                  <stop offset="100%" stopColor="#3b82f6" stopOpacity="0.02" />
+                </linearGradient>
+              </defs>
+              <path d={areaPath} fill={`url(#areaGrad-${widget.id})`} />
+              <polyline fill="none" stroke="#3b82f6" strokeWidth="2.5" points={linePath} />
+
+              {areaPoints.map((p, i) => (
+                <circle
+                  key={i}
+                  cx={p.x}
+                  cy={p.y}
+                  r="4"
+                  fill="#3b82f6"
+                  onMouseEnter={() => setHoveredLinePoint({ index: i, x: p.x, y: p.y })}
+                  onMouseLeave={() => setHoveredLinePoint(null)}
+                  style={{ cursor: 'pointer' }}
+                />
+              ))}
+
+              {areaPoints.map((p, i) => {
+                const shouldShowLabel = i === 0 || i === areaPoints.length - 1 ||
+                  i === Math.floor(areaPoints.length / 3) || i === Math.floor((2 * areaPoints.length) / 3)
+                if (!shouldShowLabel) return null
+                const labelY = padding.top + chartHeight + 25
+                return (
+                  <text key={i} x={p.x} y={labelY} fontSize="9" fill="#64748b" textAnchor="end" transform={`rotate(-45, ${p.x}, ${labelY})`}>
+                    {formatDate(p.data.date, false, true)}
+                  </text>
+                )
+              })}
+            </svg>
+
+            {hoveredLinePoint !== null && (() => {
+              const leftPercent = (hoveredLinePoint.x / width) * 100
+              const topPercent = (hoveredLinePoint.y / height) * 100
+              const adjustedLeft = Math.min(Math.max(leftPercent, 10), 90)
+              const adjustedTop = Math.max(topPercent - 15, 5)
+              return (
+                <div style={{ position: 'absolute', left: `${adjustedLeft}%`, top: `${adjustedTop}%`, transform: 'translate(-50%, -100%)', backgroundColor: 'white', padding: '8px 12px', borderRadius: '6px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', border: '1px solid #e2e8f0', pointerEvents: 'none', zIndex: 10, whiteSpace: 'nowrap' }}>
+                  <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '2px' }}>{formatDate(sampledData[hoveredLinePoint.index].date)}</div>
+                  <div style={{ fontSize: '16px', fontWeight: '700', color: '#1e293b' }}>{formatCurrency(sampledData[hoveredLinePoint.index].revenue)}</div>
+                </div>
+              )
+            })()}
+          </div>
+        </div>
+      )
+    }
+
+    // Pie chart rendering (within chart widget)
+    if (chartType === 'pie' || chartType === 'donut') {
+      const isDonut = chartType === 'donut'
+      const pieColors = [
+        '#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b',
+        '#10b981', '#06b6d4', '#6366f1', '#f43f5e',
+        '#14b8a6', '#a855f7', '#f97316', '#22c55e'
+      ]
+
+      if (productRevenueData.length === 0) {
+        return (
+          <div className={styles.chartCard}>
+            <h3 className={styles.chartTitle}>{widget.title}</h3>
+            <div className={styles.noChartData}>No product revenue data available</div>
+          </div>
+        )
+      }
+
+      const totalValue = productRevenueData.reduce((sum, s) => sum + s.value, 0)
+      const centerX = 200
+      const centerY = 200
+      const outerRadius = 140
+      const innerRadius = isDonut ? 80 : 0
+
+      const polarToCartesian = (cx: number, cy: number, r: number, angle: number) => {
+        const rad = (angle - 90) * Math.PI / 180
+        return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) }
+      }
+
+      let currentAngle = 0
+
+      return (
+        <div className={styles.chartCard}>
+          <h3 className={styles.chartTitle}>{widget.title}</h3>
+          <div className={styles.pieChart}>
+            <svg viewBox="0 0 400 400" style={{ width: '100%', height: '100%' }}>
+              {productRevenueData.map((segment, i) => {
+                const percentage = (segment.value / totalValue) * 100
+                const sliceAngle = (percentage / 100) * 360
+                const endAngle = currentAngle + sliceAngle
+                const color = pieColors[i % pieColors.length]
+                const largeArc = sliceAngle > 180 ? '1' : '0'
+
+                let path: string
+                if (isDonut) {
+                  const outerStart = polarToCartesian(centerX, centerY, outerRadius, endAngle)
+                  const outerEnd = polarToCartesian(centerX, centerY, outerRadius, currentAngle)
+                  const innerStart = polarToCartesian(centerX, centerY, innerRadius, currentAngle)
+                  const innerEnd = polarToCartesian(centerX, centerY, innerRadius, endAngle)
+                  path = `M ${outerStart.x} ${outerStart.y} A ${outerRadius} ${outerRadius} 0 ${largeArc} 0 ${outerEnd.x} ${outerEnd.y} L ${innerStart.x} ${innerStart.y} A ${innerRadius} ${innerRadius} 0 ${largeArc} 1 ${innerEnd.x} ${innerEnd.y} Z`
+                } else {
+                  const start = polarToCartesian(centerX, centerY, outerRadius, endAngle)
+                  const end = polarToCartesian(centerX, centerY, outerRadius, currentAngle)
+                  path = `M ${centerX} ${centerY} L ${start.x} ${start.y} A ${outerRadius} ${outerRadius} 0 ${largeArc} 0 ${end.x} ${end.y} Z`
+                }
+
+                const slice = (
+                  <path
+                    key={i}
+                    d={path}
+                    fill={color}
+                    className={styles.pieSlice}
+                    onMouseEnter={() => setHoveredPieSlice(i)}
+                    onMouseLeave={() => setHoveredPieSlice(null)}
+                  />
+                )
+                currentAngle = endAngle
+                return slice
+              })}
+              {isDonut && (
+                <text x={centerX} y={centerY} textAnchor="middle" dominantBaseline="central" fontSize="18" fontWeight="700" fill="#1e293b">
+                  {formatCurrency(totalValue)}
+                </text>
+              )}
+            </svg>
+
+            {hoveredPieSlice !== null && (
+              <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', backgroundColor: 'white', padding: '12px 16px', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', border: '1px solid #e2e8f0', pointerEvents: 'none', zIndex: 10 }}>
+                <div style={{ fontSize: '13px', color: '#64748b', marginBottom: '4px', fontWeight: '500' }}>{productRevenueData[hoveredPieSlice].name}</div>
+                <div style={{ fontSize: '20px', fontWeight: '700', color: '#1e293b' }}>{formatCurrency(productRevenueData[hoveredPieSlice].value)}</div>
+              </div>
+            )}
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '12px', marginTop: '8px', maxHeight: '120px', overflowY: 'auto', flexShrink: 0, padding: '0 16px 8px' }}>
+            {productRevenueData.map((segment, i) => {
+              const percentage = (segment.value / totalValue) * 100
+              return (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{ width: '14px', height: '14px', backgroundColor: pieColors[i % pieColors.length], borderRadius: '3px', flexShrink: 0 }} />
+                  <span style={{ color: '#64748b', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{segment.name}</span>
+                  <span style={{ color: '#1e293b', fontWeight: '600' }}>{formatCurrency(segment.value)} ({percentage.toFixed(1)}%)</span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )
+    }
+
+    // Horizontal bar chart rendering
+    if (chartType === 'horizontal-bar') {
+      const maxRevenue = Math.max(...chartData.map(d => d.revenue), 1)
+      const displayData = chartData.slice(0, 20)
+
+      return (
+        <div className={styles.chartCard}>
+          <h3 className={styles.chartTitle}>{widget.title}</h3>
+          <div className={styles.horizontalBarChart} style={{ padding: '12px 16px' }}>
+            {displayData.length > 0 ? displayData.map((day, idx) => {
+              const percentage = (day.revenue / maxRevenue) * 100
+              const barColor = day.isSale ? '#16a34a' : '#3b82f6'
+              return (
+                <div key={idx} className={styles.horizontalBarRow}>
+                  <span className={styles.horizontalBarLabel}>{formatDate(day.date, false, true)}</span>
+                  <div className={styles.horizontalBarWrapper}>
+                    <div className={styles.horizontalBar} style={{ width: `${Math.max(percentage, 1)}%`, background: barColor }} />
+                    <span className={styles.horizontalBarValue}>{formatCurrency(day.revenue)}</span>
+                  </div>
+                </div>
+              )
+            }) : (
+              <div className={styles.noChartData}>No time series data available</div>
+            )}
+          </div>
+        </div>
+      )
+    }
+
+    // Stacked bar chart rendering (revenue + units side by side)
+    if (chartType === 'stacked-bar') {
+      const maxTotal = Math.max(...chartData.map(d => d.revenue + d.units), 1)
+      const maxRevenue = Math.max(...chartData.map(d => d.revenue), 1)
+
+      return (
+        <div className={styles.chartCard}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '8px' }}>
+            <h3 className={styles.chartTitle}>{widget.title}</h3>
+            {yearRange && <span style={{ fontSize: '0.875rem', fontWeight: 500, color: '#64748b' }}>{yearRange}</span>}
+          </div>
+          <div className={styles.chartLegend}>
+            <span className={styles.legendItem}>
+              <span className={styles.legendDot} style={{ backgroundColor: '#3b82f6' }} />
+              Revenue
+            </span>
+            <span className={styles.legendItem}>
+              <span className={styles.legendDot} style={{ backgroundColor: '#8b5cf6' }} />
+              Units (scaled)
+            </span>
+            <span className={styles.legendItem}>
+              <span className={styles.legendDot} style={{ backgroundColor: '#16a34a' }} />
+              Sale Period
+            </span>
+          </div>
+          <div className={styles.barChartContainer}>
+            {chartData.length > 0 ? (
+              <div className={styles.barChart}>
+                {chartData.map((day, idx) => {
+                  const revenueHeight = (day.revenue / maxRevenue) * 100
+                  const unitHeight = Math.min((day.units / Math.max(...chartData.map(d => d.units), 1)) * 100, 100)
+                  const saleColor = day.isSale ? '#16a34a' : '#3b82f6'
+
+                  return (
+                    <div key={idx} className={styles.barColumn}
+                      onMouseMove={(e) => {
+                        const tooltip = e.currentTarget.querySelector(`.${styles.barTooltip}`) as HTMLElement
+                        if (tooltip) {
+                          const rect = e.currentTarget.getBoundingClientRect()
+                          tooltip.style.left = `${rect.left + rect.width / 2}px`
+                          tooltip.style.top = `${rect.top}px`
+                        }
+                      }}
+                    >
+                      <div className={styles.barTooltip}>
+                        <div style={{ fontWeight: 700, marginBottom: '6px', fontSize: '15px' }}>{formatDate(day.date)}</div>
+                        <div style={{ fontSize: '14px', marginBottom: '2px' }}><strong>Revenue:</strong> {formatCurrency(day.revenue)}</div>
+                        <div style={{ fontSize: '14px' }}><strong>Units:</strong> {formatNumber(day.units)}</div>
+                        {day.isSale && <div style={{ marginTop: '6px', color: '#10b981', fontWeight: 600 }}>Sale Period</div>}
+                      </div>
+                      <div className={styles.barWrapper} style={{ flexDirection: 'row', gap: '1px', alignItems: 'flex-end' }}>
+                        <div className={styles.bar} style={{ height: `${Math.max(revenueHeight, 2)}%`, backgroundColor: saleColor, flex: 1 }} />
+                        <div className={styles.bar} style={{ height: `${Math.max(unitHeight, 2)}%`, backgroundColor: '#8b5cf6', flex: 1 }} />
+                      </div>
+                      <span className={styles.barLabel}>{formatDate(day.date, false, true)}</span>
+                    </div>
+                  )
+                })}
+              </div>
+            ) : (
+              <div className={styles.noChartData}>No time series data available</div>
+            )}
+          </div>
+        </div>
+      )
+    }
+
+    // Bar chart rendering (default)
+    const maxChartRevenue = Math.max(...chartData.map(d => d.revenue), 1)
     return (
       <div className={styles.chartCard}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '8px' }}>
@@ -1096,11 +1464,11 @@ export default function AnalyticsPage() {
           </span>
         </div>
         <div className={styles.barChartContainer}>
-          {dailyData.length > 0 ? (
+          {chartData.length > 0 ? (
             <div className={styles.barChart}>
-              {dailyData.map((day, idx) => {
+              {chartData.map((day, idx) => {
                 // Color based on revenue intensity
-                const intensity = day.revenue / maxDailyRevenue
+                const intensity = day.revenue / maxChartRevenue
                 const barColor = day.isSale ? '#16a34a' :
                   intensity > 0.8 ? '#3b82f6' :
                   intensity > 0.6 ? '#60a5fa' :
@@ -1108,7 +1476,7 @@ export default function AnalyticsPage() {
 
                 // Show year on first occurrence and when crossing year boundary
                 const currentYear = day.date.substring(0, 4)
-                const previousYear = idx > 0 ? dailyData[idx - 1].date.substring(0, 4) : null
+                const previousYear = idx > 0 ? chartData[idx - 1].date.substring(0, 4) : null
                 const isFirstOfYear = hasMultipleYears && (idx === 0 || currentYear !== previousYear)
 
                 // Month label no longer needed since we show "Jan 13" format in daily views
@@ -1159,7 +1527,7 @@ export default function AnalyticsPage() {
                         <div
                           className={styles.bar}
                           style={{
-                            height: `${Math.max((day.revenue / maxDailyRevenue) * 100, 2)}%`,
+                            height: `${Math.max((day.revenue / maxChartRevenue) * 100, 2)}%`,
                             backgroundColor: barColor
                           }}
                         />
@@ -2269,7 +2637,7 @@ function EditWidgetModal({ widget, onClose, onSave, products, clients, regions, 
 }) {
   const [title, setTitle] = useState(widget.title)
   const [widgetType, setWidgetType] = useState(widget.type)
-  const [chartType, setChartType] = useState(widget.config.chartType || 'bar')
+  const [chartType, setChartType] = useState(widget.config.chartType || (widget.type === 'pie' ? 'pie' : 'bar'))
   const [statKey, setStatKey] = useState(widget.config.statKey || 'totalRevenue')
   const [dataSource, setDataSource] = useState(widget.config.dataSource || 'daily')
 
