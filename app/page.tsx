@@ -278,9 +278,57 @@ export default function GameDriveDashboard() {
   async function handleGameUpdate(gameId: string, updates: Partial<Game>) { try { const { data, error } = await supabase.from('games').update(updates).eq('id', gameId).select(`*, client:clients(*)`).single(); if (error) throw error; if (data) { setGames(prev => prev.map(g => g.id === gameId ? data : g).sort((a, b) => a.name.localeCompare(b.name))); setProducts(prev => prev.map(p => p.game_id === gameId ? { ...p, game: data } : p)) } } catch (err: unknown) { console.error('Error updating game:', err); throw err } }
   async function handleProductUpdate(productId: string, updates: Partial<Product>) { try { const { data, error } = await supabase.from('products').update(updates).eq('id', productId).select(`*, game:games(*, client:clients(*))`).single(); if (error) throw error; if (data) { setProducts(prev => prev.map(p => p.id === productId ? data : p).sort((a, b) => a.name.localeCompare(b.name))) } } catch (err: unknown) { console.error('Error updating product:', err); throw err } }
 
-  async function handleClientDelete(clientId: string) { try { const { error } = await supabase.from('clients').delete().eq('id', clientId); if (error) throw error; if (filterClientId === clientId) setFilterClientId(''); setClients(prev => prev.filter(c => c.id !== clientId)); const deletedGameIds = games.filter(g => g.client_id === clientId).map(g => g.id); setGames(prev => prev.filter(g => g.client_id !== clientId)); setProducts(prev => prev.filter(p => !deletedGameIds.includes(p.game_id))); setSales(prev => prev.filter(s => !deletedGameIds.includes(s.product?.game_id || ''))) } catch (err: unknown) { console.error('Error deleting client:', err); throw err } }
-  async function handleGameDelete(gameId: string) { try { const { error } = await supabase.from('games').delete().eq('id', gameId); if (error) throw error; if (filterGameId === gameId) setFilterGameId(''); setGames(prev => prev.filter(g => g.id !== gameId)); const deletedProductIds = products.filter(p => p.game_id === gameId).map(p => p.id); setProducts(prev => prev.filter(p => p.game_id !== gameId)); setSales(prev => prev.filter(s => !deletedProductIds.includes(s.product_id))) } catch (err: unknown) { console.error('Error deleting game:', err); throw err } }
-  async function handleProductDelete(productId: string) { try { const { error } = await supabase.from('products').delete().eq('id', productId); if (error) throw error; setProducts(prev => prev.filter(p => p.id !== productId)); setSales(prev => prev.filter(s => s.product_id !== productId)) } catch (err: unknown) { console.error('Error deleting product:', err); throw err } }
+  async function handleClientDelete(clientId: string) {
+    try {
+      // Delete children first to avoid FK constraint timeouts
+      const gameIds = games.filter(g => g.client_id === clientId).map(g => g.id)
+      const productIds = products.filter(p => gameIds.includes(p.game_id)).map(p => p.id)
+      if (productIds.length > 0) {
+        const { error: salesErr } = await supabase.from('sales').delete().in('product_id', productIds)
+        if (salesErr) throw salesErr
+        const { error: prodErr } = await supabase.from('products').delete().in('id', productIds)
+        if (prodErr) throw prodErr
+      }
+      if (gameIds.length > 0) {
+        const { error: gameErr } = await supabase.from('games').delete().in('id', gameIds)
+        if (gameErr) throw gameErr
+      }
+      const { error } = await supabase.from('clients').delete().eq('id', clientId)
+      if (error) throw error
+      if (filterClientId === clientId) setFilterClientId('')
+      setClients(prev => prev.filter(c => c.id !== clientId))
+      setGames(prev => prev.filter(g => g.client_id !== clientId))
+      setProducts(prev => prev.filter(p => !gameIds.includes(p.game_id)))
+      setSales(prev => prev.filter(s => !gameIds.includes(s.product?.game_id || '')))
+    } catch (err: unknown) { console.error('Error deleting client:', err); throw err }
+  }
+  async function handleGameDelete(gameId: string) {
+    try {
+      const productIds = products.filter(p => p.game_id === gameId).map(p => p.id)
+      if (productIds.length > 0) {
+        const { error: salesErr } = await supabase.from('sales').delete().in('product_id', productIds)
+        if (salesErr) throw salesErr
+        const { error: prodErr } = await supabase.from('products').delete().in('id', productIds)
+        if (prodErr) throw prodErr
+      }
+      const { error } = await supabase.from('games').delete().eq('id', gameId)
+      if (error) throw error
+      if (filterGameId === gameId) setFilterGameId('')
+      setGames(prev => prev.filter(g => g.id !== gameId))
+      setProducts(prev => prev.filter(p => p.game_id !== gameId))
+      setSales(prev => prev.filter(s => !productIds.includes(s.product_id)))
+    } catch (err: unknown) { console.error('Error deleting game:', err); throw err }
+  }
+  async function handleProductDelete(productId: string) {
+    try {
+      const { error: salesErr } = await supabase.from('sales').delete().eq('product_id', productId)
+      if (salesErr) throw salesErr
+      const { error } = await supabase.from('products').delete().eq('id', productId)
+      if (error) throw error
+      setProducts(prev => prev.filter(p => p.id !== productId))
+      setSales(prev => prev.filter(s => s.product_id !== productId))
+    } catch (err: unknown) { console.error('Error deleting product:', err); throw err }
+  }
 
   const filteredGames = useMemo(() => { if (!filterClientId) return games; return games.filter(g => g.client_id === filterClientId) }, [games, filterClientId])
   const filteredProducts = useMemo(() => { let result = products; if (filterGameId) { result = result.filter(p => p.game_id === filterGameId) } else if (filterClientId) { result = result.filter(p => p.game?.client_id === filterClientId) }; return result }, [products, filterClientId, filterGameId])
