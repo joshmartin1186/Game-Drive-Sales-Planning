@@ -275,17 +275,40 @@ export default function AnalyticsPage() {
   const [showAddWidgetModal, setShowAddWidgetModal] = useState(false)
   const gridRef = useRef<HTMLDivElement>(null)
 
-  // Fetch clients
+  // Fetch only clients that have API keys configured
   useEffect(() => {
     const fetchClients = async () => {
-      const { data } = await supabase.from('clients').select('id, name')
-      if (data) setClients(data)
+      const { data } = await supabase
+        .from('steam_api_keys')
+        .select('client_id, clients (id, name)')
+        .eq('is_active', true)
+      if (data) {
+        const clientList = data
+          .map((row: Record<string, unknown>) => row.clients as { id: string; name: string } | null)
+          .filter((c): c is { id: string; name: string } => c !== null)
+          .sort((a, b) => a.name.localeCompare(b.name))
+        // Deduplicate in case a client has multiple keys
+        const seen = new Set<string>()
+        const unique = clientList.filter(c => {
+          if (seen.has(c.id)) return false
+          seen.add(c.id)
+          return true
+        })
+        setClients(unique)
+        // Auto-select first client for faster initial load
+        if (unique.length > 0 && selectedClient === 'all') {
+          setSelectedClient(unique[0].id)
+        }
+      }
     }
     fetchClients()
-  }, [supabase])
+  }, [supabase]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Fetch performance data
   const fetchPerformanceData = useCallback(async () => {
+    // Wait until a specific client is selected (set by fetchClients on mount)
+    if (selectedClient === 'all') return
+
     setIsLoading(true)
     try {
       // Only select the columns we actually need for better performance
@@ -313,9 +336,7 @@ export default function AnalyticsPage() {
         if (selectedProduct !== 'all') {
           query = query.eq('product_name', selectedProduct)
         }
-        if (selectedClient !== 'all') {
-          query = query.eq('client_id', selectedClient)
-        }
+        query = query.eq('client_id', selectedClient)
         if (selectedRegion !== 'all') {
           query = query.eq('region', selectedRegion)
         }
@@ -2274,7 +2295,6 @@ export default function AnalyticsPage() {
           <div className={styles.filterGroup}>
             <label className={styles.filterLabel}>Client</label>
             <select className={styles.filterSelect} value={selectedClient} onChange={(e) => setSelectedClient(e.target.value)}>
-              <option value="all">All Clients</option>
               {clients.map(client => (<option key={client.id} value={client.id}>{client.name}</option>))}
             </select>
           </div>
