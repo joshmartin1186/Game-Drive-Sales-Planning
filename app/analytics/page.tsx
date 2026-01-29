@@ -91,6 +91,10 @@ interface PeriodData {
   avgDailyUnits: number
   isSale: boolean
   discountPct: number | null
+  saleName: string | null
+  saleType: string | null
+  plannedDiscount: number | null
+  source: 'price-detected' | 'committed' | 'both'
 }
 
 interface CurrentPeriodState {
@@ -99,6 +103,31 @@ interface CurrentPeriodState {
   units: number
   isSale: boolean
   discountPct: number | null
+  saleName: string | null
+  saleType: string | null
+  plannedDiscount: number | null
+  source: 'price-detected' | 'committed' | 'both'
+}
+
+interface CommittedSaleSnapshot {
+  product_id: string
+  platform_id: string
+  start_date: string
+  end_date: string
+  discount_percentage: number | null
+  sale_name: string | null
+  sale_type: string
+  status: string
+  notes: string | null
+  product_name?: string
+  platform_name?: string
+}
+
+interface CommittedVersion {
+  id: string
+  name: string
+  sales_snapshot: CommittedSaleSnapshot[]
+  committed_at: string
 }
 
 // Widget Types for editable dashboard
@@ -269,6 +298,7 @@ export default function AnalyticsPage() {
   const [widgets, setWidgets] = useState<DashboardWidget[]>(DEFAULT_WIDGETS)
   const [draggedWidget, setDraggedWidget] = useState<string | null>(null)
   const [showAddWidgetModal, setShowAddWidgetModal] = useState(false)
+  const [committedVersion, setCommittedVersion] = useState<CommittedVersion | null>(null)
   const gridRef = useRef<HTMLDivElement>(null)
 
   // Fetch only clients that have API keys configured
@@ -299,6 +329,36 @@ export default function AnalyticsPage() {
     }
     fetchClients()
   }, [supabase]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Fetch committed version for the selected client
+  useEffect(() => {
+    const fetchCommittedVersion = async () => {
+      if (selectedClient === 'all') {
+        setCommittedVersion(null)
+        return
+      }
+
+      try {
+        const { data, error } = await supabase
+          .from('calendar_versions')
+          .select('id, name, sales_snapshot, committed_at')
+          .eq('client_id', selectedClient)
+          .eq('is_committed', true)
+          .single()
+
+        if (error && error.code !== 'PGRST116') {
+          console.error('Error fetching committed version:', error)
+        }
+
+        setCommittedVersion(data || null)
+      } catch (err) {
+        console.error('Error fetching committed version:', err)
+        setCommittedVersion(null)
+      }
+    }
+
+    fetchCommittedVersion()
+  }, [supabase, selectedClient])
 
   // Fetch performance data
   const fetchPerformanceData = useCallback(async () => {
@@ -546,13 +606,41 @@ export default function AnalyticsPage() {
     }))
   }, [dailyData])
 
+  // Build a date-to-sale lookup from the committed version
+  const committedSaleLookup = useMemo(() => {
+    if (!committedVersion) return new Map<string, CommittedSaleSnapshot>()
+
+    const lookup = new Map<string, CommittedSaleSnapshot>()
+
+    for (const sale of committedVersion.sales_snapshot) {
+      const start = new Date(sale.start_date + 'T00:00:00Z')
+      const end = new Date(sale.end_date + 'T00:00:00Z')
+
+      for (let d = new Date(start); d <= end; d.setUTCDate(d.getUTCDate() + 1)) {
+        const dateStr = d.toISOString().split('T')[0]
+        if (!lookup.has(dateStr)) {
+          lookup.set(dateStr, sale)
+        }
+      }
+    }
+
+    return lookup
+  }, [committedVersion])
+
   const pushPeriod = (periods: PeriodData[], period: CurrentPeriodState): void => {
     if (period.dates.length > 0) {
       const days = period.dates.length
+      const discount = period.discountPct || period.plannedDiscount
+      let name: string
+      if (period.isSale) {
+        name = period.saleName
+          ? `${period.saleName} (${discount || '??'}% off)`
+          : `Sale Period (${discount || '??'}% off)`
+      } else {
+        name = 'Regular Price'
+      }
       periods.push({
-        name: period.isSale 
-          ? `Sale Period (${period.discountPct || '??'}% off)`
-          : 'Regular Price',
+        name,
         startDate: period.dates[0],
         endDate: period.dates[period.dates.length - 1],
         days,
@@ -561,52 +649,86 @@ export default function AnalyticsPage() {
         avgDailyRevenue: safeDivide(period.revenue, days),
         avgDailyUnits: safeDivide(period.units, days),
         isSale: period.isSale,
-        discountPct: period.discountPct
+        discountPct: period.discountPct,
+        saleName: period.saleName,
+        saleType: period.saleType,
+        plannedDiscount: period.plannedDiscount,
+        source: period.source
       })
     }
   }
 
   const periodData = useMemo((): PeriodData[] => {
     if (!performanceData.length) return []
-    
+
     const periods: PeriodData[] = []
     let currentPeriod: CurrentPeriodState | null = null
-    
+
     const dailyAgg = new Map<string, {
       revenue: number
       units: number
       isSale: boolean
       discountPct: number | null
+      saleName: string | null
+      saleType: string | null
+      plannedDiscount: number | null
+      source: 'price-detected' | 'committed' | 'both'
     }>()
-    
+
     performanceData.forEach(row => {
       const existing = dailyAgg.get(row.date)
       const rowIsSale = isSalePrice(row.base_price_usd, row.sale_price_usd)
       const discountPct = calculateDiscountPct(row.base_price_usd, row.sale_price_usd)
-      
+
+      // Cross-reference with committed version
+      const committedSale = committedSaleLookup.get(row.date)
+      const effectiveIsSale = rowIsSale || !!committedSale
+      const saleName = committedSale?.sale_name || null
+      const saleType = committedSale?.sale_type || null
+      const plannedDiscount = committedSale?.discount_percentage || null
+
+      let source: 'price-detected' | 'committed' | 'both' = 'price-detected'
+      if (rowIsSale && committedSale) source = 'both'
+      else if (committedSale && !rowIsSale) source = 'committed'
+
       if (existing) {
         dailyAgg.set(row.date, {
           revenue: existing.revenue + toNumber(row.net_steam_sales_usd),
           units: existing.units + toNumber(row.net_units_sold),
-          isSale: existing.isSale || rowIsSale,
-          discountPct: discountPct ?? existing.discountPct
+          isSale: existing.isSale || effectiveIsSale,
+          discountPct: discountPct ?? existing.discountPct,
+          saleName: saleName ?? existing.saleName,
+          saleType: saleType ?? existing.saleType,
+          plannedDiscount: plannedDiscount ?? existing.plannedDiscount,
+          source: existing.source === 'both' ? 'both' :
+                  (existing.source !== source ? 'both' : source)
         })
       } else {
         dailyAgg.set(row.date, {
           revenue: toNumber(row.net_steam_sales_usd),
           units: toNumber(row.net_units_sold),
-          isSale: rowIsSale,
-          discountPct
+          isSale: effectiveIsSale,
+          discountPct,
+          saleName,
+          saleType,
+          plannedDiscount,
+          source: effectiveIsSale ? source : 'price-detected'
         })
       }
     })
-    
+
     const sortedDates = Array.from(dailyAgg.keys()).sort()
-    
+
     for (const date of sortedDates) {
       const dayData = dailyAgg.get(date)!
-      
-      if (!currentPeriod || currentPeriod.isSale !== dayData.isSale) {
+
+      // Group by isSale AND saleName so different named sales become separate periods
+      const periodKey = dayData.isSale ? (dayData.saleName || '__unnamed_sale__') : '__regular__'
+      const currentKey = currentPeriod
+        ? (currentPeriod.isSale ? (currentPeriod.saleName || '__unnamed_sale__') : '__regular__')
+        : null
+
+      if (!currentPeriod || periodKey !== currentKey) {
         if (currentPeriod) {
           pushPeriod(periods, currentPeriod)
         }
@@ -615,7 +737,11 @@ export default function AnalyticsPage() {
           revenue: dayData.revenue,
           units: dayData.units,
           isSale: dayData.isSale,
-          discountPct: dayData.discountPct
+          discountPct: dayData.discountPct,
+          saleName: dayData.saleName,
+          saleType: dayData.saleType,
+          plannedDiscount: dayData.plannedDiscount,
+          source: dayData.source
         }
       } else {
         currentPeriod.dates.push(date)
@@ -623,13 +749,13 @@ export default function AnalyticsPage() {
         currentPeriod.units += dayData.units
       }
     }
-    
+
     if (currentPeriod) {
       pushPeriod(periods, currentPeriod)
     }
 
     return periods
-  }, [performanceData])
+  }, [performanceData, committedSaleLookup]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Memoize product revenue calculation for pie chart
   const productRevenueData = useMemo(() => {
@@ -674,11 +800,13 @@ export default function AnalyticsPage() {
 
     performanceData.forEach(row => {
       const date = row.date
-      const isSale = isSalePrice(row.base_price_usd, row.sale_price_usd)
+      const priceIsSale = isSalePrice(row.base_price_usd, row.sale_price_usd)
+      const committedSale = committedSaleLookup.get(date)
+      const effectiveIsSale = priceIsSale || !!committedSale
       const revenue = toNumber(row.net_steam_sales_usd)
       const units = toNumber(row.net_units_sold)
 
-      if (isSale) {
+      if (effectiveIsSale) {
         saleData.revenue += revenue
         saleData.units += units
         if (!seenDates.has(`sale-${date}`)) {
@@ -696,7 +824,7 @@ export default function AnalyticsPage() {
     })
 
     return { saleData, regularData }
-  }, [performanceData])
+  }, [performanceData, committedSaleLookup])
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('en-US', {
@@ -1518,7 +1646,14 @@ export default function AnalyticsPage() {
       <div className={styles.periodSection}>
         <div className={styles.sectionHeader}>
           <h3 className={styles.sectionTitle}>{widget.title}</h3>
-          <p className={styles.sectionSubtitle}>Compare sale periods vs regular price performance</p>
+          <p className={styles.sectionSubtitle}>
+            Compare sale periods vs regular price performance
+            {committedVersion && (
+              <span className={styles.committedVersionInfo}>
+                {' '}| Using committed calendar: &quot;{committedVersion.name}&quot;
+              </span>
+            )}
+          </p>
         </div>
         {periodData.length > 0 ? (
           <div className={styles.periodTable}>
@@ -1526,12 +1661,14 @@ export default function AnalyticsPage() {
               <thead>
                 <tr>
                   <th>Period</th>
+                  {committedVersion && <th>Sale Type</th>}
                   <th>Dates</th>
                   <th>Days</th>
                   <th>Total Revenue</th>
                   <th>Total Units</th>
                   <th>Avg Daily Revenue</th>
                   <th>Avg Daily Units</th>
+                  {committedVersion && <th>Source</th>}
                 </tr>
               </thead>
               <tbody>
@@ -1542,12 +1679,31 @@ export default function AnalyticsPage() {
                         {period.isSale ? '🏷️ ' : ''}{period.name}
                       </span>
                     </td>
+                    {committedVersion && (
+                      <td>
+                        {period.saleType ? (
+                          <span className={styles.saleTypeBadge}>{period.saleType}</span>
+                        ) : '-'}
+                      </td>
+                    )}
                     <td>{formatDate(period.startDate)} - {formatDate(period.endDate)}</td>
                     <td>{period.days}</td>
                     <td className={styles.revenueCell}>{formatCurrency(period.totalRevenue)}</td>
                     <td>{formatNumber(period.totalUnits)}</td>
                     <td className={styles.revenueCell}>{formatCurrency(period.avgDailyRevenue)}</td>
                     <td>{formatNumber(period.avgDailyUnits)}</td>
+                    {committedVersion && (
+                      <td>
+                        <span className={`${styles.sourceBadge} ${
+                          period.source === 'both' ? styles.sourceBoth :
+                          period.source === 'committed' ? styles.sourceCommitted :
+                          styles.sourcePriceDetected
+                        }`}>
+                          {period.source === 'both' ? 'Plan + Actual' :
+                           period.source === 'committed' ? 'Plan Only' : 'Price Detected'}
+                        </span>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -2304,6 +2460,19 @@ export default function AnalyticsPage() {
             </select>
           </div>
         </div>
+
+        {committedVersion ? (
+          <div className={styles.committedIndicator}>
+            <span>📌 Committed Calendar: &quot;{committedVersion.name}&quot;</span>
+            <span className={styles.committedDate}>
+              Committed {new Date(committedVersion.committed_at).toLocaleDateString()}
+            </span>
+          </div>
+        ) : selectedClient !== 'all' ? (
+          <div className={styles.noCommittedIndicator}>
+            No committed sales calendar. Period analysis uses price detection only.
+          </div>
+        ) : null}
 
         {isLoading ? (
           <div className={styles.statsGrid}>

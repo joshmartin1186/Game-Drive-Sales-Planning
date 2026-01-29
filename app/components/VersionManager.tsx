@@ -16,6 +16,9 @@ interface CalendarVersion {
   platform_summary: Record<string, number>
   date_range_start: string | null
   date_range_end: string | null
+  client_id: string | null
+  is_committed: boolean
+  committed_at: string | null
   created_at: string
   updated_at: string
 }
@@ -41,6 +44,7 @@ interface VersionManagerProps {
   currentSales: SaleWithDetails[]
   platforms: Platform[]
   onRestoreVersion: (sales: SaleSnapshot[]) => Promise<void>
+  clientId?: string | null
 }
 
 export default function VersionManager({
@@ -48,7 +52,8 @@ export default function VersionManager({
   onClose,
   currentSales,
   platforms,
-  onRestoreVersion
+  onRestoreVersion,
+  clientId
 }: VersionManagerProps) {
   const [versions, setVersions] = useState<CalendarVersion[]>([])
   const [loading, setLoading] = useState(true)
@@ -67,15 +72,25 @@ export default function VersionManager({
   // Confirm restore state
   const [confirmRestore, setConfirmRestore] = useState<CalendarVersion | null>(null)
 
+  // Commit state
+  const [committing, setCommitting] = useState(false)
+
   // Fetch versions
   const fetchVersions = useCallback(async () => {
     setLoading(true)
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('calendar_versions')
         .select('*')
+        .order('is_committed', { ascending: false })
         .order('created_at', { ascending: false })
-      
+
+      if (clientId) {
+        query = query.or(`client_id.eq.${clientId},client_id.is.null`)
+      }
+
+      const { data, error } = await query
+
       if (error) throw error
       setVersions(data || [])
     } catch (err) {
@@ -84,7 +99,7 @@ export default function VersionManager({
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [clientId])
 
   useEffect(() => {
     if (isOpen) {
@@ -139,7 +154,8 @@ export default function VersionManager({
           sale_count: currentSales.length,
           platform_summary: platformSummary,
           date_range_start: sortedDates[0] || null,
-          date_range_end: sortedDates[sortedDates.length - 1] || null
+          date_range_end: sortedDates[sortedDates.length - 1] || null,
+          client_id: clientId || null
         })
       
       if (error) throw error
@@ -160,6 +176,11 @@ export default function VersionManager({
 
   // Delete a version
   const handleDeleteVersion = async (versionId: string) => {
+    const version = versions.find(v => v.id === versionId)
+    if (version?.is_committed) {
+      setError('Cannot delete a committed version. Uncommit it first.')
+      return
+    }
     if (!confirm('Are you sure you want to delete this version? This cannot be undone.')) {
       return
     }
@@ -179,6 +200,69 @@ export default function VersionManager({
     } catch (err) {
       console.error('Error deleting version:', err)
       setError(err instanceof Error ? err.message : 'Failed to delete version')
+    }
+  }
+
+  // Commit a version (make it the active sales calendar)
+  const handleCommitVersion = async (version: CalendarVersion) => {
+    const targetClientId = version.client_id || clientId
+    if (!targetClientId) {
+      setError('Cannot commit a version without a client. Please filter by client first.')
+      return
+    }
+
+    setCommitting(true)
+    setError(null)
+
+    try {
+      // Uncommit any currently committed version for this client
+      const { error: uncommitError } = await supabase
+        .from('calendar_versions')
+        .update({ is_committed: false, committed_at: null })
+        .eq('client_id', targetClientId)
+        .eq('is_committed', true)
+
+      if (uncommitError) throw uncommitError
+
+      // Commit the selected version
+      const { error: commitError } = await supabase
+        .from('calendar_versions')
+        .update({
+          is_committed: true,
+          committed_at: new Date().toISOString(),
+          client_id: targetClientId
+        })
+        .eq('id', version.id)
+
+      if (commitError) throw commitError
+
+      await fetchVersions()
+    } catch (err) {
+      console.error('Error committing version:', err)
+      setError(err instanceof Error ? err.message : 'Failed to commit version')
+    } finally {
+      setCommitting(false)
+    }
+  }
+
+  // Uncommit a version
+  const handleUncommitVersion = async (version: CalendarVersion) => {
+    setCommitting(true)
+    setError(null)
+
+    try {
+      const { error } = await supabase
+        .from('calendar_versions')
+        .update({ is_committed: false, committed_at: null })
+        .eq('id', version.id)
+
+      if (error) throw error
+      await fetchVersions()
+    } catch (err) {
+      console.error('Error uncommitting version:', err)
+      setError(err instanceof Error ? err.message : 'Failed to uncommit version')
+    } finally {
+      setCommitting(false)
     }
   }
 
@@ -300,10 +384,15 @@ export default function VersionManager({
                 {versions.map(version => (
                   <div 
                     key={version.id} 
-                    className={`${styles.versionCard} ${previewVersion?.id === version.id ? styles.selected : ''}`}
+                    className={`${styles.versionCard} ${previewVersion?.id === version.id ? styles.selected : ''} ${version.is_committed ? styles.committedCard : ''}`}
                   >
                     <div className={styles.versionHeader}>
-                      <h4>{version.name}</h4>
+                      <div>
+                        <h4>
+                          {version.is_committed && <span className={styles.committedBadge}>Committed</span>}
+                          {version.name}
+                        </h4>
+                      </div>
                       <span className={styles.versionDate}>
                         {formatDate(version.created_at)}
                       </span>
@@ -345,6 +434,15 @@ export default function VersionManager({
                     )}
                     
                     <div className={styles.versionActions}>
+                      <button
+                        className={version.is_committed ? styles.uncommitBtn : styles.commitBtn}
+                        onClick={() => version.is_committed
+                          ? handleUncommitVersion(version)
+                          : handleCommitVersion(version)}
+                        disabled={committing}
+                      >
+                        {version.is_committed ? '✅ Committed' : '📌 Commit'}
+                      </button>
                       <button
                         className={styles.previewBtn}
                         onClick={() => setPreviewVersion(previewVersion?.id === version.id ? null : version)}

@@ -461,3 +461,63 @@
   opacity: 0.6;
   cursor: not-allowed;
 }
+
+/* Committed Version Styles */
+.committedCard {
+  border-color: #16a34a !important;
+  border-width: 2px;
+  background: #f0fdf4;
+  box-shadow: 0 0 0 1px rgba(22, 163, 74, 0.1);
+}
+
+.committedBadge {
+  display: inline-block;
+  background: #16a34a;
+  color: white;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-right: 8px;
+  vertical-align: middle;
+}
+
+.commitBtn {
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: #f0fdf4;
+  border: 1px solid #86efac;
+  color: #16a34a;
+  font-weight: 500;
+}
+
+.commitBtn:hover:not(:disabled) {
+  background: #dcfce7;
+}
+
+.uncommitBtn {
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: #16a34a;
+  border: 1px solid #16a34a;
+  color: white;
+  font-weight: 500;
+}
+
+.uncommitBtn:hover:not(:disabled) {
+  background: #15803d;
+}
+
+.commitBtn:disabled,
+.uncommitBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
