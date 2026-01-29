@@ -110,7 +110,7 @@ interface DashboardWidget {
   config: {
     statKey?: string
     chartType?: 'bar' | 'line' | 'pie' | 'area' | 'donut' | 'choropleth' | 'stacked-bar' | 'horizontal-bar'
-    dataSource?: string
+
     mapType?: string
     // Filter options
     filterProduct?: string
@@ -235,7 +235,7 @@ const DEFAULT_WIDGETS: DashboardWidget[] = [
   { id: 'stat-refund', type: 'stat', title: 'Refund Rate', config: { statKey: 'refundRate' }, position: { x: 4, y: 0 }, size: { w: 1, h: 1 } },
   // Charts row - Revenue Per Unit as pie chart, Revenue Over Time as line chart
   { id: 'revenue-pie-chart', type: 'pie', title: 'Revenue Per Unit', config: { chartType: 'pie' }, position: { x: 0, y: 1 }, size: { w: 1, h: 1 } },
-  { id: 'chart-revenue', type: 'chart', title: 'Revenue Over Time', config: { chartType: 'line', dataSource: 'daily' }, position: { x: 1, y: 1 }, size: { w: 1, h: 1 } },
+  { id: 'chart-revenue', type: 'chart', title: 'Revenue Over Time', config: { chartType: 'line' }, position: { x: 1, y: 1 }, size: { w: 1, h: 1 } },
   // World map - full width
   { id: 'world-map', type: 'world-map', title: 'Revenue by Country', config: { mapType: 'choropleth' }, position: { x: 0, y: 2 }, size: { w: 2, h: 1 } },
   // Sale Performance comparison - full width
@@ -431,85 +431,6 @@ export default function AnalyticsPage() {
 
     return dailyEntries
   }, [performanceData, selectedDatePreset])
-
-  // Compute monthly aggregated data (always grouped by month regardless of date preset)
-  const monthlyData = useMemo((): DailyData[] => {
-    if (!performanceData.length) return []
-
-    const byDate = new Map<string, { revenue: number; units: number; hasSale: boolean }>()
-    performanceData.forEach(row => {
-      const existing = byDate.get(row.date) || { revenue: 0, units: 0, hasSale: false }
-      const rowIsSale = isSalePrice(row.base_price_usd, row.sale_price_usd)
-      byDate.set(row.date, {
-        revenue: existing.revenue + toNumber(row.net_steam_sales_usd),
-        units: existing.units + toNumber(row.net_units_sold),
-        hasSale: existing.hasSale || rowIsSale
-      })
-    })
-
-    const byMonth = new Map<string, { revenue: number; units: number; hasSale: boolean }>()
-    byDate.forEach((data, date) => {
-      const monthKey = date.substring(0, 7) + '-01'
-      const existing = byMonth.get(monthKey) || { revenue: 0, units: 0, hasSale: false }
-      byMonth.set(monthKey, {
-        revenue: existing.revenue + data.revenue,
-        units: existing.units + data.units,
-        hasSale: existing.hasSale || data.hasSale
-      })
-    })
-
-    return Array.from(byMonth.entries())
-      .map(([date, data]) => ({ date, revenue: data.revenue, units: data.units, isSale: data.hasSale }))
-      .sort((a, b) => a.date.localeCompare(b.date))
-  }, [performanceData])
-
-  // Compute quarterly aggregated data
-  const quarterlyData = useMemo((): DailyData[] => {
-    if (!performanceData.length) return []
-
-    const byDate = new Map<string, { revenue: number; units: number; hasSale: boolean }>()
-    performanceData.forEach(row => {
-      const existing = byDate.get(row.date) || { revenue: 0, units: 0, hasSale: false }
-      const rowIsSale = isSalePrice(row.base_price_usd, row.sale_price_usd)
-      byDate.set(row.date, {
-        revenue: existing.revenue + toNumber(row.net_steam_sales_usd),
-        units: existing.units + toNumber(row.net_units_sold),
-        hasSale: existing.hasSale || rowIsSale
-      })
-    })
-
-    const getQuarterKey = (date: string) => {
-      const month = parseInt(date.substring(5, 7), 10)
-      const year = date.substring(0, 4)
-      const quarter = Math.ceil(month / 3)
-      const quarterStartMonth = ((quarter - 1) * 3 + 1).toString().padStart(2, '0')
-      return `${year}-${quarterStartMonth}-01`
-    }
-
-    const byQuarter = new Map<string, { revenue: number; units: number; hasSale: boolean }>()
-    byDate.forEach((data, date) => {
-      const qKey = getQuarterKey(date)
-      const existing = byQuarter.get(qKey) || { revenue: 0, units: 0, hasSale: false }
-      byQuarter.set(qKey, {
-        revenue: existing.revenue + data.revenue,
-        units: existing.units + data.units,
-        hasSale: existing.hasSale || data.hasSale
-      })
-    })
-
-    return Array.from(byQuarter.entries())
-      .map(([date, data]) => ({ date, revenue: data.revenue, units: data.units, isSale: data.hasSale }))
-      .sort((a, b) => a.date.localeCompare(b.date))
-  }, [performanceData])
-
-  // Get chart data based on widget's data source config
-  const getDataForSource = (dataSource: string): DailyData[] => {
-    switch (dataSource) {
-      case 'monthly': return monthlyData
-      case 'quarterly': return quarterlyData
-      default: return dailyData
-    }
-  }
 
   // Compute regional breakdown
   const regionData = useMemo((): RegionData[] => {
@@ -891,7 +812,7 @@ export default function AnalyticsPage() {
       id: `widget-${Date.now()}`,
       type,
       title,
-      config: type === 'stat' ? { statKey: 'totalRevenue' } : { chartType: type === 'pie' ? 'pie' : 'bar', dataSource: 'daily' },
+      config: type === 'stat' ? { statKey: 'totalRevenue' } : { chartType: type === 'pie' ? 'pie' : 'bar' },
       position: { x: 0, y: widgets.reduce((max, w) => Math.max(max, w.position.y + w.size.h), 0) },
       size: type === 'stat' ? { w: 1, h: 1 } : { w: 2, h: 2 }
     }
@@ -963,9 +884,8 @@ export default function AnalyticsPage() {
 
   // Render chart widget
   const renderChartWidget = (widget: DashboardWidget) => {
-    const widgetDataSource = widget.config.dataSource || 'daily'
-    const chartData = getDataForSource(widgetDataSource)
-    const isMonthlyView = widgetDataSource === 'monthly' || widgetDataSource === 'quarterly' || chartData.length > 45
+    const chartData = dailyData
+    const isMonthlyView = chartData.length > 45
     const chartType = widget.config.chartType || 'bar'
 
     // Detect year range for year indicators
@@ -2639,8 +2559,6 @@ function EditWidgetModal({ widget, onClose, onSave, products, clients, regions, 
   const [widgetType, setWidgetType] = useState(widget.type)
   const [chartType, setChartType] = useState(widget.config.chartType || (widget.type === 'pie' ? 'pie' : 'bar'))
   const [statKey, setStatKey] = useState(widget.config.statKey || 'totalRevenue')
-  const [dataSource, setDataSource] = useState(widget.config.dataSource || 'daily')
-
   // Filter states
   const [filterProduct, setFilterProduct] = useState(widget.config.filterProduct || 'all')
   const [filterClient, setFilterClient] = useState(widget.config.filterClient || 'all')
@@ -2664,8 +2582,7 @@ function EditWidgetModal({ widget, onClose, onSave, products, clients, regions, 
       config: {
         ...widget.config,
         ...(widgetType === 'stat' ? { statKey } : {}),
-        ...(widgetType === 'chart' || widgetType === 'pie' ? { chartType, dataSource } : {}),
-        ...(widgetType === 'region' || widgetType === 'countries' || widgetType === 'world-map' ? { dataSource } : {}),
+        ...(widgetType === 'chart' || widgetType === 'pie' ? { chartType } : {}),
         // Always save filter options
         filterProduct: filterProduct === 'all' ? undefined : filterProduct,
         filterClient: filterClient === 'all' ? undefined : filterClient,
@@ -2711,12 +2628,6 @@ function EditWidgetModal({ widget, onClose, onSave, products, clients, regions, 
     { value: 'donut', label: 'Donut Chart' },
     { value: 'horizontal-bar', label: 'Horizontal Bar' },
     { value: 'stacked-bar', label: 'Stacked Bar' }
-  ]
-
-  const dataSourceOptions = [
-    { value: 'daily', label: 'Daily Data' },
-    { value: 'monthly', label: 'Monthly Data' },
-    { value: 'quarterly', label: 'Quarterly Data' }
   ]
 
   const colorSchemeOptions = [
@@ -2795,34 +2706,7 @@ function EditWidgetModal({ widget, onClose, onSave, products, clients, regions, 
                 </select>
               </div>
 
-              <div className={styles.formGroup}>
-                <label className={styles.formLabel}>Data Source</label>
-                <select
-                  className={styles.formInput}
-                  value={dataSource}
-                  onChange={(e) => setDataSource(e.target.value)}
-                >
-                  {dataSourceOptions.map(opt => (
-                    <option key={opt.value} value={opt.value}>{opt.label}</option>
-                  ))}
-                </select>
-              </div>
             </>
-          )}
-
-          {(widgetType === 'region' || widgetType === 'countries' || widgetType === 'world-map') && (
-            <div className={styles.formGroup}>
-              <label className={styles.formLabel}>Data Source</label>
-              <select
-                className={styles.formInput}
-                value={dataSource}
-                onChange={(e) => setDataSource(e.target.value)}
-              >
-                {dataSourceOptions.map(opt => (
-                  <option key={opt.value} value={opt.value}>{opt.label}</option>
-                ))}
-              </select>
-            </div>
           )}
 
           {/* Filters Section */}
