@@ -7,6 +7,70 @@
   - Improve visual polish (animations, hover states)
   - Add filtering controls within charts
 
+## ✅ Completed (Session: 2026-01-30)
+
+### User Management & Permissions System
+- [x] Built full user management page at `/permissions`
+  - Table of users with Email, Display Name, Role, Client Access, Actions columns
+  - Role badges colored by type (Superadmin = blue, Editor = green, Viewer = gray)
+  - Edit and Delete buttons per user row
+- [x] Invite User flow with magic link generation
+  - Email field, role dropdown, client access checkboxes, feature permissions
+  - Generates invite link via Supabase Auth admin API
+  - Copy-to-clipboard for invite URLs
+- [x] "All Clients (including future)" toggle
+  - `all_clients` boolean column added to `user_profiles` table
+  - When enabled, skips individual `user_clients` rows — user sees all clients automatically
+  - Toggle in both invite and edit modals
+- [x] Delete user functionality with confirmation dialog
+  - Removes from `auth.users`, `user_profiles`, `user_clients`, `user_permissions`
+  - Cascading cleanup via API route
+- [x] Added Permissions nav item to Sidebar (between Excel Export and API Settings)
+
+### RLS Policy Fix for `all_clients` Access
+- [x] **Root cause fix:** Users with `all_clients=true` couldn't load any data
+  - All 40 RLS policies across 10 tables only checked `user_clients` junction table
+  - When `all_clients=true`, no `user_clients` rows exist → RLS returned zero rows
+- [x] Created `has_client_access(client_id uuid)` PostgreSQL function
+  - Checks `all_clients=true` on `user_profiles` OR matching `user_clients` row
+  - `SECURITY DEFINER` + `STABLE` for performance
+- [x] Created `has_game_client_access(game_id uuid)` for `products` table
+  - Joins through `games` table to resolve `client_id`
+- [x] Updated 40 RLS policies across 10 tables:
+  - `clients`, `games`, `products`, `sales`, `steam_api_keys`
+  - `steam_performance_data`, `steam_sales`, `calendar_versions`
+  - `performance_metrics`, `performance_import_history`, `sync_jobs`
+- [x] Applies to all existing and future users automatically
+
+### Session Swap Bug Fix
+- [x] Fixed bug where creating a new user via admin invite would swap the admin's session
+  - `supabase.auth.admin.createUser` was being called with client-side Supabase (which auto-signs-in the new user)
+  - Fixed by using server-side `getServerSupabase()` with service role key for admin operations
+
+**Files Created:**
+- `app/api/users/route.ts` — GET/POST/PUT/DELETE user management API
+- `app/permissions/page.tsx` — User management UI
+- `app/permissions/permissions.module.css` — Styles for permissions page
+- `supabase/migrations/add_all_clients_column.sql`
+
+**Files Modified:**
+- `app/components/Sidebar.tsx` — Added Permissions nav item
+- `lib/auth.ts` — Added `all_clients: boolean` to `UserProfile` interface
+
+**Migrations Applied (via Supabase MCP):**
+- `add_all_clients_column` — `ALTER TABLE user_profiles ADD COLUMN all_clients BOOLEAN DEFAULT false`
+- `add_has_client_access_function_and_update_rls` — Helper functions + 40 policy updates
+
+**Commits:**
+- `e5b00851` — Add auth + RBAC with email/password login and superadmin panel
+- `9c7c7012` — Add invite link flow for user creation
+- `384c98d2` — Add client access and feature permissions to invite user modal
+- `4f0f8555` — Add user management page with all-clients access and delete functionality
+- `25483552` — Remove duplicate Permissions nav item from Sidebar
+- `409a1be5` — Add 'All Clients (including future)' toggle and delete user to admin page
+- `a03fb72e` — Fix session swap when creating new users via admin invite
+- `e1a4a861` — Fix all_clients flag not granting data access via RLS policies
+
 ## ✅ Completed (Session: 2026-01-20)
 
 ### Revenue Over Time Chart Improvements
