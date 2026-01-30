@@ -29,7 +29,9 @@ export function getServerSupabase() {
     console.warn('SUPABASE_SERVICE_ROLE_KEY not found, falling back to anon key')
     return supabase
   }
-  return createClient(supabaseUrl, serviceRoleKey)
+  return createClient(supabaseUrl, serviceRoleKey, {
+    auth: { autoRefreshToken: false, persistSession: false }
+  })
 }
 
 // For backwards compatibility, export a serverSupabase instance
@@ -39,7 +41,9 @@ export const serverSupabase = (() => {
     return supabase // Client-side, use anon key
   }
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-  return serviceRoleKey && supabaseUrl ? createClient(supabaseUrl, serviceRoleKey) : supabase
+  return serviceRoleKey && supabaseUrl
+    ? createClient(supabaseUrl, serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } })
+    : supabase
 })()
 
 // Database types based on our schema
