@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { Sidebar } from '../components/Sidebar'
+import { useAuth } from '@/lib/auth-context'
 
 interface Platform {
   id: string
@@ -16,6 +17,9 @@ interface Platform {
 
 export default function PlatformsPage() {
   const supabase = createClientComponentClient()
+  const { hasAccess, loading: authLoading } = useAuth()
+  const canView = hasAccess('platform_settings', 'view')
+  const canEdit = hasAccess('platform_settings', 'edit')
   const [platforms, setPlatforms] = useState<Platform[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [editingPlatform, setEditingPlatform] = useState<Platform | null>(null)
@@ -78,10 +82,33 @@ export default function PlatformsPage() {
     }
   }
 
+  if (authLoading || isLoading) {
+    return (
+      <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: '#f8fafc' }}>
+        <Sidebar />
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <p>Loading...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (!canView) {
+    return (
+      <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: '#f8fafc' }}>
+        <Sidebar />
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '1rem' }}>
+          <h2 style={{ fontSize: '1.5rem', fontWeight: 600, color: '#1f2937' }}>Access Denied</h2>
+          <p style={{ color: '#6b7280' }}>You don&apos;t have permission to view Platform Settings.</p>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: '#f8fafc' }}>
       <Sidebar />
-      
+
       <div style={{ flex: 1, padding: '32px' }}>
         <div style={{ maxWidth: '900px', margin: '0 auto' }}>
           <div style={{ marginBottom: '32px' }}>

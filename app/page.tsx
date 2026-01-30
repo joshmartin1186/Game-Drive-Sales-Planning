@@ -4,7 +4,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { parseISO, format, addDays } from 'date-fns'
-import { supabase } from '@/lib/supabase'
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import GanttChart from './components/GanttChart'
 import SalesTable from './components/SalesTable'
 import AddSaleModal from './components/AddSaleModal'
@@ -24,6 +24,7 @@ import StatCard from './components/StatCard'
 import PageToggle from './components/PageToggle'
 import { GeneratedSale, CalendarVariation, generatedSaleToCreateFormat } from '@/lib/sale-calendar-generator'
 import { useUndo } from '@/lib/undo-context'
+import { useAuth } from '@/lib/auth-context'
 import { normalizeToLocalDate } from '@/lib/dateUtils'
 import styles from './page.module.css'
 import { Sale, Platform, Product, Game, Client, SaleWithDetails, PlatformEvent } from '@/lib/types'
@@ -37,6 +38,10 @@ type SaleStatus = 'planned' | 'submitted' | 'confirmed' | 'live' | 'ended'
 interface ConflictInfo { productName: string; eventName: string; overlapDays: number }
 
 export default function GameDriveDashboard() {
+  const supabase = createClientComponentClient()
+  const { hasAccess, loading: authLoading, resolveAccess } = useAuth()
+  const canEdit = hasAccess('sales_timeline', 'edit')
+  const canView = hasAccess('sales_timeline', 'view')
   const [sales, setSales] = useState<SaleWithDetails[]>([])
   const [clients, setClients] = useState<Client[]>([])
   const [games, setGames] = useState<(Game & { client: Client })[]>([])
@@ -312,7 +317,9 @@ export default function GameDriveDashboard() {
 
   useEffect(() => { if (filterClientId && filterGameId) { const game = games.find(g => g.id === filterGameId); if (game && game.client_id !== filterClientId) { setFilterGameId('') } } }, [filterClientId, filterGameId, games])
 
-  if (loading) { return (<div className={styles.container}><div className={styles.loading}><div className={styles.spinner}></div><p>Loading sales data...</p></div></div>) }
+  if (authLoading || loading) { return (<div className={styles.container}><div className={styles.loading}><div className={styles.spinner}></div><p>Loading sales data...</p></div></div>) }
+
+  if (!canView) { return (<div className={styles.container}><div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '50vh', gap: '1rem' }}><h2 style={{ fontSize: '1.5rem', fontWeight: 600, color: '#1f2937' }}>Access Denied</h2><p style={{ color: '#6b7280' }}>You don&apos;t have permission to view the Sales Timeline.</p></div></div>) }
 
   return (
     <div className={styles.container}>

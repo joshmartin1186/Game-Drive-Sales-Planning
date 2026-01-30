@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { format, parseISO } from 'date-fns'
-import { supabase } from '@/lib/supabase'
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { SaleWithDetails, Platform } from '@/lib/types'
 import styles from './VersionManager.module.css'
 
@@ -50,6 +50,7 @@ export default function VersionManager({
   platforms,
   onRestoreVersion
 }: VersionManagerProps) {
+  const supabase = createClientComponentClient()
   const [versions, setVersions] = useState<CalendarVersion[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)

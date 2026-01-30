@@ -8,6 +8,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import styles from './page.module.css'
 import PageToggle from '../components/PageToggle'
+import { useAuth } from '@/lib/auth-context'
 
 // Types
 interface PerformanceData {
@@ -243,6 +244,9 @@ const DEFAULT_WIDGETS: DashboardWidget[] = [
 
 export default function AnalyticsPage() {
   const supabase = createClientComponentClient()
+  const { hasAccess, loading: authLoading } = useAuth()
+  const canView = hasAccess('analytics', 'view')
+  const canEdit = hasAccess('analytics', 'edit')
 
   // State
   const [isLoading, setIsLoading] = useState(true)
@@ -1881,10 +1885,25 @@ export default function AnalyticsPage() {
     }
   }
 
+  if (authLoading) {
+    return <div className={styles.pageContainer}><div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '50vh' }}><p>Loading...</p></div></div>
+  }
+
+  if (!canView) {
+    return (
+      <div className={styles.pageContainer}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '50vh', gap: '1rem' }}>
+          <h2 style={{ fontSize: '1.5rem', fontWeight: 600, color: '#1f2937' }}>Access Denied</h2>
+          <p style={{ color: '#6b7280' }}>You don&apos;t have permission to view Analytics.</p>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className={styles.pageContainer}>
       <AnalyticsSidebar />
-      
+
       <div className={styles.pageContent}>
         <PageToggle />
         

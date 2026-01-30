@@ -2,8 +2,9 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { parseISO } from 'date-fns'
-import { supabase } from '@/lib/supabase'
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { Sale, Platform, Product, Game, Client, SaleWithDetails, PlatformEvent } from '@/lib/types'
+import { useAuth } from '@/lib/auth-context'
 import GanttChart from '../components/GanttChart'
 import SalesTable from '../components/SalesTable'
 import AddSaleModal from '../components/AddSaleModal'
@@ -18,6 +19,10 @@ interface SalePrefill {
 }
 
 export default function PlanningPage() {
+  const supabase = createClientComponentClient()
+  const { hasAccess, loading: authLoading } = useAuth()
+  const canView = hasAccess('sales_timeline', 'view')
+  const canEdit = hasAccess('sales_timeline', 'edit')
   const [sales, setSales] = useState<SaleWithDetails[]>([])
   const [platforms, setPlatforms] = useState<Platform[]>([])
   const [products, setProducts] = useState<(Product & { game: Game & { client: Client } })[]>([])
@@ -251,7 +256,7 @@ export default function PlanningPage() {
   // DEBUG: Log the callback we're about to pass
   console.log('[Planning] About to render GanttChart with onCreateSale:', typeof handleTimelineCreate)
   
-  if (loading) {
+  if (authLoading || loading) {
     return (
       <div className={styles.container}>
         <div className={styles.loading}>
@@ -261,7 +266,18 @@ export default function PlanningPage() {
       </div>
     )
   }
-  
+
+  if (!canView) {
+    return (
+      <div className={styles.container}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '50vh', gap: '1rem' }}>
+          <h2 style={{ fontSize: '1.5rem', fontWeight: 600, color: '#1f2937' }}>Access Denied</h2>
+          <p style={{ color: '#6b7280' }}>You don&apos;t have permission to view Sales Planning.</p>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className={styles.container}>
       <header className={styles.header}>
