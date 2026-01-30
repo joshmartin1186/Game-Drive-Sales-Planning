@@ -19,6 +19,7 @@ export interface UserProfile {
   display_name: string | null
   role: Role
   is_active: boolean
+  all_clients: boolean
   created_at: string
   updated_at: string
 }
