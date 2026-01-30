@@ -49,7 +49,7 @@ export async function POST(request: Request) {
   }
 
   const body = await request.json()
-  const { email, role } = body
+  const { email, role, clientIds, permissions } = body
 
   if (!email) {
     return NextResponse.json({ error: 'Email is required' }, { status: 400 })
@@ -69,12 +69,37 @@ export async function POST(request: Request) {
 
   // Update the profile with role (trigger created it with defaults)
   if (linkData.user) {
+    const userId = linkData.user.id
+
     await serverSupabase
       .from('user_profiles')
       .update({
         role: role || 'viewer',
       })
-      .eq('id', linkData.user.id)
+      .eq('id', userId)
+
+    // Set client assignments if provided
+    if (clientIds && clientIds.length > 0) {
+      const clientRows = clientIds.map((clientId: string) => ({
+        user_id: userId,
+        client_id: clientId,
+      }))
+      await serverSupabase.from('user_clients').insert(clientRows)
+    }
+
+    // Set feature permissions if provided
+    if (permissions && permissions.length > 0) {
+      const permRows = permissions
+        .filter((p: { access_level: string }) => p.access_level !== 'none')
+        .map((p: { feature: string; access_level: string }) => ({
+          user_id: userId,
+          feature: p.feature,
+          access_level: p.access_level,
+        }))
+      if (permRows.length > 0) {
+        await serverSupabase.from('user_permissions').insert(permRows)
+      }
+    }
   }
 
   // Build a custom setup URL using the token hash from the generated link

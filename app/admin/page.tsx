@@ -47,6 +47,8 @@ export default function AdminPage() {
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [newEmail, setNewEmail] = useState('')
   const [newRole, setNewRole] = useState<Role>('viewer')
+  const [newClientIds, setNewClientIds] = useState<string[]>([])
+  const [newPermissions, setNewPermissions] = useState<Record<string, AccessLevel>>({})
   const [creating, setCreating] = useState(false)
   const [inviteUrl, setInviteUrl] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
@@ -97,6 +99,12 @@ export default function AdminPage() {
         body: JSON.stringify({
           email: newEmail,
           role: newRole,
+          clientIds: newRole !== 'superadmin' ? newClientIds : [],
+          permissions: newRole !== 'superadmin'
+            ? Object.entries(newPermissions)
+                .filter(([, level]) => level !== 'none')
+                .map(([feature, access_level]) => ({ feature, access_level }))
+            : [],
         }),
       })
       const data = await res.json()
@@ -116,6 +124,8 @@ export default function AdminPage() {
     setCopied(false)
     setNewEmail('')
     setNewRole('viewer')
+    setNewClientIds([])
+    setNewPermissions({})
     setShowCreateForm(false)
   }
 
@@ -354,7 +364,7 @@ export default function AdminPage() {
           {/* Create User Modal */}
           {showCreateForm && (
             <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-              <div style={{ background: 'var(--color-surface)', borderRadius: 'var(--radius-lg)', padding: '24px', width: '440px', maxHeight: '90vh', overflow: 'auto' }}>
+              <div style={{ background: 'var(--color-surface)', borderRadius: 'var(--radius-lg)', padding: '24px', width: '560px', maxHeight: '90vh', overflow: 'auto' }}>
                 {inviteUrl ? (
                   <>
                     <h2 style={{ fontSize: '18px', fontWeight: 700, color: 'var(--color-text)', margin: '0 0 8px 0' }}>Invite Link Created</h2>
@@ -397,11 +407,99 @@ export default function AdminPage() {
                           <option value="superadmin">Super Admin</option>
                         </select>
                       </div>
+
+                      {/* Client Access (only for non-superadmin) */}
+                      {newRole !== 'superadmin' && (
+                        <div style={{ marginBottom: '20px' }}>
+                          <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--color-text)', margin: '0 0 8px 0' }}>
+                            Client Access
+                          </h3>
+                          <p style={{ fontSize: '12px', color: 'var(--color-text-light)', margin: '0 0 12px 0' }}>
+                            Select which clients this user can see data for.
+                          </p>
+                          <div style={{ display: 'grid', gap: '6px' }}>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 12px', background: 'var(--color-bg)', borderRadius: 'var(--radius-md)', cursor: 'pointer', fontSize: '13px', fontWeight: 500 }}>
+                              <input
+                                type="checkbox"
+                                checked={clients.length > 0 && newClientIds.length === clients.length}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setNewClientIds(clients.map((c) => c.id))
+                                  } else {
+                                    setNewClientIds([])
+                                  }
+                                }}
+                              />
+                              All Clients
+                            </label>
+                            {clients.map((client) => (
+                              <label key={client.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 12px 6px 28px', background: 'var(--color-bg)', borderRadius: 'var(--radius-md)', cursor: 'pointer', fontSize: '13px' }}>
+                                <input
+                                  type="checkbox"
+                                  checked={newClientIds.includes(client.id)}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      setNewClientIds((prev) => [...prev, client.id])
+                                    } else {
+                                      setNewClientIds((prev) => prev.filter((id) => id !== client.id))
+                                    }
+                                  }}
+                                />
+                                {client.name}
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Feature Permissions (only for non-superadmin) */}
+                      {newRole !== 'superadmin' && (
+                        <div style={{ marginBottom: '20px' }}>
+                          <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--color-text)', margin: '0 0 8px 0' }}>
+                            Feature Permissions
+                          </h3>
+                          <p style={{ fontSize: '12px', color: 'var(--color-text-light)', margin: '0 0 12px 0' }}>
+                            Override the base role for specific features. Leave as &ldquo;Use default&rdquo; to inherit from the base role.
+                          </p>
+                          <div style={{ display: 'grid', gap: '8px' }}>
+                            {FEATURES.map((feature) => (
+                              <div key={feature.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: 'var(--color-bg)', borderRadius: 'var(--radius-md)' }}>
+                                <div>
+                                  <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--color-text)' }}>{feature.label}</div>
+                                  <div style={{ fontSize: '11px', color: 'var(--color-text-light)' }}>{feature.description}</div>
+                                </div>
+                                <select
+                                  value={newPermissions[feature.key] || ''}
+                                  onChange={(e) => {
+                                    const val = e.target.value
+                                    setNewPermissions((prev) => {
+                                      const next = { ...prev }
+                                      if (val === '') {
+                                        delete next[feature.key]
+                                      } else {
+                                        next[feature.key] = val as AccessLevel
+                                      }
+                                      return next
+                                    })
+                                  }}
+                                  style={{ padding: '4px 8px', fontSize: '13px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', minWidth: '130px' }}
+                                >
+                                  <option value="">Use default ({newRole === 'editor' ? 'edit' : 'view'})</option>
+                                  <option value="edit">Edit</option>
+                                  <option value="view">View only</option>
+                                  <option value="none">No access</option>
+                                </select>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
                       <p style={{ fontSize: '12px', color: 'var(--color-text-light)', margin: '0 0 16px 0' }}>
                         An invite link will be generated. The user will set their own password and display name.
                       </p>
                       <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-                        <button type="button" onClick={() => { setShowCreateForm(false); setNewEmail(''); setNewRole('viewer') }}
+                        <button type="button" onClick={() => { setShowCreateForm(false); setNewEmail(''); setNewRole('viewer'); setNewClientIds([]); setNewPermissions({}) }}
                           style={{ padding: '8px 16px', fontSize: '14px', background: 'var(--color-bg)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', cursor: 'pointer', color: 'var(--color-text)' }}>
                           Cancel
                         </button>
