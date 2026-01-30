@@ -128,3 +128,36 @@ export interface LaunchConflict {
   overlapEnd: Date
   overlapDays: number
 }
+
+// User management types
+export type UserRole = 'superadmin' | 'editor' | 'viewer'
+export type AccessLevel = 'none' | 'view' | 'edit'
+export type FeatureKey = 'sales_timeline' | 'analytics' | 'client_management' | 'platform_settings' | 'excel_export' | 'api_settings'
+
+export interface UserProfile {
+  id: string
+  email: string
+  display_name: string | null
+  role: UserRole
+  is_active: boolean
+  all_clients: boolean
+  created_at: string
+  updated_at: string
+  client_ids?: string[]
+  clients?: { id: string; name: string }[]
+  permissions?: UserPermission[]
+}
+
+export interface UserPermission {
+  id: string
+  user_id: string
+  feature: FeatureKey
+  access_level: AccessLevel
+}
+
+export interface UserClient {
+  id: string
+  user_id: string
+  client_id: string
+  created_at: string
+}
