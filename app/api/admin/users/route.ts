@@ -49,7 +49,7 @@ export async function POST(request: Request) {
   }
 
   const body = await request.json()
-  const { email, role, clientIds, permissions } = body
+  const { email, role, clientIds, permissions, allClients } = body
 
   if (!email) {
     return NextResponse.json({ error: 'Email is required' }, { status: 400 })
@@ -75,11 +75,12 @@ export async function POST(request: Request) {
       .from('user_profiles')
       .update({
         role: role || 'viewer',
+        all_clients: allClients || false,
       })
       .eq('id', userId)
 
-    // Set client assignments if provided
-    if (clientIds && clientIds.length > 0) {
+    // Set client assignments if provided (skip if all_clients is true)
+    if (!allClients && clientIds && clientIds.length > 0) {
       const clientRows = clientIds.map((clientId: string) => ({
         user_id: userId,
         client_id: clientId,
@@ -128,11 +129,12 @@ export async function PUT(request: Request) {
 
   switch (action) {
     case 'update_profile': {
-      const { role, display_name, is_active } = data
+      const { role, display_name, is_active, all_clients } = data
       const updates: Record<string, unknown> = { updated_at: new Date().toISOString() }
       if (role !== undefined) updates.role = role
       if (display_name !== undefined) updates.display_name = display_name
       if (is_active !== undefined) updates.is_active = is_active
+      if (all_clients !== undefined) updates.all_clients = all_clients
 
       const { error } = await serverSupabase
         .from('user_profiles')
@@ -203,4 +205,33 @@ export async function PUT(request: Request) {
     default:
       return NextResponse.json({ error: `Unknown action: ${action}` }, { status: 400 })
   }
+}
+
+// DELETE - Permanently remove a user
+export async function DELETE(request: Request) {
+  if (!(await verifySuperAdmin())) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
+  }
+
+  const { searchParams } = new URL(request.url)
+  const userId = searchParams.get('userId')
+
+  if (!userId) {
+    return NextResponse.json({ error: 'userId is required' }, { status: 400 })
+  }
+
+  const serverSupabase = getServerSupabase()
+
+  // Delete in order: permissions -> client access -> profile -> auth user
+  await serverSupabase.from('user_permissions').delete().eq('user_id', userId)
+  await serverSupabase.from('user_clients').delete().eq('user_id', userId)
+  await serverSupabase.from('user_profiles').delete().eq('id', userId)
+
+  // Delete auth user
+  const { error: authError } = await serverSupabase.auth.admin.deleteUser(userId)
+  if (authError) {
+    return NextResponse.json({ error: authError.message }, { status: 400 })
+  }
+
+  return NextResponse.json({ success: true })
 }

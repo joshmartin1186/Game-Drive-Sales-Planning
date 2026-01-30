@@ -13,6 +13,7 @@ interface UserProfile {
   display_name: string | null
   role: Role
   is_active: boolean
+  all_clients: boolean
   created_at: string
 }
 
@@ -47,6 +48,7 @@ export default function AdminPage() {
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [newEmail, setNewEmail] = useState('')
   const [newRole, setNewRole] = useState<Role>('viewer')
+  const [newAllClients, setNewAllClients] = useState(false)
   const [newClientIds, setNewClientIds] = useState<string[]>([])
   const [newPermissions, setNewPermissions] = useState<Record<string, AccessLevel>>({})
   const [creating, setCreating] = useState(false)
@@ -57,9 +59,14 @@ export default function AdminPage() {
   const [editingUser, setEditingUser] = useState<UserProfile | null>(null)
   const [editRole, setEditRole] = useState<Role>('viewer')
   const [editDisplayName, setEditDisplayName] = useState('')
+  const [editAllClients, setEditAllClients] = useState(false)
   const [editPermissions, setEditPermissions] = useState<Record<string, AccessLevel>>({})
   const [editClientIds, setEditClientIds] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
+
+  // Delete user
+  const [deletingUser, setDeletingUser] = useState<UserProfile | null>(null)
+  const [deleting, setDeleting] = useState(false)
 
   const fetchData = useCallback(async () => {
     try {
@@ -99,7 +106,8 @@ export default function AdminPage() {
         body: JSON.stringify({
           email: newEmail,
           role: newRole,
-          clientIds: newRole !== 'superadmin' ? newClientIds : [],
+          allClients: newRole !== 'superadmin' ? newAllClients : true,
+          clientIds: newRole !== 'superadmin' && !newAllClients ? newClientIds : [],
           permissions: newRole !== 'superadmin'
             ? Object.entries(newPermissions)
                 .filter(([, level]) => level !== 'none')
@@ -124,6 +132,7 @@ export default function AdminPage() {
     setCopied(false)
     setNewEmail('')
     setNewRole('viewer')
+    setNewAllClients(false)
     setNewClientIds([])
     setNewPermissions({})
     setShowCreateForm(false)
@@ -141,6 +150,7 @@ export default function AdminPage() {
     setEditingUser(user)
     setEditRole(user.role)
     setEditDisplayName(user.display_name || '')
+    setEditAllClients(user.all_clients || false)
 
     // Load current permissions
     const userPerms: Record<string, AccessLevel> = {}
@@ -170,6 +180,7 @@ export default function AdminPage() {
           action: 'update_profile',
           role: editRole,
           display_name: editDisplayName || null,
+          all_clients: editRole !== 'superadmin' ? editAllClients : true,
         }),
       })
 
@@ -195,7 +206,7 @@ export default function AdminPage() {
         body: JSON.stringify({
           userId: editingUser.id,
           action: 'set_clients',
-          clientIds: editClientIds,
+          clientIds: editAllClients ? [] : editClientIds,
         }),
       })
 
@@ -219,6 +230,27 @@ export default function AdminPage() {
       }),
     })
     await fetchData()
+  }
+
+  const handleDeleteUser = async () => {
+    if (!deletingUser) return
+    setDeleting(true)
+    setError(null)
+
+    try {
+      const res = await fetch(`/api/admin/users?userId=${deletingUser.id}`, {
+        method: 'DELETE',
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+
+      setDeletingUser(null)
+      await fetchData()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete user')
+    } finally {
+      setDeleting(false)
+    }
   }
 
   if (authLoading || loading) {
@@ -316,7 +348,9 @@ export default function AdminPage() {
                           </span>
                         </td>
                         <td style={{ padding: '12px 16px', fontSize: '13px', color: 'var(--color-text-muted)' }}>
-                          {user.role === 'superadmin' ? 'All' : userClientList.length > 0 ? userClientList.join(', ') : 'None'}
+                          {user.role === 'superadmin' || user.all_clients
+                            ? <span style={{ color: '#1d4ed8', fontWeight: 500 }}>All Clients</span>
+                            : userClientList.length > 0 ? userClientList.join(', ') : 'None'}
                         </td>
                         <td style={{ padding: '12px 16px' }}>
                           <span style={{
@@ -347,10 +381,22 @@ export default function AdminPage() {
                               color: user.is_active ? 'var(--color-danger)' : 'var(--color-success)',
                               background: 'var(--color-bg)',
                               border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)',
-                              cursor: 'pointer',
+                              cursor: 'pointer', marginRight: '8px',
                             }}
                           >
                             {user.is_active ? 'Deactivate' : 'Activate'}
+                          </button>
+                          <button
+                            onClick={() => setDeletingUser(user)}
+                            style={{
+                              padding: '4px 12px', fontSize: '13px', fontWeight: 500,
+                              color: 'var(--color-danger)',
+                              background: 'var(--color-bg)',
+                              border: '1px solid var(--color-danger)', borderRadius: 'var(--radius-md)',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            Delete
                           </button>
                         </td>
                       </tr>
@@ -418,25 +464,30 @@ export default function AdminPage() {
                             Select which clients this user can see data for.
                           </p>
                           <div style={{ display: 'grid', gap: '6px' }}>
-                            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 12px', background: 'var(--color-bg)', borderRadius: 'var(--radius-md)', cursor: 'pointer', fontSize: '13px', fontWeight: 500 }}>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 12px', background: newAllClients ? '#dbeafe' : 'var(--color-bg)', borderRadius: 'var(--radius-md)', cursor: 'pointer', fontSize: '13px', fontWeight: 500 }}>
                               <input
                                 type="checkbox"
-                                checked={clients.length > 0 && newClientIds.length === clients.length}
+                                checked={newAllClients}
                                 onChange={(e) => {
+                                  setNewAllClients(e.target.checked)
                                   if (e.target.checked) {
-                                    setNewClientIds(clients.map((c) => c.id))
-                                  } else {
                                     setNewClientIds([])
                                   }
                                 }}
                               />
-                              All Clients
+                              All Clients (including future)
                             </label>
                             {clients.map((client) => (
-                              <label key={client.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 12px 6px 28px', background: 'var(--color-bg)', borderRadius: 'var(--radius-md)', cursor: 'pointer', fontSize: '13px' }}>
+                              <label key={client.id} style={{
+                                display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 12px 6px 28px',
+                                background: 'var(--color-bg)', borderRadius: 'var(--radius-md)',
+                                cursor: newAllClients ? 'not-allowed' : 'pointer', fontSize: '13px',
+                                opacity: newAllClients ? 0.5 : 1,
+                              }}>
                                 <input
                                   type="checkbox"
-                                  checked={newClientIds.includes(client.id)}
+                                  checked={newAllClients || newClientIds.includes(client.id)}
+                                  disabled={newAllClients}
                                   onChange={(e) => {
                                     if (e.target.checked) {
                                       setNewClientIds((prev) => [...prev, client.id])
@@ -499,7 +550,7 @@ export default function AdminPage() {
                         An invite link will be generated. The user will set their own password and display name.
                       </p>
                       <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-                        <button type="button" onClick={() => { setShowCreateForm(false); setNewEmail(''); setNewRole('viewer'); setNewClientIds([]); setNewPermissions({}) }}
+                        <button type="button" onClick={() => { setShowCreateForm(false); setNewEmail(''); setNewRole('viewer'); setNewAllClients(false); setNewClientIds([]); setNewPermissions({}) }}
                           style={{ padding: '8px 16px', fontSize: '14px', background: 'var(--color-bg)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', cursor: 'pointer', color: 'var(--color-text)' }}>
                           Cancel
                         </button>
@@ -597,11 +648,30 @@ export default function AdminPage() {
                       Select which clients this user can see data for.
                     </p>
                     <div style={{ display: 'grid', gap: '6px' }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 12px', background: editAllClients ? '#dbeafe' : 'var(--color-bg)', borderRadius: 'var(--radius-md)', cursor: 'pointer', fontSize: '13px', fontWeight: 500 }}>
+                        <input
+                          type="checkbox"
+                          checked={editAllClients}
+                          onChange={(e) => {
+                            setEditAllClients(e.target.checked)
+                            if (e.target.checked) {
+                              setEditClientIds([])
+                            }
+                          }}
+                        />
+                        All Clients (including future)
+                      </label>
                       {clients.map((client) => (
-                        <label key={client.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 12px', background: 'var(--color-bg)', borderRadius: 'var(--radius-md)', cursor: 'pointer', fontSize: '13px' }}>
+                        <label key={client.id} style={{
+                          display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 12px 6px 28px',
+                          background: 'var(--color-bg)', borderRadius: 'var(--radius-md)',
+                          cursor: editAllClients ? 'not-allowed' : 'pointer', fontSize: '13px',
+                          opacity: editAllClients ? 0.5 : 1,
+                        }}>
                           <input
                             type="checkbox"
-                            checked={editClientIds.includes(client.id)}
+                            checked={editAllClients || editClientIds.includes(client.id)}
+                            disabled={editAllClients}
                             onChange={(e) => {
                               if (e.target.checked) {
                                 setEditClientIds((prev) => [...prev, client.id])
@@ -625,6 +695,35 @@ export default function AdminPage() {
                   <button onClick={handleSaveUser} disabled={saving}
                     style={{ padding: '8px 16px', fontSize: '14px', fontWeight: 600, color: '#fff', background: 'var(--color-primary)', border: 'none', borderRadius: 'var(--radius-md)', cursor: saving ? 'not-allowed' : 'pointer' }}>
                     {saving ? 'Saving...' : 'Save Changes'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+          {/* Delete Confirmation Modal */}
+          {deletingUser && (
+            <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+              <div style={{ background: 'var(--color-surface)', borderRadius: 'var(--radius-lg)', padding: '24px', width: '440px', textAlign: 'center' }}>
+                <h2 style={{ fontSize: '18px', fontWeight: 700, color: 'var(--color-text)', margin: '0 0 12px 0' }}>
+                  Delete User
+                </h2>
+                <p style={{ fontSize: '14px', color: 'var(--color-text-muted)', margin: '0 0 8px 0' }}>
+                  Are you sure you want to permanently delete <strong>{deletingUser.display_name || deletingUser.email}</strong>?
+                </p>
+                <div style={{
+                  margin: '16px 0', padding: '12px', background: '#fef2f2',
+                  borderRadius: 'var(--radius-md)', fontSize: '13px', color: 'var(--color-danger)',
+                }}>
+                  This action cannot be undone. The user will be removed from the system entirely, including their auth account, permissions, and client access.
+                </div>
+                <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', marginTop: '20px' }}>
+                  <button onClick={() => setDeletingUser(null)}
+                    style={{ padding: '8px 16px', fontSize: '14px', background: 'var(--color-bg)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', cursor: 'pointer', color: 'var(--color-text)' }}>
+                    Cancel
+                  </button>
+                  <button onClick={handleDeleteUser} disabled={deleting}
+                    style={{ padding: '8px 16px', fontSize: '14px', fontWeight: 600, color: '#fff', background: 'var(--color-danger)', border: 'none', borderRadius: 'var(--radius-md)', cursor: deleting ? 'not-allowed' : 'pointer' }}>
+                    {deleting ? 'Deleting...' : 'Delete User'}
                   </button>
                 </div>
               </div>
