@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { Sidebar } from '../components/Sidebar'
+import { useAuth } from '@/lib/auth-context'
 import * as XLSX from 'xlsx'
 
 interface Sale {
@@ -26,6 +27,8 @@ interface Sale {
 
 export default function ExportPage() {
   const supabase = createClientComponentClient()
+  const { hasAccess, loading: authLoading } = useAuth()
+  const canView = hasAccess('export', 'view')
   const [sales, setSales] = useState<Sale[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [exportFormat, setExportFormat] = useState<'csv' | 'xlsx'>('xlsx')
@@ -174,10 +177,33 @@ export default function ExportPage() {
     }
   }
 
+  if (authLoading || isLoading) {
+    return (
+      <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: '#f8fafc' }}>
+        <Sidebar />
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <p>Loading...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (!canView) {
+    return (
+      <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: '#f8fafc' }}>
+        <Sidebar />
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '1rem' }}>
+          <h2 style={{ fontSize: '1.5rem', fontWeight: 600, color: '#1f2937' }}>Access Denied</h2>
+          <p style={{ color: '#6b7280' }}>You don&apos;t have permission to view Excel Export.</p>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: '#f8fafc' }}>
       <Sidebar />
-      
+
       <div style={{ flex: 1, padding: '32px' }}>
         <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
           <div style={{ marginBottom: '32px' }}>

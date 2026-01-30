@@ -2,7 +2,7 @@
 const nextConfig = {
   images: {
     domains: [
-      'cdn.akamai.steamstatic.com', 
+      'cdn.akamai.steamstatic.com',
       'steamcdn-a.akamaihd.net',
       'shared.akamai.steamstatic.com'
     ],

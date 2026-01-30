@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Navbar } from '../components/Navbar';
 import { Sidebar } from '../components/Sidebar';
+import { useAuth } from '@/lib/auth-context';
 import styles from './settings.module.css';
 
 // Version: 2.0.0 - Background sync enabled
@@ -62,6 +63,9 @@ function formatRawResponse(rawResponse: unknown): string {
 }
 
 export default function SettingsPage() {
+  const { hasAccess, loading: authLoading } = useAuth();
+  const canView = hasAccess('api_settings', 'view');
+  const canEdit = hasAccess('api_settings', 'edit');
   const [clients, setClients] = useState<Client[] | null>(null);
   const [apiKeys, setApiKeys] = useState<SteamApiKey[] | null>(null);
   const [loading, setLoading] = useState(true);
@@ -425,6 +429,35 @@ export default function SettingsPage() {
   const availableClients = (clients || []).filter(
     client => !(apiKeys || []).some(key => key.client_id === client.id)
   );
+
+  if (authLoading || loading) {
+    return (
+      <div className={styles.pageWrapper}>
+        <Navbar />
+        <div className={styles.layoutContainer}>
+          <Sidebar />
+          <main className={styles.mainContent} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '50vh' }}>
+            <p>Loading...</p>
+          </main>
+        </div>
+      </div>
+    );
+  }
+
+  if (!canView) {
+    return (
+      <div className={styles.pageWrapper}>
+        <Navbar />
+        <div className={styles.layoutContainer}>
+          <Sidebar />
+          <main className={styles.mainContent} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '50vh', gap: '1rem' }}>
+            <h2 style={{ fontSize: '1.5rem', fontWeight: 600, color: '#1f2937' }}>Access Denied</h2>
+            <p style={{ color: '#6b7280' }}>You don&apos;t have permission to view API Settings.</p>
+          </main>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={styles.pageWrapper}>

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import Link from 'next/link'
 import { Sidebar } from '../components/Sidebar'
+import { useAuth } from '@/lib/auth-context'
 
 interface Client {
   id: string
@@ -15,6 +16,9 @@ interface Client {
 
 export default function ClientsPage() {
   const supabase = createClientComponentClient()
+  const { hasAccess, loading: authLoading } = useAuth()
+  const canView = hasAccess('client_management', 'view')
+  const canEdit = hasAccess('client_management', 'edit')
   const [clients, setClients] = useState<Client[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [showAddModal, setShowAddModal] = useState(false)
@@ -65,10 +69,33 @@ export default function ClientsPage() {
     }
   }
 
+  if (authLoading || isLoading) {
+    return (
+      <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: '#f8fafc' }}>
+        <Sidebar />
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <p>Loading...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (!canView) {
+    return (
+      <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: '#f8fafc' }}>
+        <Sidebar />
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '1rem' }}>
+          <h2 style={{ fontSize: '1.5rem', fontWeight: 600, color: '#1f2937' }}>Access Denied</h2>
+          <p style={{ color: '#6b7280' }}>You don&apos;t have permission to view Client Management.</p>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: '#f8fafc' }}>
       <Sidebar />
-      
+
       <div style={{ flex: 1, padding: '32px' }}>
         <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px' }}>
@@ -76,7 +103,7 @@ export default function ClientsPage() {
               <h1 style={{ fontSize: '28px', fontWeight: 700, color: '#1e293b', margin: 0 }}>Client Management</h1>
               <p style={{ fontSize: '14px', color: '#64748b', margin: '4px 0 0 0' }}>Manage your game publisher clients</p>
             </div>
-            <button
+            {canEdit && <button
               onClick={() => setShowAddModal(true)}
               style={{
                 display: 'flex',
@@ -96,7 +123,7 @@ export default function ClientsPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
               </svg>
               Add Client
-            </button>
+            </button>}
           </div>
 
           {isLoading ? (
