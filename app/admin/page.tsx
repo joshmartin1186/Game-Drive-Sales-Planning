@@ -46,10 +46,10 @@ export default function AdminPage() {
   // Create user form
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [newEmail, setNewEmail] = useState('')
-  const [newPassword, setNewPassword] = useState('')
-  const [newDisplayName, setNewDisplayName] = useState('')
   const [newRole, setNewRole] = useState<Role>('viewer')
   const [creating, setCreating] = useState(false)
+  const [inviteUrl, setInviteUrl] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
 
   // Edit user modal
   const [editingUser, setEditingUser] = useState<UserProfile | null>(null)
@@ -96,24 +96,34 @@ export default function AdminPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           email: newEmail,
-          password: newPassword,
-          display_name: newDisplayName,
           role: newRole,
         }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
 
-      setNewEmail('')
-      setNewPassword('')
-      setNewDisplayName('')
-      setNewRole('viewer')
-      setShowCreateForm(false)
+      setInviteUrl(data.inviteUrl)
       await fetchData()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create user')
     } finally {
       setCreating(false)
+    }
+  }
+
+  const handleCloseInvite = () => {
+    setInviteUrl(null)
+    setCopied(false)
+    setNewEmail('')
+    setNewRole('viewer')
+    setShowCreateForm(false)
+  }
+
+  const handleCopyInvite = async () => {
+    if (inviteUrl) {
+      await navigator.clipboard.writeText(inviteUrl)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
     }
   }
 
@@ -345,43 +355,64 @@ export default function AdminPage() {
           {showCreateForm && (
             <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
               <div style={{ background: 'var(--color-surface)', borderRadius: 'var(--radius-lg)', padding: '24px', width: '440px', maxHeight: '90vh', overflow: 'auto' }}>
-                <h2 style={{ fontSize: '18px', fontWeight: 700, color: 'var(--color-text)', margin: '0 0 20px 0' }}>Create New User</h2>
-                <form onSubmit={handleCreateUser}>
-                  <div style={{ marginBottom: '12px' }}>
-                    <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, color: 'var(--color-text)', marginBottom: '4px' }}>Email *</label>
-                    <input type="email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} required
-                      style={{ width: '100%', padding: '8px 12px', fontSize: '14px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', boxSizing: 'border-box' }} />
-                  </div>
-                  <div style={{ marginBottom: '12px' }}>
-                    <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, color: 'var(--color-text)', marginBottom: '4px' }}>Password *</label>
-                    <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required minLength={6}
-                      style={{ width: '100%', padding: '8px 12px', fontSize: '14px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', boxSizing: 'border-box' }} />
-                  </div>
-                  <div style={{ marginBottom: '12px' }}>
-                    <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, color: 'var(--color-text)', marginBottom: '4px' }}>Display Name</label>
-                    <input type="text" value={newDisplayName} onChange={(e) => setNewDisplayName(e.target.value)}
-                      style={{ width: '100%', padding: '8px 12px', fontSize: '14px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', boxSizing: 'border-box' }} />
-                  </div>
-                  <div style={{ marginBottom: '20px' }}>
-                    <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, color: 'var(--color-text)', marginBottom: '4px' }}>Role</label>
-                    <select value={newRole} onChange={(e) => setNewRole(e.target.value as Role)}
-                      style={{ width: '100%', padding: '8px 12px', fontSize: '14px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', boxSizing: 'border-box' }}>
-                      <option value="viewer">Viewer</option>
-                      <option value="editor">Editor</option>
-                      <option value="superadmin">Super Admin</option>
-                    </select>
-                  </div>
-                  <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-                    <button type="button" onClick={() => setShowCreateForm(false)}
-                      style={{ padding: '8px 16px', fontSize: '14px', background: 'var(--color-bg)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', cursor: 'pointer' }}>
-                      Cancel
-                    </button>
-                    <button type="submit" disabled={creating}
-                      style={{ padding: '8px 16px', fontSize: '14px', fontWeight: 600, color: '#fff', background: 'var(--color-primary)', border: 'none', borderRadius: 'var(--radius-md)', cursor: creating ? 'not-allowed' : 'pointer' }}>
-                      {creating ? 'Creating...' : 'Create User'}
-                    </button>
-                  </div>
-                </form>
+                {inviteUrl ? (
+                  <>
+                    <h2 style={{ fontSize: '18px', fontWeight: 700, color: 'var(--color-text)', margin: '0 0 8px 0' }}>Invite Link Created</h2>
+                    <p style={{ fontSize: '13px', color: 'var(--color-text-muted)', margin: '0 0 16px 0' }}>
+                      Share this link with <strong>{newEmail}</strong> to let them set up their account.
+                    </p>
+                    <div style={{
+                      padding: '12px', background: 'var(--color-bg)', border: '1px solid var(--color-border)',
+                      borderRadius: 'var(--radius-md)', fontSize: '13px', wordBreak: 'break-all',
+                      color: 'var(--color-text)', marginBottom: '16px', fontFamily: 'monospace',
+                    }}>
+                      {inviteUrl}
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                      <button onClick={handleCloseInvite}
+                        style={{ padding: '8px 16px', fontSize: '14px', background: 'var(--color-bg)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', cursor: 'pointer' }}>
+                        Done
+                      </button>
+                      <button onClick={handleCopyInvite}
+                        style={{ padding: '8px 16px', fontSize: '14px', fontWeight: 600, color: '#fff', background: copied ? 'var(--color-success)' : 'var(--color-primary)', border: 'none', borderRadius: 'var(--radius-md)', cursor: 'pointer' }}>
+                        {copied ? 'Copied!' : 'Copy Link'}
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <h2 style={{ fontSize: '18px', fontWeight: 700, color: 'var(--color-text)', margin: '0 0 20px 0' }}>Invite New User</h2>
+                    <form onSubmit={handleCreateUser}>
+                      <div style={{ marginBottom: '12px' }}>
+                        <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, color: 'var(--color-text)', marginBottom: '4px' }}>Email *</label>
+                        <input type="email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} required
+                          style={{ width: '100%', padding: '8px 12px', fontSize: '14px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', boxSizing: 'border-box', background: 'var(--color-bg)', color: 'var(--color-text)' }} />
+                      </div>
+                      <div style={{ marginBottom: '20px' }}>
+                        <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, color: 'var(--color-text)', marginBottom: '4px' }}>Role</label>
+                        <select value={newRole} onChange={(e) => setNewRole(e.target.value as Role)}
+                          style={{ width: '100%', padding: '8px 12px', fontSize: '14px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', boxSizing: 'border-box', background: 'var(--color-bg)', color: 'var(--color-text)' }}>
+                          <option value="viewer">Viewer</option>
+                          <option value="editor">Editor</option>
+                          <option value="superadmin">Super Admin</option>
+                        </select>
+                      </div>
+                      <p style={{ fontSize: '12px', color: 'var(--color-text-light)', margin: '0 0 16px 0' }}>
+                        An invite link will be generated. The user will set their own password and display name.
+                      </p>
+                      <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                        <button type="button" onClick={() => { setShowCreateForm(false); setNewEmail(''); setNewRole('viewer') }}
+                          style={{ padding: '8px 16px', fontSize: '14px', background: 'var(--color-bg)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', cursor: 'pointer', color: 'var(--color-text)' }}>
+                          Cancel
+                        </button>
+                        <button type="submit" disabled={creating}
+                          style={{ padding: '8px 16px', fontSize: '14px', fontWeight: 600, color: '#fff', background: 'var(--color-primary)', border: 'none', borderRadius: 'var(--radius-md)', cursor: creating ? 'not-allowed' : 'pointer' }}>
+                          {creating ? 'Creating...' : 'Generate Invite Link'}
+                        </button>
+                      </div>
+                    </form>
+                  </>
+                )}
               </div>
             </div>
           )}

@@ -42,44 +42,48 @@ export async function GET() {
   })
 }
 
-// POST - Create a new user
+// POST - Create a new user via invite link
 export async function POST(request: Request) {
   if (!(await verifySuperAdmin())) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
   }
 
   const body = await request.json()
-  const { email, password, display_name, role } = body
+  const { email, role } = body
 
-  if (!email || !password) {
-    return NextResponse.json({ error: 'Email and password are required' }, { status: 400 })
+  if (!email) {
+    return NextResponse.json({ error: 'Email is required' }, { status: 400 })
   }
 
   const serverSupabase = getServerSupabase()
 
-  // Create the auth user (this triggers the handle_new_user trigger which creates the profile)
-  const { data: authData, error: authError } = await serverSupabase.auth.admin.createUser({
+  // Generate an invite link (creates the user in auth + returns link properties)
+  const { data: linkData, error: linkError } = await serverSupabase.auth.admin.generateLink({
+    type: 'invite',
     email,
-    password,
-    email_confirm: true,
   })
 
-  if (authError) {
-    return NextResponse.json({ error: authError.message }, { status: 400 })
+  if (linkError) {
+    return NextResponse.json({ error: linkError.message }, { status: 400 })
   }
 
-  // Update the profile with display_name and role (trigger created it with defaults)
-  if (authData.user) {
+  // Update the profile with role (trigger created it with defaults)
+  if (linkData.user) {
     await serverSupabase
       .from('user_profiles')
       .update({
-        display_name: display_name || null,
         role: role || 'viewer',
       })
-      .eq('id', authData.user.id)
+      .eq('id', linkData.user.id)
   }
 
-  return NextResponse.json({ user: authData.user })
+  // Build a custom setup URL using the token hash from the generated link
+  const origin = request.headers.get('origin')
+    || process.env.NEXT_PUBLIC_SITE_URL
+    || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000')
+  const setupUrl = `${origin}/setup?token_hash=${linkData.properties.hashed_token}&type=invite`
+
+  return NextResponse.json({ user: linkData.user, inviteUrl: setupUrl })
 }
 
 // PUT - Update a user's profile, permissions, or client assignments

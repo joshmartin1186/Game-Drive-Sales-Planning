@@ -16,6 +16,11 @@ export async function middleware(req: NextRequest) {
     return res
   }
 
+  // Allow setup page through (invite link flow)
+  if (pathname === '/setup') {
+    return res
+  }
+
   // If no session and not on login page, redirect to login
   if (!session && pathname !== '/login') {
     const loginUrl = req.nextUrl.clone()
