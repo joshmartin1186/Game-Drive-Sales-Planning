@@ -57,6 +57,43 @@
   padding: 24px;
 }
 
+/* Scope indicator */
+.scopeIndicator {
+  margin-bottom: 16px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
+.scopeBadge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #1e40af;
+  font-size: 14px;
+}
+
+.scopeBadge strong {
+  color: #1e293b;
+}
+
+.scopeWarning {
+  display: block;
+  color: #92400e;
+  font-size: 13px;
+  line-height: 1.5;
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin: -12px -16px;
+}
+
+.scopeWarning strong {
+  color: #78350f;
+}
+
 .error {
   background: #fef2f2;
   border: 1px solid #fecaca;
