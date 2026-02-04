@@ -57,42 +57,162 @@ const DEFAULT_MAPPING: ColumnMapping = {
   notes: ''
 }
 
+// Import format presets for common platforms
+type ImportPreset = 'auto' | 'microsoft' | 'steam' | 'generic'
+
+interface FormatPreset {
+  name: string
+  description: string
+  platformHint?: string // Auto-fill platform if detected
+  columnPatterns: {
+    product: string[]
+    platform: string[]
+    startDate: string[]
+    endDate: string[]
+    discount: string[]
+    saleName: string[]
+    notes: string[]
+  }
+}
+
+const FORMAT_PRESETS: Record<Exclude<ImportPreset, 'auto'>, FormatPreset> = {
+  microsoft: {
+    name: 'Microsoft Store',
+    description: 'Xbox / Windows Store Partner Center exports',
+    platformHint: 'Microsoft',
+    columnPatterns: {
+      product: ['product', 'productname', 'title', 'game title', 'product title', 'name', 'big id'],
+      platform: ['market', 'storefront', 'platform'],
+      startDate: ['start date', 'startdate', 'promo start', 'promotion start', 'start'],
+      endDate: ['end date', 'enddate', 'promo end', 'promotion end', 'end'],
+      discount: ['discount', 'discount %', 'percentage', 'sale price', 'percent off'],
+      saleName: ['promo name', 'promotion', 'campaign', 'sale name', 'promotion name'],
+      notes: ['notes', 'comments', 'description']
+    }
+  },
+  steam: {
+    name: 'Steam',
+    description: 'Steam partner exports',
+    platformHint: 'Steam',
+    columnPatterns: {
+      product: ['app name', 'appname', 'product', 'game', 'title'],
+      platform: ['platform', 'store'],
+      startDate: ['start date', 'start', 'begin date'],
+      endDate: ['end date', 'end', 'finish date'],
+      discount: ['discount', 'discount %', 'percent'],
+      saleName: ['sale', 'event', 'campaign', 'promo'],
+      notes: ['notes', 'description']
+    }
+  },
+  generic: {
+    name: 'Generic CSV',
+    description: 'Standard format with flexible column names',
+    columnPatterns: {
+      product: ['product', 'game', 'title', 'name', 'product name', 'game name'],
+      platform: ['platform', 'store', 'storefront'],
+      startDate: ['start', 'begin', 'from', 'start date'],
+      endDate: ['end', 'finish', 'to', 'until', 'end date'],
+      discount: ['discount', 'percent', '%', 'off'],
+      saleName: ['sale name', 'sale', 'campaign', 'event'],
+      notes: ['notes', 'comment', 'comments', 'description']
+    }
+  }
+}
+
 // Common date formats to try parsing
+// Order matters: EU formats first (dd/MM) since Game Drive clients are European
 const DATE_FORMATS = [
-  'yyyy-MM-dd',
-  'MM/dd/yyyy',
-  'dd/MM/yyyy',
-  'M/d/yyyy',
-  'd/M/yyyy',
-  'yyyy/MM/dd',
-  'dd-MM-yyyy',
-  'MM-dd-yyyy',
-  'dd.MM.yyyy',
-  'yyyy.MM.dd'
+  'yyyy-MM-dd',      // ISO standard (unambiguous)
+  'yyyy/MM/dd',      // ISO with slashes (unambiguous)
+  'yyyy.MM.dd',      // ISO with dots (unambiguous)
+  'dd/MM/yyyy',      // EU format (prioritized for EU clients)
+  'd/M/yyyy',        // EU without leading zeros
+  'dd-MM-yyyy',      // EU with dashes
+  'dd.MM.yyyy',      // European dot format
+  'MM/dd/yyyy',      // US format (fallback)
+  'M/d/yyyy',        // US without leading zeros
+  'MM-dd-yyyy',      // US with dashes
 ]
 
+interface ParsedDateResult {
+  date: Date | null
+  warning?: string
+  detectedFormat?: string
+}
+
 function parseDate(value: string): Date | null {
-  if (!value) return null
-  
-  // Try ISO format first
-  const isoDate = new Date(value)
-  if (isValid(isoDate) && !isNaN(isoDate.getTime())) {
-    return isoDate
+  const result = parseDateWithWarning(value)
+  return result.date
+}
+
+function parseDateWithWarning(value: string): ParsedDateResult {
+  if (!value) return { date: null }
+
+  const trimmed = value.trim()
+
+  // Check for ISO format first (unambiguous: yyyy-MM-dd or yyyy/MM/dd)
+  const isoMatch = trimmed.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/)
+  if (isoMatch) {
+    const [, year, month, day] = isoMatch
+    const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day))
+    if (isValid(date)) {
+      return { date, detectedFormat: 'ISO' }
+    }
   }
-  
-  // Try various formats
+
+  // For dd/MM/yyyy or MM/dd/yyyy formats, use heuristics
+  const slashMatch = trimmed.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/)
+  if (slashMatch) {
+    const [, first, second, year] = slashMatch
+    const firstNum = parseInt(first)
+    const secondNum = parseInt(second)
+    const yearNum = parseInt(year)
+
+    // Heuristic: if first number > 12, it MUST be the day (EU format)
+    if (firstNum > 12) {
+      const date = new Date(yearNum, secondNum - 1, firstNum)
+      if (isValid(date)) {
+        return { date, detectedFormat: 'EU (dd/MM/yyyy)' }
+      }
+    }
+
+    // Heuristic: if second number > 12, it MUST be the day (US format)
+    if (secondNum > 12) {
+      const date = new Date(yearNum, firstNum - 1, secondNum)
+      if (isValid(date)) {
+        return { date, detectedFormat: 'US (MM/dd/yyyy)' }
+      }
+    }
+
+    // Ambiguous case: both could be month or day (e.g., 01/06/2025)
+    // Default to EU format since Game Drive clients are European
+    // but flag as ambiguous for warning
+    const euDate = new Date(yearNum, secondNum - 1, firstNum)
+    if (isValid(euDate)) {
+      const isAmbiguous = firstNum <= 12 && secondNum <= 12
+      return {
+        date: euDate,
+        detectedFormat: 'EU (dd/MM/yyyy)',
+        warning: isAmbiguous
+          ? `Ambiguous date "${trimmed}" interpreted as EU format (day/month/year). Parsed as ${format(euDate, 'MMMM d, yyyy')}.`
+          : undefined
+      }
+    }
+  }
+
+  // Fallback: try all formats explicitly with date-fns parse
   for (const fmt of DATE_FORMATS) {
     try {
-      const parsed = parse(value.trim(), fmt, new Date())
+      const parsed = parse(trimmed, fmt, new Date())
       if (isValid(parsed)) {
-        return parsed
+        return { date: parsed, detectedFormat: fmt }
       }
     } catch {
       continue
     }
   }
-  
-  return null
+
+  return { date: null }
 }
 
 function parseCSV(text: string): { headers: string[], rows: Record<string, string>[] } {
@@ -157,6 +277,12 @@ export default function ImportSalesModal({
   const [isImporting, setIsImporting] = useState(false)
   const [importError, setImportError] = useState<string | null>(null)
   const [step, setStep] = useState<'upload' | 'mapping' | 'preview'>('upload')
+  const [isDragActive, setIsDragActive] = useState(false)
+
+  // New: Import preset and append mode
+  const [importPreset, setImportPreset] = useState<ImportPreset>('auto')
+  const [skipDuplicates, setSkipDuplicates] = useState(true) // Append mode: skip duplicates by default
+  const [detectedPreset, setDetectedPreset] = useState<ImportPreset | null>(null)
 
   // Create lookup maps for matching
   const productLookup = useMemo(() => {
@@ -180,121 +306,163 @@ export default function ImportSalesModal({
   const platformLookup = useMemo(() => {
     const map = new Map<string, string>()
     platforms.forEach(p => {
-      map.set(p.name.toLowerCase(), p.id)
+      const name = p.name.toLowerCase()
+      map.set(name, p.id)
       map.set(p.id.toLowerCase(), p.id)
+
+      // Add normalized variants for better matching
+      // "Nintendo - EU" → "nintendo - eu", "nintendo-eu", "nintendo eu", "nintendoeu"
+      const normalizedNoSpaceHyphen = name.replace(/\s*-\s*/g, '-') // "nintendo-eu"
+      const normalizedSpaceOnly = name.replace(/\s*-\s*/g, ' ') // "nintendo eu"
+      const normalizedNoSeparator = name.replace(/[\s-]+/g, '') // "nintendoeu"
+
+      if (normalizedNoSpaceHyphen !== name) map.set(normalizedNoSpaceHyphen, p.id)
+      if (normalizedSpaceOnly !== name) map.set(normalizedSpaceOnly, p.id)
+      if (normalizedNoSeparator !== name) map.set(normalizedNoSeparator, p.id)
     })
     return map
   }, [platforms])
 
-  const handleFileSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = e.target.files?.[0]
-    if (!selectedFile) return
-    
+  // Helper to normalize platform value for matching
+  const normalizePlatformValue = useCallback((value: string): string[] => {
+    const lower = value.toLowerCase().trim()
+    // Return multiple variants to try matching
+    return [
+      lower,
+      lower.replace(/\s*-\s*/g, '-'), // "nintendo - eu" → "nintendo-eu"
+      lower.replace(/\s*-\s*/g, ' '), // "nintendo - eu" → "nintendo eu"
+      lower.replace(/[\s-]+/g, ''), // "nintendo - eu" → "nintendoeu"
+    ]
+  }, [])
+
+  // Auto-detect import format based on CSV headers
+  const detectPreset = useCallback((csvHeaders: string[]): ImportPreset => {
+    const lowerHeaders = csvHeaders.map(h => h.toLowerCase().trim())
+
+    // Check for Microsoft Store specific patterns
+    const microsoftIndicators = ['big id', 'market', 'promo start', 'promo end', 'promotion start', 'promotion end', 'xbox', 'ms store']
+    const hasMicrosoftHeaders = microsoftIndicators.some(ind =>
+      lowerHeaders.some(h => h.includes(ind))
+    )
+    if (hasMicrosoftHeaders) return 'microsoft'
+
+    // Check for Steam specific patterns
+    const steamIndicators = ['app name', 'appname', 'appid', 'steam', 'app id']
+    const hasSteamHeaders = steamIndicators.some(ind =>
+      lowerHeaders.some(h => h.includes(ind))
+    )
+    if (hasSteamHeaders) return 'steam'
+
+    return 'generic'
+  }, [])
+
+  // Apply preset column mapping
+  const applyPresetMapping = useCallback((preset: ImportPreset, csvHeaders: string[]): ColumnMapping => {
+    const presetConfig = preset === 'auto' ? FORMAT_PRESETS.generic : FORMAT_PRESETS[preset]
+    const lowerHeaders = csvHeaders.map(h => h.toLowerCase().trim())
+    const newMapping = { ...DEFAULT_MAPPING }
+
+    const findColumn = (patterns: string[]): string => {
+      for (const pattern of patterns) {
+        const idx = lowerHeaders.findIndex(h => h.includes(pattern) || h === pattern)
+        if (idx >= 0) return csvHeaders[idx]
+      }
+      return ''
+    }
+
+    newMapping.product = findColumn(presetConfig.columnPatterns.product)
+    newMapping.platform = findColumn(presetConfig.columnPatterns.platform)
+    newMapping.startDate = findColumn(presetConfig.columnPatterns.startDate)
+    newMapping.endDate = findColumn(presetConfig.columnPatterns.endDate)
+    newMapping.discount = findColumn(presetConfig.columnPatterns.discount)
+    newMapping.saleName = findColumn(presetConfig.columnPatterns.saleName)
+    newMapping.notes = findColumn(presetConfig.columnPatterns.notes)
+
+    return newMapping
+  }, [])
+
+  // Shared file processing logic
+  const processFile = useCallback(async (selectedFile: File) => {
     setFile(selectedFile)
     setImportError(null)
-    
+
     try {
       const text = await selectedFile.text()
       const { headers: parsedHeaders, rows } = parseCSV(text)
-      
+
       if (parsedHeaders.length === 0) {
         setImportError('Could not parse file. Please ensure it is a valid CSV.')
         return
       }
-      
+
       setHeaders(parsedHeaders)
       setRawRows(rows)
-      
-      // Auto-detect column mappings
-      const autoMapping = { ...DEFAULT_MAPPING }
-      const lowerHeaders = parsedHeaders.map(h => h.toLowerCase())
-      
-      // Product column detection
-      const productCols = ['product', 'game', 'title', 'name', 'product name', 'game name']
-      for (const col of productCols) {
-        const idx = lowerHeaders.findIndex(h => h.includes(col))
-        if (idx >= 0 && !autoMapping.product) {
-          autoMapping.product = parsedHeaders[idx]
-          break
-        }
-      }
-      
-      // Platform column detection
-      const platformCols = ['platform', 'store', 'storefront']
-      for (const col of platformCols) {
-        const idx = lowerHeaders.findIndex(h => h.includes(col))
-        if (idx >= 0) {
-          autoMapping.platform = parsedHeaders[idx]
-          break
-        }
-      }
-      
-      // Date column detection
-      const startCols = ['start', 'begin', 'from']
-      const endCols = ['end', 'finish', 'to', 'until']
-      
-      for (const col of startCols) {
-        const idx = lowerHeaders.findIndex(h => h.includes(col) && h.includes('date'))
-        if (idx >= 0) {
-          autoMapping.startDate = parsedHeaders[idx]
-          break
-        }
-      }
-      if (!autoMapping.startDate) {
-        const idx = lowerHeaders.findIndex(h => startCols.some(c => h.includes(c)))
-        if (idx >= 0) autoMapping.startDate = parsedHeaders[idx]
-      }
-      
-      for (const col of endCols) {
-        const idx = lowerHeaders.findIndex(h => h.includes(col) && h.includes('date'))
-        if (idx >= 0) {
-          autoMapping.endDate = parsedHeaders[idx]
-          break
-        }
-      }
-      if (!autoMapping.endDate) {
-        const idx = lowerHeaders.findIndex(h => endCols.some(c => h.includes(c)))
-        if (idx >= 0) autoMapping.endDate = parsedHeaders[idx]
-      }
-      
-      // Discount column detection
-      const discountCols = ['discount', 'percent', '%', 'off']
-      for (const col of discountCols) {
-        const idx = lowerHeaders.findIndex(h => h.includes(col))
-        if (idx >= 0) {
-          autoMapping.discount = parsedHeaders[idx]
-          break
-        }
-      }
-      
-      // Sale name detection
-      const nameCols = ['sale name', 'sale', 'campaign', 'event']
-      for (const col of nameCols) {
-        const idx = lowerHeaders.findIndex(h => h === col || h.includes(col))
-        if (idx >= 0 && parsedHeaders[idx].toLowerCase() !== autoMapping.platform.toLowerCase()) {
-          autoMapping.saleName = parsedHeaders[idx]
-          break
-        }
-      }
-      
-      // Notes/comment detection
-      const notesCols = ['notes', 'comment', 'comments', 'description']
-      for (const col of notesCols) {
-        const idx = lowerHeaders.findIndex(h => h.includes(col))
-        if (idx >= 0) {
-          autoMapping.notes = parsedHeaders[idx]
-          break
-        }
-      }
-      
+
+      // Auto-detect format preset based on headers
+      const detected = detectPreset(parsedHeaders)
+      setDetectedPreset(detected)
+
+      // Apply the detected or user-selected preset
+      const presetToUse = importPreset === 'auto' ? detected : importPreset
+      const autoMapping = applyPresetMapping(presetToUse, parsedHeaders)
+
       setMapping(autoMapping)
       setStep('mapping')
-      
+
     } catch (err) {
       console.error('Error parsing file:', err)
       setImportError('Failed to read file. Please ensure it is a valid CSV file.')
     }
+  }, [detectPreset, applyPresetMapping, importPreset])
+
+  // Handle file input change
+  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFile = e.target.files?.[0]
+    if (selectedFile) {
+      processFile(selectedFile)
+    }
+  }, [processFile])
+
+  // Drag and drop handlers
+  const handleDragEnter = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragActive(true)
   }, [])
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    // Only deactivate if leaving the dropzone entirely
+    if (e.currentTarget.contains(e.relatedTarget as Node)) return
+    setIsDragActive(false)
+  }, [])
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+  }, [])
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragActive(false)
+
+    const droppedFile = e.dataTransfer.files?.[0]
+    if (droppedFile) {
+      // Validate file type
+      const validTypes = ['.csv', '.tsv', '.txt']
+      const fileName = droppedFile.name.toLowerCase()
+      const isValidType = validTypes.some(ext => fileName.endsWith(ext))
+
+      if (!isValidType) {
+        setImportError('Please drop a CSV, TSV, or TXT file.')
+        return
+      }
+
+      processFile(droppedFile)
+    }
+  }, [processFile])
 
   const handleMappingChange = useCallback((field: keyof ColumnMapping, value: string) => {
     setMapping(prev => ({ ...prev, [field]: value }))
@@ -325,36 +493,47 @@ export default function ImportSalesModal({
         errors.push('Product is required')
       }
       
-      // Match platform
+      // Match platform (with normalized hyphen/space handling)
       let platformId: string | undefined
       if (platformValue) {
-        platformId = platformLookup.get(platformValue.toLowerCase())
+        // Try multiple normalized variants
+        const variants = normalizePlatformValue(platformValue)
+        for (const variant of variants) {
+          platformId = platformLookup.get(variant)
+          if (platformId) break
+        }
         if (!platformId) {
-          errors.push(`Platform "${platformValue}" not found`)
+          errors.push(`Platform "${platformValue}" not found. Available platforms: ${platforms.map(p => p.name).join(', ')}`)
         }
       } else {
         errors.push('Platform is required')
       }
       
-      // Parse dates
+      // Parse dates with ambiguity detection
       let startDate: string | undefined
       let endDate: string | undefined
-      
+
       if (startDateValue) {
-        const parsed = parseDate(startDateValue)
-        if (parsed) {
-          startDate = format(parsed, 'yyyy-MM-dd')
+        const result = parseDateWithWarning(startDateValue)
+        if (result.date) {
+          startDate = format(result.date, 'yyyy-MM-dd')
+          if (result.warning) {
+            warnings.push(result.warning)
+          }
         } else {
           errors.push(`Could not parse start date: "${startDateValue}"`)
         }
       } else {
         errors.push('Start date is required')
       }
-      
+
       if (endDateValue) {
-        const parsed = parseDate(endDateValue)
-        if (parsed) {
-          endDate = format(parsed, 'yyyy-MM-dd')
+        const result = parseDateWithWarning(endDateValue)
+        if (result.date) {
+          endDate = format(result.date, 'yyyy-MM-dd')
+          if (result.warning) {
+            warnings.push(result.warning)
+          }
         } else {
           errors.push(`Could not parse end date: "${endDateValue}"`)
         }
@@ -365,6 +544,16 @@ export default function ImportSalesModal({
       // Validate date range
       if (startDate && endDate && startDate > endDate) {
         errors.push('Start date must be before end date')
+      }
+
+      // Warn about unusually long durations (possible date format issue)
+      if (startDate && endDate && startDate <= endDate) {
+        const start = new Date(startDate)
+        const end = new Date(endDate)
+        const durationDays = Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24))
+        if (durationDays > 90) {
+          warnings.push(`Sale duration is ${durationDays} days. If this seems wrong, the date format may have been misinterpreted.`)
+        }
       }
       
       // Parse discount
@@ -379,15 +568,20 @@ export default function ImportSalesModal({
       }
       
       // Check for duplicates in existing sales
+      let isDuplicate = false
       if (productId && platformId && startDate && endDate) {
-        const isDuplicate = existingSales.some(s => 
+        isDuplicate = existingSales.some(s =>
           s.product_id === productId &&
           s.platform_id === platformId &&
           s.start_date === startDate &&
           s.end_date === endDate
         )
         if (isDuplicate) {
-          warnings.push('Possible duplicate - sale with same product/platform/dates exists')
+          if (skipDuplicates) {
+            errors.push('Duplicate - sale with same product/platform/dates already exists (skipping)')
+          } else {
+            warnings.push('Possible duplicate - sale with same product/platform/dates exists')
+          }
         }
       }
       
@@ -411,7 +605,7 @@ export default function ImportSalesModal({
     
     setParsedRows(processed)
     setStep('preview')
-  }, [rawRows, mapping, productLookup, platformLookup, existingSales])
+  }, [rawRows, mapping, productLookup, platformLookup, existingSales, skipDuplicates, normalizePlatformValue, platforms])
 
   const validRows = useMemo(() => parsedRows.filter(r => r.isValid), [parsedRows])
   const invalidRows = useMemo(() => parsedRows.filter(r => !r.isValid), [parsedRows])
@@ -496,7 +690,54 @@ export default function ImportSalesModal({
           {/* Step 1: Upload */}
           {step === 'upload' && (
             <div className={styles.uploadStep}>
-              <div className={styles.dropzone}>
+              {/* Import Options */}
+              <div className={styles.importOptions}>
+                <div className={styles.optionGroup}>
+                  <label className={styles.optionLabel}>Import Format</label>
+                  <select
+                    value={importPreset}
+                    onChange={(e) => setImportPreset(e.target.value as ImportPreset)}
+                    className={styles.presetSelect}
+                  >
+                    <option value="auto">🔍 Auto-Detect</option>
+                    <option value="microsoft">🪟 Microsoft Store (Partner Center)</option>
+                    <option value="steam">🎮 Steam (Steamworks)</option>
+                    <option value="generic">📄 Generic CSV</option>
+                  </select>
+                  <p className={styles.optionHint}>
+                    {importPreset === 'auto' && 'Automatically detect format from column headers'}
+                    {importPreset === 'microsoft' && 'Xbox / Windows Store Partner Center exports'}
+                    {importPreset === 'steam' && 'Steam partner portal exports'}
+                    {importPreset === 'generic' && 'Standard CSV with flexible column names'}
+                  </p>
+                </div>
+
+                <div className={styles.optionGroup}>
+                  <label className={styles.checkboxLabel}>
+                    <input
+                      type="checkbox"
+                      checked={skipDuplicates}
+                      onChange={(e) => setSkipDuplicates(e.target.checked)}
+                    />
+                    <span className={styles.checkboxText}>
+                      <strong>Append Mode</strong> — Skip rows that already exist in database
+                    </span>
+                  </label>
+                  <p className={styles.optionHint}>
+                    {skipDuplicates
+                      ? 'Duplicates (same product/platform/dates) will be skipped automatically'
+                      : 'Duplicates will show as warnings but still be imported'}
+                  </p>
+                </div>
+              </div>
+
+              <div
+                className={`${styles.dropzone} ${isDragActive ? styles.dropzoneActive : ''}`}
+                onDragEnter={handleDragEnter}
+                onDragLeave={handleDragLeave}
+                onDragOver={handleDragOver}
+                onDrop={handleDrop}
+              >
                 <input
                   type="file"
                   accept=".csv,.tsv,.txt"
@@ -505,9 +746,9 @@ export default function ImportSalesModal({
                   id="file-upload"
                 />
                 <label htmlFor="file-upload" className={styles.dropzoneLabel}>
-                  <div className={styles.uploadIcon}>📁</div>
+                  <div className={styles.uploadIcon}>{isDragActive ? '📥' : '📁'}</div>
                   <p className={styles.uploadText}>
-                    Click to select a CSV file or drag and drop
+                    {isDragActive ? 'Drop your file here!' : 'Click to select a CSV file or drag and drop'}
                   </p>
                   <p className={styles.uploadHint}>
                     Supported formats: .csv, .tsv
@@ -520,7 +761,7 @@ export default function ImportSalesModal({
                 <p>Your CSV should include these columns (names are flexible):</p>
                 <ul>
                   <li><strong>Product/Game</strong> - Product name (must match existing products)</li>
-                  <li><strong>Platform</strong> - Steam, PlayStation, Xbox, Nintendo, Epic</li>
+                  <li><strong>Platform</strong> - Steam, PlayStation, Xbox, Nintendo, Epic, Microsoft</li>
                   <li><strong>Start Date</strong> - Sale start date (various formats supported)</li>
                   <li><strong>End Date</strong> - Sale end date</li>
                   <li><em>Discount %</em> - Optional discount percentage</li>
@@ -534,6 +775,19 @@ export default function ImportSalesModal({
           {/* Step 2: Column Mapping */}
           {step === 'mapping' && (
             <div className={styles.mappingStep}>
+              {detectedPreset && (
+                <div className={styles.detectedFormat}>
+                  <span className={styles.detectedLabel}>Detected Format:</span>
+                  <span className={styles.detectedValue}>
+                    {detectedPreset === 'microsoft' && '🪟 Microsoft Store'}
+                    {detectedPreset === 'steam' && '🎮 Steam'}
+                    {detectedPreset === 'generic' && '📄 Generic CSV'}
+                  </span>
+                  {skipDuplicates && (
+                    <span className={styles.appendBadge}>Append Mode Active</span>
+                  )}
+                </div>
+              )}
               <p className={styles.mappingHint}>
                 Map your CSV columns to the required fields. We&apos;ve auto-detected what we could.
               </p>
@@ -656,6 +910,12 @@ export default function ImportSalesModal({
           {/* Step 3: Preview */}
           {step === 'preview' && (
             <div className={styles.previewStep}>
+              {skipDuplicates && invalidRows.some(r => r.errors.some(e => e.includes('Duplicate'))) && (
+                <div className={styles.appendModeNotice}>
+                  <span className={styles.appendModeIcon}>✓</span>
+                  <span>Append Mode: Duplicates are being skipped automatically</span>
+                </div>
+              )}
               <div className={styles.previewSummary}>
                 <div className={`${styles.summaryCard} ${styles.valid}`}>
                   <span className={styles.summaryValue}>{validRows.length}</span>
@@ -663,7 +923,7 @@ export default function ImportSalesModal({
                 </div>
                 <div className={`${styles.summaryCard} ${styles.invalid}`}>
                   <span className={styles.summaryValue}>{invalidRows.length}</span>
-                  <span className={styles.summaryLabel}>With errors</span>
+                  <span className={styles.summaryLabel}>{skipDuplicates ? 'Skipped' : 'With errors'}</span>
                 </div>
                 <div className={`${styles.summaryCard} ${styles.warning}`}>
                   <span className={styles.summaryValue}>{warningRows.length}</span>

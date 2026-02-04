@@ -34,10 +34,13 @@ export interface GenerateCalendarParams {
   productId: string
   platforms: Platform[]
   platformEvents: PlatformEvent[]
-  launchDate: string // ISO date string - calendar generates 12 months from this date
+  launchDate: string // ISO date string - start of calendar period
   defaultDiscount?: number
   existingSales?: SaleWithDetails[] // Existing sales to check against
   selectedPlatformIds?: string[] // Optional: Only generate for these platforms
+  // Custom timeframe options (mutually exclusive, monthCount takes precedence)
+  monthCount?: number // Number of months from launch date (default: 12)
+  endDate?: string // ISO date string - custom end date for the period
 }
 
 // Convert existing sale to GeneratedSale format for conflict checking
@@ -184,7 +187,9 @@ function generatePlatformSales(
   existingSales: GeneratedSale[] // Include existing sales for conflict checking
 ): GeneratedSale[] {
   const newSales: GeneratedSale[] = []
-  const maxSaleDays = platform.max_sale_days || 14
+  // Use platform max_sale_days as a default suggestion, but don't enforce it as a hard limit
+  // This allows the auto-generator to create longer sales if needed
+  const suggestedMaxDays = platform.max_sale_days || 14
   const platformCooldownDays = platform.cooldown_days || 0
   
   // Combine existing sales with new sales for conflict checking
@@ -200,9 +205,10 @@ function generatePlatformSales(
     
     const saleStart = eventStart < periodStart ? periodStart : eventStart
     const saleEnd = eventEnd > periodEnd ? periodEnd : eventEnd
-    
-    const duration = differenceInDays(saleEnd, saleStart) + 1
-    const actualEnd = duration > maxSaleDays ? addDays(saleStart, maxSaleDays - 1) : saleEnd
+
+    // For event sales, use the full event duration - don't truncate based on max_sale_days
+    // The max_sale_days is now a recommendation, not a hard limit
+    const actualEnd = saleEnd
     
     const eventCooldownDays = event.requires_cooldown === false ? 0 : platformCooldownDays
     
@@ -231,7 +237,8 @@ function generatePlatformSales(
   // For conservative: if no new event sales added, add at least one custom sale
   if (variation === 'conservative') {
     if (newSales.length === 0) {
-      const saleDuration = Math.min(maxSaleDays, 7)
+      // Use a sensible default of 7 days for the launch sale, respecting platform suggestion
+      const saleDuration = Math.min(suggestedMaxDays, 7)
       const saleEnd = addDays(periodStart, saleDuration - 1)
       
       if (!hasConflict(periodStart, saleEnd, platformCooldownDays, allSales, platform.id)) {
@@ -257,7 +264,8 @@ function generatePlatformSales(
   // For balanced and aggressive, fill gaps with custom sales
   let customSaleCount = 0
   const maxCustomSales = variation === 'aggressive' ? 50 : 12
-  const saleDuration = variation === 'aggressive' ? maxSaleDays : Math.min(maxSaleDays, 7)
+  // Use platform suggestion as a guide: aggressive uses full suggested duration, balanced uses min(suggestion, 7)
+  const saleDuration = variation === 'aggressive' ? suggestedMaxDays : Math.min(suggestedMaxDays, 7)
   
   let searchStart = addDays(periodStart, -1)
   
@@ -345,11 +353,20 @@ export function generateSaleCalendar(params: GenerateCalendarParams): CalendarVa
     launchDate,
     defaultDiscount = 50,
     existingSales = [],
-    selectedPlatformIds
+    selectedPlatformIds,
+    monthCount,
+    endDate
   } = params
-  
+
   const periodStart = parseISO(launchDate)
-  const periodEnd = addDays(addMonths(periodStart, 12), -1)
+  // Calculate period end: custom endDate > monthCount > default 12 months
+  let periodEnd: Date
+  if (endDate) {
+    periodEnd = parseISO(endDate)
+  } else {
+    const months = monthCount || 12
+    periodEnd = addDays(addMonths(periodStart, months), -1)
+  }
   
   // Convert existing sales for this product to GeneratedSale format
   const existingForProduct = existingSales

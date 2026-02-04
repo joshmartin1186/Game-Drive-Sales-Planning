@@ -31,6 +31,20 @@ interface SteamApiKey {
   next_sync_due?: string;
 }
 
+interface PlayStationApiKey {
+  id: string;
+  client_id: string;
+  ps_client_id: string;
+  client_secret: string;
+  scope: string;
+  is_active: boolean;
+  last_sync_date: string | null;
+  clients: Client;
+  auto_sync_enabled?: boolean;
+  sync_start_date?: string;
+  sync_frequency_hours?: number;
+}
+
 interface SyncDebugInfo {
   apiCalled?: boolean;
   endpoint?: string;
@@ -68,8 +82,10 @@ export default function SettingsPage() {
   const canEdit = hasAccess('api_settings', 'edit');
   const [clients, setClients] = useState<Client[] | null>(null);
   const [apiKeys, setApiKeys] = useState<SteamApiKey[] | null>(null);
+  const [playstationKeys, setPlaystationKeys] = useState<PlayStationApiKey[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showAddPSModal, setShowAddPSModal] = useState(false);
   const [showSyncModal, setShowSyncModal] = useState(false);
   const [selectedKey, setSelectedKey] = useState<SteamApiKey | null>(null);
   const [testingKey, setTestingKey] = useState<string | null>(null);
@@ -93,6 +109,21 @@ export default function SettingsPage() {
     publisher_key: '',
     app_ids: ''
   });
+
+  const [psFormData, setPsFormData] = useState({
+    client_id: '',
+    ps_client_id: '',
+    client_secret: '',
+    scope: 'psn:analytics'
+  });
+
+  const [testingPSKey, setTestingPSKey] = useState<string | null>(null);
+  const [psTestResult, setPsTestResult] = useState<{valid: boolean; message: string} | null>(null);
+  const [psSaveError, setPsSaveError] = useState<string | null>(null);
+  const [syncingPS, setSyncingPS] = useState(false);
+  const [psSyncResult, setPsSyncResult] = useState<{success: boolean; message: string; rowsImported?: number} | null>(null);
+  const [showPSSyncModal, setShowPSSyncModal] = useState(false);
+  const [selectedPSKey, setSelectedPSKey] = useState<PlayStationApiKey | null>(null);
 
   const [autoSyncConfig, setAutoSyncConfig] = useState({
     start_date: new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
@@ -125,6 +156,13 @@ export default function SettingsPage() {
       if (keysRes.ok) {
         const keysData = await keysRes.json();
         setApiKeys(Array.isArray(keysData) ? keysData : []);
+      }
+
+      // Fetch PlayStation API keys
+      const psKeysRes = await fetch('/api/playstation-api-keys');
+      if (psKeysRes.ok) {
+        const psKeysData = await psKeysRes.json();
+        setPlaystationKeys(Array.isArray(psKeysData) ? psKeysData : []);
       }
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -410,6 +448,97 @@ export default function SettingsPage() {
     return key.substring(0, 4) + '••••••••' + key.substring(key.length - 4);
   };
 
+  // PlayStation API handlers
+  const handleAddPSKey = async () => {
+    setPsSaveError(null);
+    try {
+      const res = await fetch('/api/playstation-api-keys', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          client_id: psFormData.client_id,
+          ps_client_id: psFormData.ps_client_id,
+          client_secret: psFormData.client_secret,
+          scope: psFormData.scope
+        })
+      });
+
+      if (res.ok) {
+        setShowAddPSModal(false);
+        setPsFormData({ client_id: '', ps_client_id: '', client_secret: '', scope: 'psn:analytics' });
+        fetchData();
+      } else {
+        const err = await res.json();
+        setPsSaveError(err.error || 'Failed to save PlayStation credentials');
+      }
+    } catch (error) {
+      console.error('Error adding PlayStation credentials:', error);
+      setPsSaveError('Failed to save PlayStation credentials');
+    }
+  };
+
+  const handleTestPSKey = async (clientId: string) => {
+    setTestingPSKey(clientId);
+    setPsTestResult(null);
+    try {
+      const res = await fetch(`/api/playstation-sync?client_id=${clientId}`);
+      const data = await res.json();
+      setPsTestResult({ valid: data.valid, message: data.message });
+    } catch (error) {
+      setPsTestResult({ valid: false, message: 'Failed to test credentials' });
+    }
+    setTimeout(() => {
+      setTestingPSKey(null);
+    }, 15000);
+  };
+
+  const handlePSSync = async () => {
+    if (!selectedPSKey) return;
+
+    setSyncingPS(true);
+    setPsSyncResult(null);
+    try {
+      const res = await fetch('/api/playstation-sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          client_id: selectedPSKey.client_id
+        })
+      });
+
+      const data = await res.json();
+      setPsSyncResult({
+        success: data.success,
+        message: data.message || data.error,
+        rowsImported: data.rowsImported
+      });
+
+      if (data.success) {
+        fetchData();
+      }
+    } catch (error) {
+      setPsSyncResult({ success: false, message: 'Failed to sync: ' + String(error) });
+    }
+    setSyncingPS(false);
+  };
+
+  const handleDeletePSKey = async (id: string) => {
+    if (!confirm('Are you sure you want to delete these PlayStation credentials?')) return;
+    try {
+      const res = await fetch(`/api/playstation-api-keys?id=${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        fetchData();
+      }
+    } catch (error) {
+      console.error('Error deleting PlayStation credentials:', error);
+    }
+  };
+
+  // Get clients that don't have PlayStation credentials yet
+  const availablePSClients = (clients || []).filter(
+    client => !(playstationKeys || []).some(key => key.client_id === client.id)
+  );
+
   const formatNextSync = (nextSyncDue: string | undefined) => {
     if (!nextSyncDue) return 'Not scheduled';
     const date = new Date(nextSyncDue);
@@ -646,6 +775,126 @@ export default function SettingsPage() {
             </ol>
             <p style={{ marginTop: '16px', padding: '12px', background: '#dbeafe', borderRadius: '6px', fontSize: '14px' }}>
               <strong>💡 New in June 2025:</strong> Steam now offers the <a href="https://steamcommunity.com/groups/steamworks/announcements/detail/532096678169150062" target="_blank" rel="noopener noreferrer" style={{ color: '#1b2838' }}>IPartnerFinancialsService API</a> for programmatic access to sales data including revenue, units, and regional breakdown.
+            </p>
+          </div>
+
+          {/* PlayStation API Keys Section */}
+          <div className={styles.section}>
+            <div className={styles.sectionHeader}>
+              <div className={styles.sectionTitle}>
+                <div className={styles.sectionIcon} style={{ background: '#003791' }}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <path d="M8 12h8"/>
+                    <path d="M12 8v8"/>
+                  </svg>
+                </div>
+                <h2>PlayStation API Credentials</h2>
+              </div>
+              <button className={styles.addButton} onClick={() => setShowAddPSModal(true)}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <line x1="12" y1="5" x2="12" y2="19"/>
+                  <line x1="5" y1="12" x2="19" y2="12"/>
+                </svg>
+                Add Credentials
+              </button>
+            </div>
+
+            {loading ? (
+              <div className={styles.emptyState}>
+                <div className={styles.spinner}></div>
+                <p>Loading...</p>
+              </div>
+            ) : !playstationKeys || playstationKeys.length === 0 ? (
+              <div className={styles.emptyState}>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <rect x="3" y="11" width="18" height="11" rx="2"/>
+                  <path d="M7 11V7a5 5 0 0110 0v4"/>
+                </svg>
+                <p>No PlayStation API credentials configured yet</p>
+                <button className={styles.addButton} onClick={() => setShowAddPSModal(true)}>
+                  Add Your First Credentials
+                </button>
+              </div>
+            ) : (
+              <div className={styles.keysList}>
+                {playstationKeys?.map((key) => (
+                  <div key={key.id} className={styles.keyCard}>
+                    <div className={styles.keyInfo}>
+                      <span className={styles.clientBadge} style={{ background: '#003791' }}>{key.clients?.name || 'Unknown Client'}</span>
+                      <div className={styles.keyDetails}>
+                        <span className={styles.keyMasked}>{maskApiKey(key.ps_client_id)}</span>
+                        <div className={styles.keyMeta}>
+                          <span>Scope: {key.scope}</span>
+                          {key.last_sync_date && <span>Last sync: {key.last_sync_date}</span>}
+                        </div>
+                      </div>
+                      {testingPSKey === key.client_id && psTestResult && (
+                        <div className={`${styles.statusBadge} ${psTestResult.valid ? styles.valid : styles.invalid}`}>
+                          <strong>{psTestResult.valid ? '✓ Connected' : '✗ Failed'}</strong>
+                          <span style={{ fontSize: '11px', display: 'block', marginTop: '2px' }}>{psTestResult.message}</span>
+                        </div>
+                      )}
+                    </div>
+                    <div className={styles.keyActions}>
+                      <button
+                        className={`${styles.actionButton} ${styles.test}`}
+                        onClick={() => handleTestPSKey(key.client_id)}
+                        disabled={testingPSKey === key.client_id}
+                      >
+                        {testingPSKey === key.client_id ? (
+                          <span className={styles.spinner}></span>
+                        ) : (
+                          <>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <polyline points="20 6 9 17 4 12"/>
+                            </svg>
+                            Test
+                          </>
+                        )}
+                      </button>
+                      <button
+                        className={`${styles.actionButton} ${styles.sync}`}
+                        onClick={() => { setSelectedPSKey(key); setShowPSSyncModal(true); setPsSyncResult(null); }}
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M23 4v6h-6"/>
+                          <path d="M1 20v-6h6"/>
+                          <path d="M3.51 9a9 9 0 0114.85-3.36L23 10"/>
+                          <path d="M20.49 15a9 9 0 01-14.85 3.36L1 14"/>
+                        </svg>
+                        Sync
+                      </button>
+                      <button
+                        className={`${styles.actionButton} ${styles.delete}`}
+                        onClick={() => handleDeletePSKey(key.id)}
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <polyline points="3 6 5 6 21 6"/>
+                          <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/>
+                          <path d="M10 11v6"/>
+                          <path d="M14 11v6"/>
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* PlayStation Info Section */}
+          <div className={styles.section}>
+            <h3 style={{ margin: '0 0 12px 0', fontSize: '16px' }}>How to Get Your PlayStation Analytics API Credentials</h3>
+            <ol style={{ margin: 0, paddingLeft: '20px', color: '#64748b', lineHeight: '1.8' }}>
+              <li>Log in to <a href="https://partners.playstation.net/" target="_blank" rel="noopener noreferrer" style={{ color: '#003791' }}>PlayStation Partners</a></li>
+              <li>Navigate to <strong>PlayStation Partners Analytics</strong></li>
+              <li>Request API access if not already enabled</li>
+              <li>Generate a <strong>Client ID</strong> and <strong>Client Secret</strong> for API access</li>
+              <li>Copy these credentials and add them above</li>
+            </ol>
+            <p style={{ marginTop: '16px', padding: '12px', background: '#e0e7ff', borderRadius: '6px', fontSize: '14px' }}>
+              <strong>ℹ️ Note:</strong> PlayStation Analytics API provides programmatic access to sales data, revenue, and regional breakdowns via OAuth 2.0 authentication and SQL queries.
             </p>
           </div>
         </main>
@@ -971,6 +1220,156 @@ export default function SettingsPage() {
                   </>
                 ) : (
                   'Enable Auto-Sync'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add PlayStation Credentials Modal */}
+      {showAddPSModal && (
+        <div className={styles.modalOverlay} onClick={() => setShowAddPSModal(false)}>
+          <div className={styles.modal} onClick={e => e.stopPropagation()}>
+            <div className={styles.modalHeader}>
+              <h3>Add PlayStation Credentials</h3>
+              <button className={styles.closeButton} onClick={() => setShowAddPSModal(false)}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <line x1="18" y1="6" x2="6" y2="18"/>
+                  <line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+              </button>
+            </div>
+
+            {psSaveError && (
+              <div style={{ padding: '12px', background: '#fef2f2', color: '#dc2626', borderRadius: '6px', marginBottom: '16px', fontSize: '14px' }}>
+                {psSaveError}
+              </div>
+            )}
+
+            <div className={styles.formGroup}>
+              <label>Client *</label>
+              <select
+                value={psFormData.client_id}
+                onChange={e => setPsFormData({...psFormData, client_id: e.target.value})}
+              >
+                <option value="">Select a client...</option>
+                {clients?.map(client => (
+                  <option key={client.id} value={client.id}>
+                    {client.name}
+                  </option>
+                ))}
+              </select>
+              <small>{availablePSClients?.length || 0} clients without PlayStation credentials</small>
+            </div>
+
+            <div className={styles.formGroup}>
+              <label>PlayStation Client ID *</label>
+              <input
+                type="text"
+                placeholder="Enter your PlayStation Client ID"
+                value={psFormData.ps_client_id}
+                onChange={e => setPsFormData({...psFormData, ps_client_id: e.target.value})}
+                style={{ fontFamily: 'monospace' }}
+              />
+              <small>From PlayStation Partners Analytics API settings</small>
+            </div>
+
+            <div className={styles.formGroup}>
+              <label>Client Secret *</label>
+              <input
+                type="password"
+                placeholder="Enter your Client Secret"
+                value={psFormData.client_secret}
+                onChange={e => setPsFormData({...psFormData, client_secret: e.target.value})}
+                style={{ fontFamily: 'monospace' }}
+              />
+              <small>Keep this secret secure</small>
+            </div>
+
+            <div className={styles.formGroup}>
+              <label>Scope</label>
+              <input
+                type="text"
+                placeholder="psn:analytics"
+                value={psFormData.scope}
+                onChange={e => setPsFormData({...psFormData, scope: e.target.value})}
+              />
+              <small>OAuth scope for API access (usually psn:analytics)</small>
+            </div>
+
+            <div className={styles.modalActions}>
+              <button className={styles.cancelButton} onClick={() => setShowAddPSModal(false)}>
+                Cancel
+              </button>
+              <button
+                className={styles.saveButton}
+                onClick={handleAddPSKey}
+                disabled={!psFormData.client_id || !psFormData.ps_client_id || !psFormData.client_secret}
+              >
+                Save Credentials
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* PlayStation Sync Modal */}
+      {showPSSyncModal && selectedPSKey && (
+        <div className={styles.modalOverlay} onClick={() => { setShowPSSyncModal(false); setPsSyncResult(null); }}>
+          <div className={styles.modal} onClick={e => e.stopPropagation()} style={{ maxWidth: '500px' }}>
+            <div className={styles.modalHeader}>
+              <h3>Sync PlayStation Data</h3>
+              <button className={styles.closeButton} onClick={() => { setShowPSSyncModal(false); setPsSyncResult(null); }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <line x1="18" y1="6" x2="6" y2="18"/>
+                  <line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+              </button>
+            </div>
+
+            <p style={{ color: '#64748b', marginBottom: '16px' }}>
+              Sync analytics data for <strong>{selectedPSKey.clients?.name}</strong> from PlayStation Partners Analytics API.
+            </p>
+
+            {psSyncResult && (
+              <div className={`${styles.syncResult} ${psSyncResult.success ? styles.success : styles.error}`}>
+                <strong>{psSyncResult.success ? '✓ Success' : '✗ Error'}</strong>
+                <p style={{ margin: '8px 0 0 0', fontSize: '14px' }}>{psSyncResult.message}</p>
+                {psSyncResult.rowsImported !== undefined && (
+                  <p style={{ margin: '4px 0 0 0', fontSize: '13px', opacity: 0.8 }}>
+                    {psSyncResult.rowsImported} rows imported
+                  </p>
+                )}
+              </div>
+            )}
+
+            <div style={{ padding: '12px', background: '#e0e7ff', borderRadius: '6px', fontSize: '13px', marginTop: '12px' }}>
+              <strong>ℹ️ What gets synced:</strong>
+              <ul style={{ margin: '8px 0 0 0', paddingLeft: '20px', lineHeight: '1.6' }}>
+                <li>Sales data from all available datasets</li>
+                <li>Revenue, units sold, and regional breakdowns</li>
+                <li>Data is stored in the performance metrics table</li>
+              </ul>
+            </div>
+
+            <div className={styles.modalActions}>
+              <button className={styles.cancelButton} onClick={() => { setShowPSSyncModal(false); setPsSyncResult(null); }}>
+                Close
+              </button>
+              <button
+                className={styles.saveButton}
+                onClick={handlePSSync}
+                disabled={syncingPS}
+                style={{ background: '#003791' }}
+              >
+                {syncingPS ? (
+                  <>
+                    <span className={styles.spinner}></span>
+                    Syncing...
+                  </>
+                ) : (
+                  'Start Sync'
                 )}
               </button>
             </div>

@@ -132,6 +132,76 @@
   font-size: 14px;
 }
 
+/* Import Options */
+.importOptions {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px;
+  background: #f8fafc;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+}
+
+.optionGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.optionLabel {
+  font-size: 13px;
+  font-weight: 600;
+  color: #475569;
+}
+
+.presetSelect {
+  padding: 10px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 14px;
+  color: #1e293b;
+  background: white;
+  cursor: pointer;
+  max-width: 300px;
+}
+
+.presetSelect:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.optionHint {
+  font-size: 12px;
+  color: #64748b;
+  margin: 0;
+}
+
+.checkboxLabel {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.checkboxLabel input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  accent-color: #3b82f6;
+  cursor: pointer;
+}
+
+.checkboxText {
+  font-size: 14px;
+  color: #1e293b;
+}
+
+.checkboxText strong {
+  color: #3b82f6;
+}
+
 /* Upload step */
 .uploadStep {
   display: flex;
@@ -151,6 +221,22 @@
 .dropzone:hover {
   border-color: #3b82f6;
   background: #f8fafc;
+}
+
+.dropzoneActive {
+  border-color: #3b82f6;
+  border-style: solid;
+  background: #eff6ff;
+  transform: scale(1.01);
+}
+
+.dropzoneActive .uploadIcon {
+  animation: bounce 0.5s ease infinite;
+}
+
+@keyframes bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
 }
 
 .fileInput {
@@ -219,6 +305,39 @@
   display: flex;
   flex-direction: column;
   gap: 24px;
+}
+
+.detectedFormat {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: #eff6ff;
+  border-radius: 8px;
+  border: 1px solid #bfdbfe;
+}
+
+.detectedLabel {
+  font-size: 13px;
+  color: #64748b;
+}
+
+.detectedValue {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1e40af;
+}
+
+.appendBadge {
+  margin-left: auto;
+  padding: 4px 10px;
+  background: #22c55e;
+  color: white;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .mappingHint {
@@ -317,6 +436,24 @@
   display: flex;
   flex-direction: column;
   gap: 20px;
+}
+
+.appendModeNotice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  border-radius: 8px;
+  color: #059669;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.appendModeIcon {
+  font-size: 16px;
+  font-weight: bold;
 }
 
 .previewSummary {

@@ -45,6 +45,16 @@ export interface Product {
   launch_sale_duration?: number | null  // Duration in days for launch sale (7-14 typical)
   created_at: string
   game?: Game
+  // Per-product platform availability
+  product_platforms?: ProductPlatform[]
+}
+
+export interface ProductPlatform {
+  id: string
+  product_id: string
+  platform_id: string
+  created_at: string
+  platform?: Platform
 }
 
 export interface Game {

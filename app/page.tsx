@@ -30,7 +30,7 @@ import styles from './page.module.css'
 import { Sale, Platform, Product, Game, Client, SaleWithDetails, PlatformEvent } from '@/lib/types'
 
 interface SalePrefill { productId: string; platformId: string; startDate: string; endDate: string; directCreate?: boolean; saleName?: string; discountPercentage?: number; saleType?: string }
-interface CalendarGenerationState { productId: string; productName: string; launchDate: string }
+interface CalendarGenerationState { productId: string; productName: string; launchDate: string; platformIds?: string[] }
 interface ClearSalesState { productId: string; productName: string }
 interface EditLaunchDateState { productId: string; productName: string; currentLaunchDate: string; currentLaunchSaleDuration?: number }
 interface SaleSnapshot { product_id: string; platform_id: string; start_date: string; end_date: string; discount_percentage: number | null; sale_name: string | null; sale_type: string; status: string; notes: string | null; product_name?: string; platform_name?: string }
@@ -204,7 +204,7 @@ export default function GameDriveDashboard() {
   }, [])
 
   const handleCloseAddModal = useCallback(() => { setShowAddModal(false); setSalePrefill(null) }, [])
-  const handleGenerateCalendar = useCallback((productId: string, productName: string, launchDate?: string) => { const effectiveLaunchDate = launchDate || format(new Date(), 'yyyy-MM-dd'); setCalendarGeneration({ productId, productName, launchDate: effectiveLaunchDate }) }, [])
+  const handleGenerateCalendar = useCallback((productId: string, productName: string, launchDate?: string, platformIds?: string[]) => { const effectiveLaunchDate = launchDate || format(new Date(), 'yyyy-MM-dd'); setCalendarGeneration({ productId, productName, launchDate: effectiveLaunchDate, platformIds }) }, [])
 
   const handleApplyCalendar = useCallback(async (generatedSales: GeneratedSale[]) => {
     setIsApplyingCalendar(true); setError(null)
@@ -276,8 +276,29 @@ export default function GameDriveDashboard() {
   }, [products, sales])
 
   async function handleClientCreate(client: Omit<Client, 'id' | 'created_at'>) { try { const { data, error } = await supabase.from('clients').insert([client]).select().single(); if (error) throw error; if (data) setClients(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name))) } catch (err: unknown) { console.error('Error creating client:', err); throw err } }
-  async function handleGameCreate(game: Omit<Game, 'id' | 'created_at'>) { try { const { data, error } = await supabase.from('games').insert([game]).select(`*, client:clients(*)`).single(); if (error) throw error; if (data) setGames(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name))) } catch (err: unknown) { console.error('Error creating game:', err); throw err } }
-  async function handleProductCreate(product: Omit<Product, 'id' | 'created_at'>): Promise<Product | undefined> { try { const { data, error } = await supabase.from('products').insert([product]).select(`*, game:games(*, client:clients(*))`).single(); if (error) throw error; if (data) { setProducts(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name))); return data } } catch (err: unknown) { console.error('Error creating product:', err); throw err } }
+  async function handleGameCreate(game: Omit<Game, 'id' | 'created_at'>): Promise<(Game & { client: Client }) | undefined> { try { const { data, error } = await supabase.from('games').insert([game]).select(`*, client:clients(*)`).single(); if (error) throw error; if (data) { setGames(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name))); return data } } catch (err: unknown) { console.error('Error creating game:', err); throw err } }
+  async function handleProductCreate(product: Omit<Product, 'id' | 'created_at'>, platformIds?: string[]): Promise<Product | undefined> {
+    try {
+      const { data, error } = await supabase.from('products').insert([product]).select(`*, game:games(*, client:clients(*))`).single()
+      if (error) throw error
+      if (data) {
+        // If platform IDs provided, create product_platforms entries
+        if (platformIds && platformIds.length > 0) {
+          const productPlatforms = platformIds.map(platformId => ({
+            product_id: data.id,
+            platform_id: platformId
+          }))
+          const { error: ppError } = await supabase.from('product_platforms').insert(productPlatforms)
+          if (ppError) console.error('Error creating product_platforms:', ppError)
+        }
+        setProducts(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)))
+        return data
+      }
+    } catch (err: unknown) {
+      console.error('Error creating product:', err)
+      throw err
+    }
+  }
 
   async function handleClientUpdate(clientId: string, updates: Partial<Client>) { try { const { error } = await supabase.from('clients').update(updates).eq('id', clientId); if (error) throw error; setClients(prev => prev.map(c => c.id === clientId ? { ...c, ...updates } : c).sort((a, b) => a.name.localeCompare(b.name))); if (updates.name) { setGames(prev => prev.map(g => g.client_id === clientId ? { ...g, client: { ...g.client, ...updates } } : g)); setProducts(prev => prev.map(p => p.game?.client_id === clientId ? { ...p, game: { ...p.game, client: { ...p.game.client, ...updates } } } : p)) } } catch (err: unknown) { console.error('Error updating client:', err); throw err } }
   async function handleGameUpdate(gameId: string, updates: Partial<Game>) { try { const { data, error } = await supabase.from('games').update(updates).eq('id', gameId).select(`*, client:clients(*)`).single(); if (error) throw error; if (data) { setGames(prev => prev.map(g => g.id === gameId ? data : g).sort((a, b) => a.name.localeCompare(b.name))); setProducts(prev => prev.map(p => p.game_id === gameId ? { ...p, game: data } : p)) } } catch (err: unknown) { console.error('Error updating game:', err); throw err } }
@@ -408,9 +429,9 @@ export default function GameDriveDashboard() {
       <BulkEditSalesModal isOpen={bulkEditSales.length > 0} onClose={() => setBulkEditSales([])} selectedSales={bulkEditSales} platforms={platforms} onBulkUpdate={handleBulkUpdate} onBulkDelete={handleBulkDelete} />
       <ImportSalesModal isOpen={showImportModal} onClose={() => setShowImportModal(false)} products={products} platforms={platforms} existingSales={sales} onImport={handleBulkImport} />
       <VersionManager isOpen={showVersionManager} onClose={() => setShowVersionManager(false)} currentSales={sales} platforms={platforms} onRestoreVersion={handleRestoreVersion} clientId={filterClientId || null} />
-      {showProductManager && (<ProductManager clients={clients} games={games} products={products} onClientCreate={handleClientCreate} onGameCreate={handleGameCreate} onProductCreate={handleProductCreate} onClientDelete={handleClientDelete} onGameDelete={handleGameDelete} onProductDelete={handleProductDelete} onClientUpdate={handleClientUpdate} onGameUpdate={handleGameUpdate} onProductUpdate={handleProductUpdate} onGenerateCalendar={handleGenerateCalendar} onClose={() => setShowProductManager(false)} />)}
+      {showProductManager && (<ProductManager clients={clients} games={games} products={products} platforms={platforms} onClientCreate={handleClientCreate} onGameCreate={handleGameCreate} onProductCreate={handleProductCreate} onClientDelete={handleClientDelete} onGameDelete={handleGameDelete} onProductDelete={handleProductDelete} onClientUpdate={handleClientUpdate} onGameUpdate={handleGameUpdate} onProductUpdate={handleProductUpdate} onGenerateCalendar={handleGenerateCalendar} onClose={() => setShowProductManager(false)} />)}
       <PlatformSettings isOpen={showPlatformSettings} onClose={() => setShowPlatformSettings(false)} onEventsChange={() => { fetchPlatformEvents(); fetchData() }} />
-      {calendarGeneration && (<SaleCalendarPreviewModal isOpen={true} onClose={() => setCalendarGeneration(null)} productId={calendarGeneration.productId} productName={calendarGeneration.productName} launchDate={calendarGeneration.launchDate} platforms={platforms} platformEvents={platformEvents} existingSales={sales} onApply={handleApplyCalendar} isApplying={isApplyingCalendar} />)}
+      {calendarGeneration && (<SaleCalendarPreviewModal isOpen={true} onClose={() => setCalendarGeneration(null)} productId={calendarGeneration.productId} productName={calendarGeneration.productName} launchDate={calendarGeneration.launchDate} platforms={platforms} platformEvents={platformEvents} existingSales={sales} onApply={handleApplyCalendar} isApplying={isApplyingCalendar} initialPlatformIds={calendarGeneration.platformIds} />)}
       {clearSalesState && (<ClearSalesModal isOpen={true} onClose={() => setClearSalesState(null)} productId={clearSalesState.productId} productName={clearSalesState.productName} platforms={platforms} sales={sales} onConfirm={handleConfirmClearSales} />)}
       {editLaunchDateState && (<EditLaunchDateModal isOpen={true} onClose={() => setEditLaunchDateState(null)} productId={editLaunchDateState.productId} productName={editLaunchDateState.productName} currentLaunchDate={editLaunchDateState.currentLaunchDate} currentLaunchSaleDuration={editLaunchDateState.currentLaunchSaleDuration || 7} onSave={handleSaveLaunchDate} salesCount={sales.filter(s => s.product_id === editLaunchDateState.productId).length} platforms={platforms} platformEvents={platformEvents} />)}
       <TimelineExportModal isOpen={showExportModal} onClose={() => setShowExportModal(false)} sales={filteredSales} products={filteredProducts} platforms={platforms} timelineStart={timelineStart} monthCount={monthCount} calendarVariations={lastGeneratedVariations} />
