@@ -1204,6 +1204,9 @@ export default function ImportSalesModal({
               {invalidRows.length > 0 && (
                 <div className={styles.errorList}>
                   <h4>Rows with Errors (will be skipped)</h4>
+                  <p className={styles.errorHint}>
+                    These may be header rows, month separators, or rows with missing/invalid data.
+                  </p>
                   <div className={styles.errorRows}>
                     {invalidRows.slice(0, 10).map(row => (
                       <div key={row.rowIndex} className={styles.errorRow}>
