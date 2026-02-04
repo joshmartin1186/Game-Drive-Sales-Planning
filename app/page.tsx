@@ -69,6 +69,7 @@ export default function GameDriveDashboard() {
   const [editLaunchDateState, setEditLaunchDateState] = useState<EditLaunchDateState | null>(null)
   const [filterClientId, setFilterClientId] = useState<string>('')
   const [filterGameId, setFilterGameId] = useState<string>('')
+  const [activeVersionId, setActiveVersionId] = useState<string | null>(null)  // null = working draft
   const { pushAction, setHandlers } = useUndo()
 
   useEffect(() => {
@@ -186,39 +187,12 @@ export default function GameDriveDashboard() {
     } catch (err: unknown) { const errorMessage = err instanceof Error ? err.message : 'Failed to duplicate sales'; console.error('Error duplicating sales:', err); throw new Error(errorMessage) }
   }, [pushAction])
 
-  const handleRestoreVersion = useCallback(async (salesSnapshot: SaleSnapshot[]) => {
-    const currentSaleIds = sales.map(s => s.id)
-    try {
-      // Delete all current sales in a single batch operation (much faster than one-by-one)
-      if (currentSaleIds.length > 0) {
-        const { error: deleteError } = await supabase.from('sales').delete().in('id', currentSaleIds)
-        if (deleteError) throw deleteError
-      }
-      // Insert all snapshot sales in a single batch
-      if (salesSnapshot.length > 0) {
-        const salesToCreate = salesSnapshot.map(s => ({
-          product_id: s.product_id,
-          platform_id: s.platform_id,
-          start_date: s.start_date,
-          end_date: s.end_date,
-          discount_percentage: s.discount_percentage,
-          sale_name: s.sale_name,
-          sale_type: s.sale_type,
-          status: s.status,
-          notes: s.notes
-        }))
-        const { error: insertError } = await supabase.from('sales').insert(salesToCreate)
-        if (insertError) throw insertError
-      }
-      await fetchSales()
-    } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to restore version'
-      console.error('Error restoring version:', err)
-      setError(errorMessage)
-      await fetchSales()
-      throw new Error(errorMessage)
-    }
-  }, [sales])
+  // Activate a version to display (no data deletion - just switches view)
+  const handleActivateVersion = useCallback(async (versionId: string | null) => {
+    setActiveVersionId(versionId)
+    // Re-fetch sales - they'll be filtered by version in the display
+    await fetchSales()
+  }, [])
 
   const handleSaleEdit = useCallback((sale: SaleWithDetails) => { setEditingSale(sale) }, [])
   const handleSaleDuplicate = useCallback((sale: SaleWithDetails) => { setDuplicatingSale(sale) }, [])
@@ -453,7 +427,7 @@ export default function GameDriveDashboard() {
       {duplicatingSale && (<DuplicateSaleModal sale={duplicatingSale} products={products} platforms={platforms} existingSales={sales} onDuplicate={handleDuplicateSales} onClose={() => setDuplicatingSale(null)} />)}
       <BulkEditSalesModal isOpen={bulkEditSales.length > 0} onClose={() => setBulkEditSales([])} selectedSales={bulkEditSales} platforms={platforms} onBulkUpdate={handleBulkUpdate} onBulkDelete={handleBulkDelete} />
       <ImportSalesModal isOpen={showImportModal} onClose={() => setShowImportModal(false)} products={products} platforms={platforms} existingSales={sales} onImport={handleBulkImport} clients={clients} games={games} onProductCreate={handleProductCreate} onGameCreate={handleGameCreate} />
-      <VersionManager isOpen={showVersionManager} onClose={() => setShowVersionManager(false)} currentSales={sales} platforms={platforms} onRestoreVersion={handleRestoreVersion} clientId={filterClientId || null} />
+      <VersionManager isOpen={showVersionManager} onClose={() => setShowVersionManager(false)} currentSales={sales} platforms={platforms} onActivateVersion={handleActivateVersion} activeVersionId={activeVersionId} clientId={filterClientId || null} />
       {showProductManager && (<ProductManager clients={clients} games={games} products={products} platforms={platforms} onClientCreate={handleClientCreate} onGameCreate={handleGameCreate} onProductCreate={handleProductCreate} onClientDelete={handleClientDelete} onGameDelete={handleGameDelete} onProductDelete={handleProductDelete} onClientUpdate={handleClientUpdate} onGameUpdate={handleGameUpdate} onProductUpdate={handleProductUpdate} onGenerateCalendar={handleGenerateCalendar} onClose={() => setShowProductManager(false)} />)}
       <PlatformSettings isOpen={showPlatformSettings} onClose={() => setShowPlatformSettings(false)} onEventsChange={() => { fetchPlatformEvents(); fetchData() }} />
       {calendarGeneration && (<SaleCalendarPreviewModal isOpen={true} onClose={() => setCalendarGeneration(null)} productId={calendarGeneration.productId} productName={calendarGeneration.productName} launchDate={calendarGeneration.launchDate} platforms={platforms} platformEvents={platformEvents} existingSales={sales} onApply={handleApplyCalendar} isApplying={isApplyingCalendar} initialPlatformIds={calendarGeneration.platformIds} />)}
