@@ -755,6 +755,30 @@ export default function ImportSalesModal({
     })
   }, [])
 
+  // Reprocess rows when new products are created
+  const reprocessRowsWithNewProducts = useCallback((newProductIds: Map<string, string>) => {
+    setParsedRows(currentRows => {
+      if (newProductIds.size === 0 || currentRows.length === 0) return currentRows
+
+      return currentRows.map(row => {
+        if (row.missingProductName && !row.productId) {
+          const productId = newProductIds.get(row.missingProductName.toLowerCase())
+          if (productId) {
+            // Product was created, update this row
+            const newErrors = row.errors.filter(e => !e.includes('not found'))
+            return {
+              ...row,
+              productId,
+              errors: newErrors,
+              isValid: newErrors.length === 0
+            }
+          }
+        }
+        return row
+      })
+    })
+  }, [])
+
   // Create selected products and reprocess rows
   const handleCreateProducts = useCallback(async () => {
     if (!onProductCreate || selectedProductsToCreate.size === 0) return
@@ -789,47 +813,15 @@ export default function ImportSalesModal({
       setSelectedProductsToCreate(new Set())
       setProductsToCreate(new Map())
 
-      // Reprocess rows with the newly created products
-      // This will be handled by the useEffect watching createdProductIds
+      // Reprocess rows with the newly created products immediately
+      reprocessRowsWithNewProducts(newCreatedIds)
     } catch (err) {
       console.error('Error creating products:', err)
       setImportError(err instanceof Error ? err.message : 'Failed to create products')
     } finally {
       setIsCreatingProducts(false)
     }
-  }, [onProductCreate, selectedProductsToCreate, productsToCreate, createdProductIds])
-
-  // Reprocess rows when new products are created
-  const reprocessRowsWithNewProducts = useCallback(() => {
-    if (createdProductIds.size === 0 || parsedRows.length === 0) return
-
-    const reprocessed = parsedRows.map(row => {
-      if (row.missingProductName && !row.productId) {
-        const productId = createdProductIds.get(row.missingProductName.toLowerCase())
-        if (productId) {
-          // Product was created, update this row
-          const newErrors = row.errors.filter(e => !e.includes('not found'))
-          return {
-            ...row,
-            productId,
-            errors: newErrors,
-            isValid: newErrors.length === 0
-          }
-        }
-      }
-      return row
-    })
-
-    setParsedRows(reprocessed)
-  }, [createdProductIds, parsedRows])
-
-  // Effect to reprocess rows when products are created
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useMemo(() => {
-    if (createdProductIds.size > 0 && step === 'preview') {
-      reprocessRowsWithNewProducts()
-    }
-  }, [createdProductIds])
+  }, [onProductCreate, selectedProductsToCreate, productsToCreate, createdProductIds, reprocessRowsWithNewProducts])
 
   if (!isOpen) return null
 
