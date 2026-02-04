@@ -27,13 +27,16 @@ import { useUndo } from '@/lib/undo-context'
 import { useAuth } from '@/lib/auth-context'
 import { normalizeToLocalDate } from '@/lib/dateUtils'
 import styles from './page.module.css'
-import { Sale, Platform, Product, Game, Client, SaleWithDetails, PlatformEvent } from '@/lib/types'
+import { Sale, Platform, Product, Game, Client, SaleWithDetails, PlatformEvent, SaleSnapshot } from '@/lib/types'
 
 interface SalePrefill { productId: string; platformId: string; startDate: string; endDate: string; directCreate?: boolean; saleName?: string; discountPercentage?: number; saleType?: string }
+// Convert version snapshot to SaleWithDetails format for display
+interface VersionSaleDisplay extends SaleWithDetails {
+  _isSnapshot?: boolean  // Flag to identify snapshot sales in the display
+}
 interface CalendarGenerationState { productId: string; productName: string; launchDate: string; platformIds?: string[] }
 interface ClearSalesState { productId: string; productName: string }
 interface EditLaunchDateState { productId: string; productName: string; currentLaunchDate: string; currentLaunchSaleDuration?: number }
-interface SaleSnapshot { product_id: string; platform_id: string; start_date: string; end_date: string; discount_percentage: number | null; sale_name: string | null; sale_type: string; status: string; notes: string | null; product_name?: string; platform_name?: string }
 type SaleStatus = 'planned' | 'submitted' | 'confirmed' | 'live' | 'ended'
 interface ConflictInfo { productName: string; eventName: string; overlapDays: number }
 
@@ -69,7 +72,9 @@ export default function GameDriveDashboard() {
   const [editLaunchDateState, setEditLaunchDateState] = useState<EditLaunchDateState | null>(null)
   const [filterClientId, setFilterClientId] = useState<string>('')
   const [filterGameId, setFilterGameId] = useState<string>('')
+  const [filterProductId, setFilterProductId] = useState<string>('')  // For version management
   const [activeVersionId, setActiveVersionId] = useState<string | null>(null)  // null = working draft
+  const [activeVersionSnapshot, setActiveVersionSnapshot] = useState<SaleSnapshot[] | null>(null)  // Snapshot data when viewing a version
   const { pushAction, setHandlers } = useUndo()
 
   useEffect(() => {
@@ -188,10 +193,11 @@ export default function GameDriveDashboard() {
   }, [pushAction])
 
   // Activate a version to display (no data deletion - just switches view)
-  const handleActivateVersion = useCallback(async (versionId: string | null) => {
+  const handleActivateVersion = useCallback(async (versionId: string | null, snapshot?: SaleSnapshot[] | null) => {
     setActiveVersionId(versionId)
-    // Re-fetch sales - they'll be filtered by version in the display
-    await fetchSales()
+    // Store snapshot data for display when viewing a saved version
+    setActiveVersionSnapshot(snapshot || null)
+    // No need to re-fetch sales - we display from snapshot when version is active
   }, [])
 
   const handleSaleEdit = useCallback((sale: SaleWithDetails) => { setEditingSale(sale) }, [])
@@ -356,8 +362,46 @@ export default function GameDriveDashboard() {
   }
 
   const filteredGames = useMemo(() => { if (!filterClientId) return games; return games.filter(g => g.client_id === filterClientId) }, [games, filterClientId])
-  const filteredProducts = useMemo(() => { let result = products; if (filterGameId) { result = result.filter(p => p.game_id === filterGameId) } else if (filterClientId) { result = result.filter(p => p.game?.client_id === filterClientId) }; return result }, [products, filterClientId, filterGameId])
-  const filteredSales = useMemo(() => { let result = sales; if (filterGameId) { result = result.filter(s => s.product?.game_id === filterGameId) } else if (filterClientId) { result = result.filter(s => s.product?.game?.client_id === filterClientId) }; return result }, [sales, filterClientId, filterGameId])
+  const filteredProducts = useMemo(() => { let result = products; if (filterProductId) { result = result.filter(p => p.id === filterProductId) } else if (filterGameId) { result = result.filter(p => p.game_id === filterGameId) } else if (filterClientId) { result = result.filter(p => p.game?.client_id === filterClientId) }; return result }, [products, filterClientId, filterGameId, filterProductId])
+
+  // When a version is active, convert its snapshot to SaleWithDetails format for display
+  const filteredSales = useMemo(() => {
+    // If we're viewing a saved version, show its snapshot data
+    if (activeVersionId && activeVersionSnapshot) {
+      const snapshotSales: SaleWithDetails[] = activeVersionSnapshot.map((snap, idx) => {
+        const product = products.find(p => p.id === snap.product_id)
+        const platform = platforms.find(p => p.id === snap.platform_id)
+        return {
+          id: `snapshot-${idx}`,  // Synthetic ID for display
+          product_id: snap.product_id,
+          platform_id: snap.platform_id,
+          start_date: snap.start_date,
+          end_date: snap.end_date,
+          discount_percentage: snap.discount_percentage ?? undefined,
+          sale_name: snap.sale_name ?? undefined,
+          sale_type: snap.sale_type as Sale['sale_type'],
+          status: snap.status as Sale['status'],
+          notes: snap.notes ?? undefined,
+          created_at: new Date().toISOString(),
+          product: product || { id: snap.product_id, game_id: '', name: snap.product_name || 'Unknown', product_type: 'base' as const, created_at: '', game: { id: '', client_id: '', name: '', created_at: '', client: { id: '', name: '', created_at: '' } } },
+          platform: platform || { id: snap.platform_id, name: snap.platform_name || 'Unknown', cooldown_days: 0, approval_required: false, color_hex: '#666', max_sale_days: 14, special_sales_no_cooldown: false }
+        }
+      })
+      // Apply filters to snapshot data
+      let result = snapshotSales
+      if (filterProductId) { result = result.filter(s => s.product_id === filterProductId) }
+      else if (filterGameId) { result = result.filter(s => s.product?.game_id === filterGameId) }
+      else if (filterClientId) { result = result.filter(s => s.product?.game?.client_id === filterClientId) }
+      return result
+    }
+
+    // Normal mode: show live sales
+    let result = sales
+    if (filterProductId) { result = result.filter(s => s.product_id === filterProductId) }
+    else if (filterGameId) { result = result.filter(s => s.product?.game_id === filterGameId) }
+    else if (filterClientId) { result = result.filter(s => s.product?.game?.client_id === filterClientId) }
+    return result
+  }, [sales, filterClientId, filterGameId, filterProductId, activeVersionId, activeVersionSnapshot, products, platforms])
 
   const { conflicts, conflictDetails } = useMemo(() => {
     const conflictList: ConflictInfo[] = []
@@ -383,7 +427,14 @@ export default function GameDriveDashboard() {
 
   const now = new Date(); const timelineStart = new Date(now.getFullYear(), now.getMonth(), 1); const monthCount = 12
 
-  useEffect(() => { if (filterClientId && filterGameId) { const game = games.find(g => g.id === filterGameId); if (game && game.client_id !== filterClientId) { setFilterGameId('') } } }, [filterClientId, filterGameId, games])
+  useEffect(() => {
+    // Clear game filter if it doesn't belong to selected client
+    if (filterClientId && filterGameId) { const game = games.find(g => g.id === filterGameId); if (game && game.client_id !== filterClientId) { setFilterGameId(''); setFilterProductId('') } }
+    // Clear product filter if it doesn't belong to selected game
+    if (filterGameId && filterProductId) { const product = products.find(p => p.id === filterProductId); if (product && product.game_id !== filterGameId) { setFilterProductId('') } }
+    // Also clear version state when filters change significantly
+    if (!filterProductId && activeVersionId) { setActiveVersionId(null); setActiveVersionSnapshot(null) }
+  }, [filterClientId, filterGameId, filterProductId, games, products, activeVersionId])
 
   if (authLoading || loading) { return (<div className={styles.container}><div className={styles.loading}><div className={styles.spinner}></div><p>Loading sales data...</p></div></div>) }
 
@@ -407,15 +458,24 @@ export default function GameDriveDashboard() {
       <GapAnalysis sales={filteredSales} products={filteredProducts} platforms={platforms} timelineStart={timelineStart} monthCount={monthCount} />
 
       <div className={styles.filters}>
-        <div className={styles.filterGroup}><label>Client:</label><select value={filterClientId} onChange={(e) => setFilterClientId(e.target.value)}><option value="">All Clients</option>{clients.map(client => (<option key={client.id} value={client.id}>{client.name}</option>))}</select></div>
-        <div className={styles.filterGroup}><label>Game:</label><select value={filterGameId} onChange={(e) => setFilterGameId(e.target.value)}><option value="">All Games</option>{filteredGames.map(game => (<option key={game.id} value={game.id}>{game.name}</option>))}</select></div>
+        <div className={styles.filterGroup}><label>Client:</label><select value={filterClientId} onChange={(e) => { setFilterClientId(e.target.value); setFilterGameId(''); setFilterProductId('') }}><option value="">All Clients</option>{clients.map(client => (<option key={client.id} value={client.id}>{client.name}</option>))}</select></div>
+        <div className={styles.filterGroup}><label>Game:</label><select value={filterGameId} onChange={(e) => { setFilterGameId(e.target.value); setFilterProductId('') }}><option value="">All Games</option>{filteredGames.map(game => (<option key={game.id} value={game.id}>{game.name}</option>))}</select></div>
+        <div className={styles.filterGroup}><label>Product:</label><select value={filterProductId} onChange={(e) => setFilterProductId(e.target.value)}><option value="">All Products</option>{filteredProducts.map(product => (<option key={product.id} value={product.id}>{product.name}</option>))}</select></div>
         <div className={styles.filterGroup}><label className={styles.checkboxLabel}><input type="checkbox" checked={showEvents} onChange={(e) => setShowEvents(e.target.checked)} />Show Platform Events</label></div>
-        {(filterClientId || filterGameId) && (<button className={styles.clearFilters} onClick={() => { setFilterClientId(''); setFilterGameId(''); }}>Clear Filters</button>)}
+        {(filterClientId || filterGameId || filterProductId) && (<button className={styles.clearFilters} onClick={() => { setFilterClientId(''); setFilterGameId(''); setFilterProductId(''); setActiveVersionId(null); setActiveVersionSnapshot(null) }}>Clear Filters</button>)}
       </div>
+
+      {/* Version viewing banner */}
+      {activeVersionId && (
+        <div className={styles.versionBanner}>
+          <span>📋 Viewing saved version. Changes are disabled.</span>
+          <button onClick={() => { setActiveVersionId(null); setActiveVersionSnapshot(null) }}>✏️ Return to Working Draft</button>
+        </div>
+      )}
 
       <div className={styles.toolbar}>
         <div className={styles.viewToggle}><button className={`${styles.toggleBtn} ${viewMode === 'gantt' ? styles.active : ''}`} onClick={() => setViewMode('gantt')}>Timeline</button><button className={`${styles.toggleBtn} ${viewMode === 'table' ? styles.active : ''}`} onClick={() => setViewMode('table')}>Table</button></div>
-        <div className={styles.actions}><button className={styles.primaryBtn} onClick={() => setShowAddModal(true)}>+ Add Sale</button><button className={styles.secondaryBtn} onClick={() => setShowImportModal(true)}>Import CSV</button><button className={styles.secondaryBtn} onClick={() => setShowVersionManager(true)}>📚 Versions</button><button className={styles.secondaryBtn} onClick={() => setShowProductManager(true)}>Manage Products</button><button className={styles.secondaryBtn} onClick={() => setShowPlatformSettings(true)}>Platform Settings</button><button className={styles.secondaryBtn} onClick={() => setShowExportModal(true)}>Export</button><button className={styles.secondaryBtn} onClick={fetchData}>Refresh</button></div>
+        <div className={styles.actions}>{!activeVersionId && <button className={styles.primaryBtn} onClick={() => setShowAddModal(true)}>+ Add Sale</button>}{!activeVersionId && <button className={styles.secondaryBtn} onClick={() => setShowImportModal(true)}>Import CSV</button>}<button className={styles.secondaryBtn} onClick={() => setShowVersionManager(true)}>📚 Versions</button>{!activeVersionId && <button className={styles.secondaryBtn} onClick={() => setShowProductManager(true)}>Manage Products</button>}{!activeVersionId && <button className={styles.secondaryBtn} onClick={() => setShowPlatformSettings(true)}>Platform Settings</button>}<button className={styles.secondaryBtn} onClick={() => setShowExportModal(true)}>Export</button>{!activeVersionId && <button className={styles.secondaryBtn} onClick={fetchData}>Refresh</button>}</div>
       </div>
 
       <div className={styles.mainContent}>
@@ -427,7 +487,7 @@ export default function GameDriveDashboard() {
       {duplicatingSale && (<DuplicateSaleModal sale={duplicatingSale} products={products} platforms={platforms} existingSales={sales} onDuplicate={handleDuplicateSales} onClose={() => setDuplicatingSale(null)} />)}
       <BulkEditSalesModal isOpen={bulkEditSales.length > 0} onClose={() => setBulkEditSales([])} selectedSales={bulkEditSales} platforms={platforms} onBulkUpdate={handleBulkUpdate} onBulkDelete={handleBulkDelete} />
       <ImportSalesModal isOpen={showImportModal} onClose={() => setShowImportModal(false)} products={products} platforms={platforms} existingSales={sales} onImport={handleBulkImport} clients={clients} games={games} onProductCreate={handleProductCreate} onGameCreate={handleGameCreate} />
-      <VersionManager isOpen={showVersionManager} onClose={() => setShowVersionManager(false)} currentSales={sales} platforms={platforms} onActivateVersion={handleActivateVersion} activeVersionId={activeVersionId} clientId={filterClientId || null} />
+      <VersionManager isOpen={showVersionManager} onClose={() => setShowVersionManager(false)} currentSales={sales} platforms={platforms} onActivateVersion={handleActivateVersion} activeVersionId={activeVersionId} productId={filterProductId || null} clientId={filterClientId || null} />
       {showProductManager && (<ProductManager clients={clients} games={games} products={products} platforms={platforms} onClientCreate={handleClientCreate} onGameCreate={handleGameCreate} onProductCreate={handleProductCreate} onClientDelete={handleClientDelete} onGameDelete={handleGameDelete} onProductDelete={handleProductDelete} onClientUpdate={handleClientUpdate} onGameUpdate={handleGameUpdate} onProductUpdate={handleProductUpdate} onGenerateCalendar={handleGenerateCalendar} onClose={() => setShowProductManager(false)} />)}
       <PlatformSettings isOpen={showPlatformSettings} onClose={() => setShowPlatformSettings(false)} onEventsChange={() => { fetchPlatformEvents(); fetchData() }} />
       {calendarGeneration && (<SaleCalendarPreviewModal isOpen={true} onClose={() => setCalendarGeneration(null)} productId={calendarGeneration.productId} productName={calendarGeneration.productName} launchDate={calendarGeneration.launchDate} platforms={platforms} platformEvents={platformEvents} existingSales={sales} onApply={handleApplyCalendar} isApplying={isApplyingCalendar} initialPlatformIds={calendarGeneration.platformIds} />)}

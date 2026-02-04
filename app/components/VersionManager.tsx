@@ -15,9 +15,10 @@ interface VersionManagerProps {
   onClose: () => void
   currentSales: SaleWithDetails[]
   platforms: Platform[]
-  onActivateVersion: (versionId: string | null) => Promise<void>  // null = show working draft
+  onActivateVersion: (versionId: string | null, snapshot?: SaleSnapshot[] | null) => Promise<void>  // null = show working draft
   activeVersionId: string | null  // Currently active version (null = working draft)
-  clientId?: string | null
+  productId?: string | null  // Product-scoped versions
+  clientId?: string | null  // Legacy client filter (for backward compatibility)
 }
 
 export default function VersionManager({
@@ -27,6 +28,7 @@ export default function VersionManager({
   platforms,
   onActivateVersion,
   activeVersionId,
+  productId,
   clientId
 }: VersionManagerProps) {
   const supabase = createClientComponentClient()
@@ -50,8 +52,8 @@ export default function VersionManager({
   // Track if initial load is done (for skeleton vs spinner)
   const hasLoadedOnce = useRef(false)
 
-  // Cache key based on client filter
-  const cacheKey = useMemo(() => `versions-${clientId || 'all'}`, [clientId])
+  // Cache key based on product or client filter
+  const cacheKey = useMemo(() => `versions-${productId || clientId || 'all'}`, [productId, clientId])
 
   // Fetch versions with caching
   const fetchVersions = useCallback(async (forceRefresh = false) => {
@@ -78,7 +80,11 @@ export default function VersionManager({
         .order('is_committed', { ascending: false })
         .order('created_at', { ascending: false })
 
-      if (clientId) {
+      // Filter by product if specified (new product-scoped versions)
+      if (productId) {
+        query = query.or(`product_id.eq.${productId},product_id.is.null`)
+      } else if (clientId) {
+        // Legacy client filter - backward compatibility
         query = query.or(`client_id.eq.${clientId},client_id.is.null`)
       }
 
@@ -113,11 +119,22 @@ export default function VersionManager({
       return
     }
 
+    // Product-scoped versions require a product to be selected
+    if (!productId && !clientId) {
+      setError('Please select a product to save a version for')
+      return
+    }
+
     setSaving(true)
     setError(null)
 
-    // Create snapshot from current sales
-    const snapshot: SaleSnapshot[] = currentSales.map(sale => ({
+    // Filter sales to only include the selected product if product-scoped
+    const salesToSnapshot = productId
+      ? currentSales.filter(s => s.product_id === productId)
+      : currentSales
+
+    // Create snapshot from filtered sales
+    const snapshot: SaleSnapshot[] = salesToSnapshot.map(sale => ({
       product_id: sale.product_id,
       platform_id: sale.platform_id,
       start_date: sale.start_date,
@@ -132,14 +149,14 @@ export default function VersionManager({
     }))
 
     // Calculate metadata
-    const productIds = new Set(currentSales.map(s => s.product_id))
+    const productIds = new Set(salesToSnapshot.map(s => s.product_id))
     const platformSummary: Record<string, number> = {}
-    currentSales.forEach(sale => {
+    salesToSnapshot.forEach(sale => {
       const platformName = sale.platform?.name || 'Unknown'
       platformSummary[platformName] = (platformSummary[platformName] || 0) + 1
     })
 
-    const dates = currentSales.map(s => s.start_date).concat(currentSales.map(s => s.end_date))
+    const dates = salesToSnapshot.map(s => s.start_date).concat(salesToSnapshot.map(s => s.end_date))
     const sortedDates = dates.sort()
 
     // Create optimistic version (with temp ID)
@@ -150,11 +167,12 @@ export default function VersionManager({
       description: saveDescription.trim() || null,
       sales_snapshot: snapshot,
       product_count: productIds.size,
-      sale_count: currentSales.length,
+      sale_count: salesToSnapshot.length,
       platform_summary: platformSummary,
       date_range_start: sortedDates[0] || null,
       date_range_end: sortedDates[sortedDates.length - 1] || null,
-      client_id: clientId || null,
+      product_id: productId || null,  // New product scope
+      client_id: clientId || null,  // Legacy client scope
       is_committed: false,
       committed_at: null,
       is_active: false,
@@ -180,7 +198,8 @@ export default function VersionManager({
           platform_summary: platformSummary,
           date_range_start: optimisticVersion.date_range_start,
           date_range_end: optimisticVersion.date_range_end,
-          client_id: optimisticVersion.client_id
+          product_id: optimisticVersion.product_id,  // New product scope
+          client_id: optimisticVersion.client_id  // Legacy
         })
         .select()
         .single()
@@ -341,6 +360,7 @@ export default function VersionManager({
     setError(null)
 
     const versionId = version?.id || null
+    const snapshot = version?.sales_snapshot || null
     const previousVersions = versions
 
     // Optimistically update UI
@@ -350,12 +370,14 @@ export default function VersionManager({
     })))
 
     try {
-      // Update database: deactivate all versions for this client
-      if (clientId) {
+      // Update database: deactivate all versions for this product/client
+      const scopeId = productId || clientId
+      if (scopeId) {
+        const scopeColumn = productId ? 'product_id' : 'client_id'
         await supabase
           .from('calendar_versions')
           .update({ is_active: false })
-          .eq('client_id', clientId)
+          .eq(scopeColumn, scopeId)
       }
 
       // Activate the selected version (if not switching to draft)
@@ -366,11 +388,14 @@ export default function VersionManager({
           .eq('id', versionId)
       }
 
-      // Notify parent to update displayed sales
-      await onActivateVersion(versionId)
+      // Notify parent to update displayed sales - pass the snapshot data!
+      await onActivateVersion(versionId, snapshot)
 
       // Invalidate cache
       versionCache.delete(cacheKey)
+
+      // Close modal after successful activation
+      onClose()
     } catch (err) {
       console.error('Error activating version:', err)
       setVersions(previousVersions) // Rollback
