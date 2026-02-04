@@ -18,7 +18,9 @@ interface VersionManagerProps {
   onActivateVersion: (versionId: string | null, snapshot?: SaleSnapshot[] | null) => Promise<void>  // null = show working draft
   activeVersionId: string | null  // Currently active version (null = working draft)
   productId?: string | null  // Product-scoped versions
+  productName?: string | null  // Display name for product filter
   clientId?: string | null  // Legacy client filter (for backward compatibility)
+  clientName?: string | null  // Display name for client filter
 }
 
 export default function VersionManager({
@@ -29,7 +31,9 @@ export default function VersionManager({
   onActivateVersion,
   activeVersionId,
   productId,
-  clientId
+  productName,
+  clientId,
+  clientName
 }: VersionManagerProps) {
   const supabase = createClientComponentClient()
   const [versions, setVersions] = useState<CalendarVersion[]>([])
@@ -425,6 +429,20 @@ export default function VersionManager({
         </div>
 
         <div className={styles.content}>
+          {/* Scope indicator */}
+          <div className={styles.scopeIndicator}>
+            {productId && productName ? (
+              <span className={styles.scopeBadge}>🎮 Product: <strong>{productName}</strong></span>
+            ) : clientId && clientName ? (
+              <span className={styles.scopeBadge}>👤 Client: <strong>{clientName}</strong></span>
+            ) : (
+              <span className={styles.scopeWarning}>
+                ⚠️ Select a <strong>Product</strong> or <strong>Client</strong> filter to manage versions for a specific scope.
+                Currently showing all versions.
+              </span>
+            )}
+          </div>
+
           {error && (
             <div className={styles.error}>
               {error}
