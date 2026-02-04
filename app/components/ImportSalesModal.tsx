@@ -1128,6 +1128,33 @@ export default function ImportSalesModal({
                   <div className={styles.createProductsHeader}>
                     <h4>🆕 Create Missing Products</h4>
                     <p>These products were not found. Select the ones you want to create:</p>
+                    {filteredGames.length > 0 && (
+                      <div className={styles.bulkGameSelect}>
+                        <label>Assign all to game:</label>
+                        <select
+                          onChange={(e) => {
+                            if (e.target.value) {
+                              // Set all products to this game
+                              const gameId = e.target.value
+                              setProductsToCreate(prev => {
+                                const newMap = new Map(prev)
+                                newMap.forEach((product, key) => {
+                                  const game = filteredGames.find(g => g.id === gameId)
+                                  newMap.set(key, { ...product, gameId, gameName: game?.name || '' })
+                                })
+                                return newMap
+                              })
+                            }
+                          }}
+                          className={styles.gameSelect}
+                        >
+                          <option value="">-- Select game for all --</option>
+                          {filteredGames.map(g => (
+                            <option key={g.id} value={g.id}>{g.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
                   </div>
                   <div className={styles.createProductsList}>
                     {Array.from(productsToCreate.entries()).map(([key, product]) => (
