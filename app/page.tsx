@@ -432,8 +432,8 @@ export default function GameDriveDashboard() {
     if (filterClientId && filterGameId) { const game = games.find(g => g.id === filterGameId); if (game && game.client_id !== filterClientId) { setFilterGameId(''); setFilterProductId('') } }
     // Clear product filter if it doesn't belong to selected game
     if (filterGameId && filterProductId) { const product = products.find(p => p.id === filterProductId); if (product && product.game_id !== filterGameId) { setFilterProductId('') } }
-    // Also clear version state when filters change significantly
-    if (!filterProductId && activeVersionId) { setActiveVersionId(null); setActiveVersionSnapshot(null) }
+    // Also clear version state when no scope filter is active (need either product or client filter for versions)
+    if (!filterProductId && !filterClientId && activeVersionId) { setActiveVersionId(null); setActiveVersionSnapshot(null) }
   }, [filterClientId, filterGameId, filterProductId, games, products, activeVersionId])
 
   if (authLoading || loading) { return (<div className={styles.container}><div className={styles.loading}><div className={styles.spinner}></div><p>Loading sales data...</p></div></div>) }
