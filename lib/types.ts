@@ -112,7 +112,8 @@ export interface CalendarVersion {
   platform_summary?: Record<string, number>
   date_range_start?: string | null
   date_range_end?: string | null
-  client_id?: string | null
+  product_id?: string | null  // Product-scoped versions (preferred)
+  client_id?: string | null  // Legacy client-scoped versions
   is_committed: boolean
   committed_at?: string | null
   is_active: boolean  // If true, this version is currently displayed
