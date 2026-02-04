@@ -94,9 +94,45 @@ export interface Sale {
   is_confirmed?: boolean
   comment?: string
   prev_sale_end_date?: string
+  // Version tracking - NULL means "working draft" (current edits)
+  version_id?: string | null
   created_at: string
   product?: Product
   platform?: Platform
+}
+
+// Calendar version for version control / toggling
+export interface CalendarVersion {
+  id: string
+  name: string
+  description?: string | null
+  sales_snapshot: SaleSnapshot[]
+  product_count?: number
+  sale_count?: number
+  platform_summary?: Record<string, number>
+  date_range_start?: string | null
+  date_range_end?: string | null
+  client_id?: string | null
+  is_committed: boolean
+  committed_at?: string | null
+  is_active: boolean  // If true, this version is currently displayed
+  created_at: string
+  updated_at: string
+}
+
+// Sale snapshot stored in version (denormalized for display)
+export interface SaleSnapshot {
+  product_id: string
+  platform_id: string
+  start_date: string
+  end_date: string
+  discount_percentage?: number | null
+  sale_name?: string | null
+  sale_type: string
+  status: string
+  notes?: string | null
+  product_name?: string
+  platform_name?: string
 }
 
 export interface SaleWithDetails extends Sale {

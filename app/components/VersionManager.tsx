@@ -3,51 +3,20 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { format, parseISO } from 'date-fns'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
-import { SaleWithDetails, Platform } from '@/lib/types'
+import { SaleWithDetails, Platform, CalendarVersion, SaleSnapshot } from '@/lib/types'
 import styles from './VersionManager.module.css'
 
 // Client-side cache for versions to avoid re-fetching
 const versionCache = new Map<string, { versions: CalendarVersion[], timestamp: number }>()
 const CACHE_TTL = 60000 // 1 minute cache
 
-interface CalendarVersion {
-  id: string
-  name: string
-  description: string | null
-  sales_snapshot: SaleSnapshot[]
-  product_count: number
-  sale_count: number
-  platform_summary: Record<string, number>
-  date_range_start: string | null
-  date_range_end: string | null
-  client_id: string | null
-  is_committed: boolean
-  committed_at: string | null
-  created_at: string
-  updated_at: string
-}
-
-interface SaleSnapshot {
-  product_id: string
-  platform_id: string
-  start_date: string
-  end_date: string
-  discount_percentage: number | null
-  sale_name: string | null
-  sale_type: string
-  status: string
-  notes: string | null
-  // Denormalized for display
-  product_name?: string
-  platform_name?: string
-}
-
 interface VersionManagerProps {
   isOpen: boolean
   onClose: () => void
   currentSales: SaleWithDetails[]
   platforms: Platform[]
-  onRestoreVersion: (sales: SaleSnapshot[]) => Promise<void>
+  onActivateVersion: (versionId: string | null) => Promise<void>  // null = show working draft
+  activeVersionId: string | null  // Currently active version (null = working draft)
   clientId?: string | null
 }
 
@@ -56,14 +25,15 @@ export default function VersionManager({
   onClose,
   currentSales,
   platforms,
-  onRestoreVersion,
+  onActivateVersion,
+  activeVersionId,
   clientId
 }: VersionManagerProps) {
   const supabase = createClientComponentClient()
   const [versions, setVersions] = useState<CalendarVersion[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [restoring, setRestoring] = useState(false)
+  const [activating, setActivating] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   // Save form state
@@ -73,9 +43,6 @@ export default function VersionManager({
 
   // Preview state
   const [previewVersion, setPreviewVersion] = useState<CalendarVersion | null>(null)
-
-  // Confirm restore state
-  const [confirmRestore, setConfirmRestore] = useState<CalendarVersion | null>(null)
 
   // Commit state
   const [committing, setCommitting] = useState(false)
@@ -190,6 +157,7 @@ export default function VersionManager({
       client_id: clientId || null,
       is_committed: false,
       committed_at: null,
+      is_active: false,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     }
@@ -367,20 +335,48 @@ export default function VersionManager({
     }
   }
 
-  // Restore a version
-  const handleRestoreVersion = async (version: CalendarVersion) => {
-    setRestoring(true)
+  // Activate a version (switch to viewing it) - no data deletion!
+  const handleActivateVersion = async (version: CalendarVersion | null) => {
+    setActivating(true)
     setError(null)
-    
+
+    const versionId = version?.id || null
+    const previousVersions = versions
+
+    // Optimistically update UI
+    setVersions(prev => prev.map(v => ({
+      ...v,
+      is_active: v.id === versionId
+    })))
+
     try {
-      await onRestoreVersion(version.sales_snapshot)
-      setConfirmRestore(null)
-      onClose()
+      // Update database: deactivate all versions for this client
+      if (clientId) {
+        await supabase
+          .from('calendar_versions')
+          .update({ is_active: false })
+          .eq('client_id', clientId)
+      }
+
+      // Activate the selected version (if not switching to draft)
+      if (versionId) {
+        await supabase
+          .from('calendar_versions')
+          .update({ is_active: true })
+          .eq('id', versionId)
+      }
+
+      // Notify parent to update displayed sales
+      await onActivateVersion(versionId)
+
+      // Invalidate cache
+      versionCache.delete(cacheKey)
     } catch (err) {
-      console.error('Error restoring version:', err)
-      setError(err instanceof Error ? err.message : 'Failed to restore version')
+      console.error('Error activating version:', err)
+      setVersions(previousVersions) // Rollback
+      setError(err instanceof Error ? err.message : 'Failed to activate version')
     } finally {
-      setRestoring(false)
+      setActivating(false)
     }
   }
 
@@ -575,10 +571,11 @@ export default function VersionManager({
                         {previewVersion?.id === version.id ? 'Hide Preview' : 'Preview'}
                       </button>
                       <button
-                        className={styles.restoreBtn}
-                        onClick={() => setConfirmRestore(version)}
+                        className={`${styles.activateBtn} ${version.is_active || activeVersionId === version.id ? styles.activeVersion : ''}`}
+                        onClick={() => handleActivateVersion(version)}
+                        disabled={activating || version.is_active || activeVersionId === version.id}
                       >
-                        Restore
+                        {version.is_active || activeVersionId === version.id ? '✓ Active' : 'Activate'}
                       </button>
                       <button
                         className={styles.deleteBtn}
@@ -640,35 +637,17 @@ export default function VersionManager({
           )}
         </div>
 
-        {/* Confirm restore modal */}
-        {confirmRestore && (
-          <div className={styles.confirmOverlay}>
-            <div className={styles.confirmModal}>
-              <h3>⚠️ Restore Version?</h3>
-              <p>
-                This will <strong>replace all current sales</strong> with the sales from 
-                &quot;{confirmRestore.name}&quot; ({confirmRestore.sale_count} sales).
-              </p>
-              <p className={styles.warning}>
-                Your current calendar will be lost unless you save it as a version first.
-              </p>
-              <div className={styles.confirmActions}>
-                <button 
-                  className={styles.cancelBtn}
-                  onClick={() => setConfirmRestore(null)}
-                  disabled={restoring}
-                >
-                  Cancel
-                </button>
-                <button 
-                  className={styles.dangerBtn}
-                  onClick={() => handleRestoreVersion(confirmRestore)}
-                  disabled={restoring}
-                >
-                  {restoring ? 'Restoring...' : 'Yes, Restore This Version'}
-                </button>
-              </div>
-            </div>
+        {/* Working Draft button - to switch back from a version to live edits */}
+        {activeVersionId && (
+          <div className={styles.draftBanner}>
+            <span>📋 Viewing saved version. Switch back to edit mode?</span>
+            <button
+              className={styles.draftBtn}
+              onClick={() => handleActivateVersion(null)}
+              disabled={activating}
+            >
+              {activating ? 'Switching...' : '✏️ Edit Working Draft'}
+            </button>
           </div>
         )}
       </div>
