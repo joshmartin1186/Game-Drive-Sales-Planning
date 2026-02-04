@@ -125,6 +125,31 @@
   background: #2563eb;
 }
 
+.versionBannerModified {
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+  border-color: #f59e0b;
+  color: #92400e;
+}
+
+.versionBannerActions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.saveVersionBtn {
+  background: #16a34a !important;
+}
+
+.saveVersionBtn:hover {
+  background: #15803d !important;
+}
+
+.saveVersionBtn:disabled {
+  background: #86efac !important;
+  cursor: not-allowed;
+}
+
 /* Stats Grid */
 .statsGrid {
   display: grid;
