@@ -106,3 +106,51 @@ export function isWeekend(date: Date): boolean {
   const day = date.getDay()
   return day === 0 || day === 6
 }
+
+/**
+ * Computes the temporal status of a sale based on its dates.
+ * This provides a real-time status that reflects the actual state of the sale:
+ * - 'upcoming': Sale hasn't started yet (start_date > today)
+ * - 'live': Sale is currently active (start_date <= today <= end_date)
+ * - 'ended': Sale has finished (end_date < today)
+ *
+ * This is used for display purposes and should take precedence over
+ * the stored 'status' field when showing temporal state.
+ */
+export type TemporalStatus = 'upcoming' | 'live' | 'ended'
+
+export function computeSaleTemporalStatus(startDate: string, endDate: string): TemporalStatus {
+  const today = normalizeToLocalDate(new Date())
+  const start = normalizeToLocalDate(startDate)
+  const end = normalizeToLocalDate(endDate)
+
+  if (isAfter(start, today)) {
+    return 'upcoming'
+  } else if (isBefore(end, today)) {
+    return 'ended'
+  } else {
+    return 'live'
+  }
+}
+
+/**
+ * Returns a display-friendly label for the temporal status.
+ */
+export function getTemporalStatusLabel(status: TemporalStatus): string {
+  switch (status) {
+    case 'upcoming': return 'Upcoming'
+    case 'live': return 'Live'
+    case 'ended': return 'Ended'
+  }
+}
+
+/**
+ * Returns a color for the temporal status badge.
+ */
+export function getTemporalStatusColor(status: TemporalStatus): string {
+  switch (status) {
+    case 'upcoming': return '#8b5cf6' // Purple
+    case 'live': return '#22c55e' // Green
+    case 'ended': return '#6b7280' // Gray
+  }
+}

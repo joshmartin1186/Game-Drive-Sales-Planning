@@ -3,6 +3,7 @@
 import { useRef, useState } from 'react'
 import { format, parseISO, differenceInDays, addMonths } from 'date-fns'
 import html2canvas from 'html2canvas'
+import * as XLSX from 'xlsx'
 import { CalendarVariation, GeneratedSale } from '@/lib/sale-calendar-generator'
 import styles from './CalendarExport.module.css'
 
@@ -11,6 +12,7 @@ interface CalendarExportProps {
   onClose: () => void
   productName: string
   launchDate: string
+  endDate?: string // Optional custom end date
   variations: CalendarVariation[]
 }
 
@@ -19,15 +21,16 @@ export default function CalendarExport({
   onClose,
   productName,
   launchDate,
+  endDate,
   variations
 }: CalendarExportProps) {
   const exportRef = useRef<HTMLDivElement>(null)
   const [isExporting, setIsExporting] = useState(false)
   
   if (!isOpen) return null
-  
+
   const periodStart = parseISO(launchDate)
-  const periodEnd = addMonths(periodStart, 12)
+  const periodEnd = endDate ? parseISO(endDate) : addMonths(periodStart, 12)
   
   // Generate months for the timeline
   const months: Date[] = []
@@ -75,7 +78,142 @@ export default function CalendarExport({
       setIsExporting(false)
     }
   }
-  
+
+  const handleExportExcel = () => {
+    setIsExporting(true)
+
+    try {
+      // Create workbook
+      const wb = XLSX.utils.book_new()
+
+      // Create a sheet for each variation
+      variations.forEach((variation, vIdx) => {
+        const headers = [
+          'Platform',
+          'Sale Name',
+          'Start Date',
+          'End Date',
+          'Duration (Days)',
+          'Discount %',
+          'Type',
+          'Is Event'
+        ]
+
+        const rows = variation.sales
+          .sort((a, b) => new Date(a.start_date).getTime() - new Date(b.start_date).getTime())
+          .map(sale => [
+            sale.platform_name,
+            sale.sale_name,
+            format(parseISO(sale.start_date), 'yyyy-MM-dd'),
+            format(parseISO(sale.end_date), 'yyyy-MM-dd'),
+            differenceInDays(parseISO(sale.end_date), parseISO(sale.start_date)) + 1,
+            sale.discount_percentage,
+            sale.is_event ? 'Event' : 'Custom',
+            sale.is_event ? 'Yes' : 'No'
+          ])
+
+        // Create worksheet data
+        const wsData = [
+          // Title rows
+          [`Sale Calendar Proposal: ${productName}`],
+          [`Strategy: ${variation.name} - ${variation.description}`],
+          [`Period: ${format(periodStart, 'MMM d, yyyy')} - ${format(periodEnd, 'MMM d, yyyy')}`],
+          [`Generated: ${format(new Date(), 'MMMM d, yyyy')}`],
+          [],
+          // Statistics
+          ['Summary Statistics'],
+          ['Total Sales', variation.stats.totalSales],
+          ['Days on Sale', variation.stats.totalDaysOnSale],
+          ['Event Sales', variation.stats.eventSales],
+          ['Custom Sales', variation.stats.customSales],
+          ['Coverage', `${variation.stats.percentageOnSale}%`],
+          [],
+          // Sales data headers and rows
+          headers,
+          ...rows
+        ]
+
+        const ws = XLSX.utils.aoa_to_sheet(wsData)
+
+        // Set column widths
+        ws['!cols'] = [
+          { wch: 15 }, // Platform
+          { wch: 30 }, // Sale Name
+          { wch: 12 }, // Start Date
+          { wch: 12 }, // End Date
+          { wch: 10 }, // Duration
+          { wch: 10 }, // Discount
+          { wch: 10 }, // Type
+          { wch: 10 }, // Is Event
+        ]
+
+        // Add sheet with variation name (truncated if too long)
+        const sheetName = variation.name.substring(0, 31).replace(/[\\\/\?\*\[\]]/g, '')
+        XLSX.utils.book_append_sheet(wb, ws, sheetName)
+      })
+
+      // Also create a combined "All Strategies" sheet
+      const allHeaders = [
+        'Strategy',
+        'Platform',
+        'Sale Name',
+        'Start Date',
+        'End Date',
+        'Duration (Days)',
+        'Discount %',
+        'Type'
+      ]
+
+      const allRows: (string | number)[][] = []
+      variations.forEach(variation => {
+        variation.sales
+          .sort((a, b) => new Date(a.start_date).getTime() - new Date(b.start_date).getTime())
+          .forEach(sale => {
+            allRows.push([
+              variation.name,
+              sale.platform_name,
+              sale.sale_name,
+              format(parseISO(sale.start_date), 'yyyy-MM-dd'),
+              format(parseISO(sale.end_date), 'yyyy-MM-dd'),
+              differenceInDays(parseISO(sale.end_date), parseISO(sale.start_date)) + 1,
+              sale.discount_percentage,
+              sale.is_event ? 'Event' : 'Custom'
+            ])
+          })
+      })
+
+      const allWsData = [
+        [`Sale Calendar Proposal: ${productName}`],
+        [`All Strategies Combined`],
+        [`Period: ${format(periodStart, 'MMM d, yyyy')} - ${format(periodEnd, 'MMM d, yyyy')}`],
+        [],
+        allHeaders,
+        ...allRows
+      ]
+
+      const allWs = XLSX.utils.aoa_to_sheet(allWsData)
+      allWs['!cols'] = [
+        { wch: 12 }, // Strategy
+        { wch: 15 }, // Platform
+        { wch: 30 }, // Sale Name
+        { wch: 12 }, // Start Date
+        { wch: 12 }, // End Date
+        { wch: 10 }, // Duration
+        { wch: 10 }, // Discount
+        { wch: 10 }, // Type
+      ]
+      XLSX.utils.book_append_sheet(wb, allWs, 'All Strategies')
+
+      // Download
+      const filename = `${productName.replace(/\s+/g, '_')}_Sale_Calendar_${format(new Date(), 'yyyy-MM-dd')}.xlsx`
+      XLSX.writeFile(wb, filename)
+    } catch (err) {
+      console.error('Excel export failed:', err)
+    } finally {
+      setIsExporting(false)
+    }
+  }
+
   // Group sales by platform for each variation
   const groupByPlatform = (sales: GeneratedSale[]) => {
     const groups: Record<string, GeneratedSale[]> = {}
@@ -94,7 +232,14 @@ export default function CalendarExport({
         <div className={styles.header}>
           <h2>Export Sale Calendar Proposal</h2>
           <div className={styles.headerActions}>
-            <button 
+            <button
+              className={styles.exportBtn}
+              onClick={handleExportExcel}
+              disabled={isExporting}
+            >
+              {isExporting ? '⏳ Exporting...' : '📊 Download Excel'}
+            </button>
+            <button
               className={styles.exportBtn}
               onClick={handleExportPNG}
               disabled={isExporting}

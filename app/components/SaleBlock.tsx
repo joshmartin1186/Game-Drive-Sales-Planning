@@ -5,6 +5,7 @@ import { CSS } from '@dnd-kit/utilities'
 import { format, parseISO, addDays, differenceInDays } from 'date-fns'
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { SaleWithDetails } from '@/lib/types'
+import { computeSaleTemporalStatus, getTemporalStatusLabel, getTemporalStatusColor } from '@/lib/dateUtils'
 import styles from './SaleBlock.module.css'
 
 interface SaleBlockProps {
@@ -78,12 +79,17 @@ export default function SaleBlock({
   
   const startDate = parseISO(sale.start_date)
   const endDate = parseISO(sale.end_date)
-  
+
   const displayName = sale.sale_name || 'Custom Sale'
   const discountText = sale.discount_percentage ? `-${sale.discount_percentage}%` : ''
-  
-  // Status badge
-  const statusColors: Record<string, string> = {
+
+  // Compute temporal status based on current date (not stored status)
+  const temporalStatus = computeSaleTemporalStatus(sale.start_date, sale.end_date)
+  const temporalStatusLabel = getTemporalStatusLabel(temporalStatus)
+  const temporalStatusColor = getTemporalStatusColor(temporalStatus)
+
+  // Workflow status colors (for stored status like planned, submitted, confirmed)
+  const workflowStatusColors: Record<string, string> = {
     planned: '#94a3b8',
     submitted: '#f59e0b',
     confirmed: '#22c55e',
@@ -271,14 +277,14 @@ export default function SaleBlock({
             {displayName} {discountText}
           </span>
           
-          {sale.status && (
-            <span 
-              className={styles.statusBadge}
-              style={{ backgroundColor: statusColors[sale.status] || '#6b7280' }}
-            >
-              {sale.status}
-            </span>
-          )}
+          {/* Show computed temporal status (Upcoming/Live/Ended) based on dates */}
+          <span
+            className={styles.statusBadge}
+            style={{ backgroundColor: temporalStatusColor }}
+            title={`Sale dates: ${sale.start_date} to ${sale.end_date}`}
+          >
+            {temporalStatusLabel}
+          </span>
         </div>
         
         <div className={styles.actions}>

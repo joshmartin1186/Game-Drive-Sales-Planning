@@ -1,10 +1,14 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { format, parseISO } from 'date-fns'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { SaleWithDetails, Platform } from '@/lib/types'
 import styles from './VersionManager.module.css'
+
+// Client-side cache for versions to avoid re-fetching
+const versionCache = new Map<string, { versions: CalendarVersion[], timestamp: number }>()
+const CACHE_TTL = 60000 // 1 minute cache
 
 interface CalendarVersion {
   id: string
@@ -61,24 +65,45 @@ export default function VersionManager({
   const [saving, setSaving] = useState(false)
   const [restoring, setRestoring] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  
+
   // Save form state
   const [showSaveForm, setShowSaveForm] = useState(false)
   const [saveName, setSaveName] = useState('')
   const [saveDescription, setSaveDescription] = useState('')
-  
+
   // Preview state
   const [previewVersion, setPreviewVersion] = useState<CalendarVersion | null>(null)
-  
+
   // Confirm restore state
   const [confirmRestore, setConfirmRestore] = useState<CalendarVersion | null>(null)
 
   // Commit state
   const [committing, setCommitting] = useState(false)
 
-  // Fetch versions
-  const fetchVersions = useCallback(async () => {
-    setLoading(true)
+  // Track if initial load is done (for skeleton vs spinner)
+  const hasLoadedOnce = useRef(false)
+
+  // Cache key based on client filter
+  const cacheKey = useMemo(() => `versions-${clientId || 'all'}`, [clientId])
+
+  // Fetch versions with caching
+  const fetchVersions = useCallback(async (forceRefresh = false) => {
+    // Check cache first (unless force refresh)
+    if (!forceRefresh) {
+      const cached = versionCache.get(cacheKey)
+      if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+        setVersions(cached.versions)
+        setLoading(false)
+        hasLoadedOnce.current = true
+        return
+      }
+    }
+
+    // Only show loading spinner on first load, not refreshes
+    if (!hasLoadedOnce.current) {
+      setLoading(true)
+    }
+
     try {
       let query = supabase
         .from('calendar_versions')
@@ -93,14 +118,20 @@ export default function VersionManager({
       const { data, error } = await query
 
       if (error) throw error
-      setVersions(data || [])
+
+      const versionsData = data || []
+      setVersions(versionsData)
+
+      // Update cache
+      versionCache.set(cacheKey, { versions: versionsData, timestamp: Date.now() })
+      hasLoadedOnce.current = true
     } catch (err) {
       console.error('Error fetching versions:', err)
       setError(err instanceof Error ? err.message : 'Failed to load versions')
     } finally {
       setLoading(false)
     }
-  }, [clientId])
+  }, [clientId, cacheKey, supabase])
 
   useEffect(() => {
     if (isOpen) {
@@ -108,74 +139,103 @@ export default function VersionManager({
     }
   }, [isOpen, fetchVersions])
 
-  // Save current state as version
+  // Save current state as version (with optimistic update)
   const handleSaveVersion = async () => {
     if (!saveName.trim()) {
       setError('Please enter a version name')
       return
     }
-    
+
     setSaving(true)
     setError(null)
-    
+
+    // Create snapshot from current sales
+    const snapshot: SaleSnapshot[] = currentSales.map(sale => ({
+      product_id: sale.product_id,
+      platform_id: sale.platform_id,
+      start_date: sale.start_date,
+      end_date: sale.end_date,
+      discount_percentage: sale.discount_percentage || null,
+      sale_name: sale.sale_name || null,
+      sale_type: sale.sale_type,
+      status: sale.status,
+      notes: sale.notes || null,
+      product_name: sale.product?.name,
+      platform_name: sale.platform?.name
+    }))
+
+    // Calculate metadata
+    const productIds = new Set(currentSales.map(s => s.product_id))
+    const platformSummary: Record<string, number> = {}
+    currentSales.forEach(sale => {
+      const platformName = sale.platform?.name || 'Unknown'
+      platformSummary[platformName] = (platformSummary[platformName] || 0) + 1
+    })
+
+    const dates = currentSales.map(s => s.start_date).concat(currentSales.map(s => s.end_date))
+    const sortedDates = dates.sort()
+
+    // Create optimistic version (with temp ID)
+    const tempId = `temp-${Date.now()}`
+    const optimisticVersion: CalendarVersion = {
+      id: tempId,
+      name: saveName.trim(),
+      description: saveDescription.trim() || null,
+      sales_snapshot: snapshot,
+      product_count: productIds.size,
+      sale_count: currentSales.length,
+      platform_summary: platformSummary,
+      date_range_start: sortedDates[0] || null,
+      date_range_end: sortedDates[sortedDates.length - 1] || null,
+      client_id: clientId || null,
+      is_committed: false,
+      committed_at: null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    }
+
+    // Optimistically add to UI immediately
+    setVersions(prev => [optimisticVersion, ...prev])
+    setSaveName('')
+    setSaveDescription('')
+    setShowSaveForm(false)
+
     try {
-      // Create snapshot from current sales
-      const snapshot: SaleSnapshot[] = currentSales.map(sale => ({
-        product_id: sale.product_id,
-        platform_id: sale.platform_id,
-        start_date: sale.start_date,
-        end_date: sale.end_date,
-        discount_percentage: sale.discount_percentage || null,
-        sale_name: sale.sale_name || null,
-        sale_type: sale.sale_type,
-        status: sale.status,
-        notes: sale.notes || null,
-        product_name: sale.product?.name,
-        platform_name: sale.platform?.name
-      }))
-      
-      // Calculate metadata
-      const productIds = new Set(currentSales.map(s => s.product_id))
-      const platformSummary: Record<string, number> = {}
-      currentSales.forEach(sale => {
-        const platformName = sale.platform?.name || 'Unknown'
-        platformSummary[platformName] = (platformSummary[platformName] || 0) + 1
-      })
-      
-      const dates = currentSales.map(s => s.start_date).concat(currentSales.map(s => s.end_date))
-      const sortedDates = dates.sort()
-      
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('calendar_versions')
         .insert({
-          name: saveName.trim(),
-          description: saveDescription.trim() || null,
+          name: optimisticVersion.name,
+          description: optimisticVersion.description,
           sales_snapshot: snapshot,
-          product_count: productIds.size,
-          sale_count: currentSales.length,
+          product_count: optimisticVersion.product_count,
+          sale_count: optimisticVersion.sale_count,
           platform_summary: platformSummary,
-          date_range_start: sortedDates[0] || null,
-          date_range_end: sortedDates[sortedDates.length - 1] || null,
-          client_id: clientId || null
+          date_range_start: optimisticVersion.date_range_start,
+          date_range_end: optimisticVersion.date_range_end,
+          client_id: optimisticVersion.client_id
         })
-      
+        .select()
+        .single()
+
       if (error) throw error
-      
-      // Reset form and refresh
-      setSaveName('')
-      setSaveDescription('')
-      setShowSaveForm(false)
-      await fetchVersions()
-      
+
+      // Replace temp version with real one
+      setVersions(prev => prev.map(v => v.id === tempId ? data : v))
+
+      // Invalidate cache so next open gets fresh data
+      versionCache.delete(cacheKey)
+
     } catch (err) {
       console.error('Error saving version:', err)
+      // Remove optimistic version on error
+      setVersions(prev => prev.filter(v => v.id !== tempId))
       setError(err instanceof Error ? err.message : 'Failed to save version')
     } finally {
       setSaving(false)
     }
   }
 
-  // Delete a version
+  // Delete a version (with optimistic update)
   const handleDeleteVersion = async (versionId: string) => {
     const version = versions.find(v => v.id === versionId)
     if (version?.is_committed) {
@@ -185,26 +245,35 @@ export default function VersionManager({
     if (!confirm('Are you sure you want to delete this version? This cannot be undone.')) {
       return
     }
-    
+
+    // Store for rollback
+    const previousVersions = versions
+
+    // Optimistically remove immediately
+    setVersions(prev => prev.filter(v => v.id !== versionId))
+    if (previewVersion?.id === versionId) {
+      setPreviewVersion(null)
+    }
+
     try {
       const { error } = await supabase
         .from('calendar_versions')
         .delete()
         .eq('id', versionId)
-      
+
       if (error) throw error
-      
-      setVersions(prev => prev.filter(v => v.id !== versionId))
-      if (previewVersion?.id === versionId) {
-        setPreviewVersion(null)
-      }
+
+      // Invalidate cache
+      versionCache.delete(cacheKey)
     } catch (err) {
       console.error('Error deleting version:', err)
+      // Rollback on error
+      setVersions(previousVersions)
       setError(err instanceof Error ? err.message : 'Failed to delete version')
     }
   }
 
-  // Commit a version (make it the active sales calendar)
+  // Commit a version (with optimistic update)
   const handleCommitVersion = async (version: CalendarVersion) => {
     const targetClientId = version.client_id || clientId
     if (!targetClientId) {
@@ -214,6 +283,22 @@ export default function VersionManager({
 
     setCommitting(true)
     setError(null)
+
+    // Store for rollback
+    const previousVersions = versions
+    const committedAt = new Date().toISOString()
+
+    // Optimistically update UI
+    setVersions(prev => prev.map(v => {
+      if (v.id === version.id) {
+        return { ...v, is_committed: true, committed_at: committedAt, client_id: targetClientId }
+      }
+      // Uncommit others for this client
+      if (v.client_id === targetClientId && v.is_committed) {
+        return { ...v, is_committed: false, committed_at: null }
+      }
+      return v
+    }))
 
     try {
       // Uncommit any currently committed version for this client
@@ -230,26 +315,37 @@ export default function VersionManager({
         .from('calendar_versions')
         .update({
           is_committed: true,
-          committed_at: new Date().toISOString(),
+          committed_at: committedAt,
           client_id: targetClientId
         })
         .eq('id', version.id)
 
       if (commitError) throw commitError
 
-      await fetchVersions()
+      // Invalidate cache
+      versionCache.delete(cacheKey)
     } catch (err) {
       console.error('Error committing version:', err)
+      // Rollback on error
+      setVersions(previousVersions)
       setError(err instanceof Error ? err.message : 'Failed to commit version')
     } finally {
       setCommitting(false)
     }
   }
 
-  // Uncommit a version
+  // Uncommit a version (with optimistic update)
   const handleUncommitVersion = async (version: CalendarVersion) => {
     setCommitting(true)
     setError(null)
+
+    // Store for rollback
+    const previousVersions = versions
+
+    // Optimistically update UI
+    setVersions(prev => prev.map(v =>
+      v.id === version.id ? { ...v, is_committed: false, committed_at: null } : v
+    ))
 
     try {
       const { error } = await supabase
@@ -258,9 +354,13 @@ export default function VersionManager({
         .eq('id', version.id)
 
       if (error) throw error
-      await fetchVersions()
+
+      // Invalidate cache
+      versionCache.delete(cacheKey)
     } catch (err) {
       console.error('Error uncommitting version:', err)
+      // Rollback on error
+      setVersions(previousVersions)
       setError(err instanceof Error ? err.message : 'Failed to uncommit version')
     } finally {
       setCommitting(false)
@@ -373,8 +473,32 @@ export default function VersionManager({
           <div className={styles.versionsList}>
             <h3>Saved Versions ({versions.length})</h3>
             
-            {loading ? (
-              <div className={styles.loadingState}>Loading versions...</div>
+            {loading && !hasLoadedOnce.current ? (
+              // Skeleton loading on first load
+              <div className={styles.skeletonGrid}>
+                {[1, 2, 3].map(i => (
+                  <div key={i} className={styles.skeletonCard}>
+                    <div className={styles.skeletonHeader}>
+                      <div className={styles.skeletonTitle} />
+                      <div className={styles.skeletonDate} />
+                    </div>
+                    <div className={styles.skeletonStats}>
+                      <div className={styles.skeletonStat} />
+                      <div className={styles.skeletonStat} />
+                    </div>
+                    <div className={styles.skeletonBadges}>
+                      <div className={styles.skeletonBadge} />
+                      <div className={styles.skeletonBadge} />
+                      <div className={styles.skeletonBadge} />
+                    </div>
+                    <div className={styles.skeletonActions}>
+                      <div className={styles.skeletonButton} />
+                      <div className={styles.skeletonButton} />
+                      <div className={styles.skeletonButton} />
+                    </div>
+                  </div>
+                ))}
+              </div>
             ) : versions.length === 0 ? (
               <div className={styles.emptyState}>
                 <p>No saved versions yet.</p>

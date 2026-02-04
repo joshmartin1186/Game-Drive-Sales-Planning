@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { Sidebar } from '../components/Sidebar'
 import { useAuth } from '@/lib/auth-context'
+import { format, differenceInDays, parseISO } from 'date-fns'
 import * as XLSX from 'xlsx'
 
 interface Sale {
@@ -13,17 +14,29 @@ interface Sale {
   discount_percentage: number | null
   sale_name: string | null
   status: string
+  sale_type: string | null
   products: {
+    id: string
     name: string
+    launch_date: string | null
     games: {
+      id: string
       name: string
+      clients: {
+        id: string
+        name: string
+      } | null
     } | null
   } | null
   platforms: {
+    id: string
     name: string
     cooldown_days: number
+    color_hex: string
   } | null
 }
+
+type ExportStructure = 'flat' | 'by-client' | 'by-game' | 'by-platform'
 
 export default function ExportPage() {
   const supabase = createClientComponentClient()
@@ -33,6 +46,8 @@ export default function ExportPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [exportFormat, setExportFormat] = useState<'csv' | 'xlsx'>('xlsx')
   const [dateFilter, setDateFilter] = useState('all')
+  const [exportStructure, setExportStructure] = useState<ExportStructure>('flat')
+  const [includeSummary, setIncludeSummary] = useState(true)
   const [isExporting, setIsExporting] = useState(false)
 
   useEffect(() => {
@@ -45,8 +60,8 @@ export default function ExportPage() {
       .from('sales')
       .select(`
         *,
-        products (name, games (name)),
-        platforms (name, cooldown_days)
+        products (id, name, launch_date, games (id, name, clients (id, name))),
+        platforms (id, name, cooldown_days, color_hex)
       `)
       .order('start_date', { ascending: false })
 
@@ -96,6 +111,7 @@ export default function ExportPage() {
 
   const buildExportData = () => {
     const headers = [
+      'Client',
       'Game Name',
       'Product',
       'Platform',
@@ -104,11 +120,13 @@ export default function ExportPage() {
       'Duration (Days)',
       'Discount %',
       'Sale Name',
+      'Sale Type',
       'Status',
       'Cooldown End'
     ]
 
     const rows = sales.map(sale => [
+      sale.products?.games?.clients?.name || '',
       sale.products?.games?.name || '',
       sale.products?.name || '',
       sale.platforms?.name || '',
@@ -117,6 +135,7 @@ export default function ExportPage() {
       calculateDuration(sale.start_date, sale.end_date),
       sale.discount_percentage || '',
       sale.sale_name || '',
+      sale.sale_type || '',
       sale.status,
       sale.platforms ? calculateCooldownEnd(sale.end_date, sale.platforms.cooldown_days) : ''
     ])
@@ -124,37 +143,218 @@ export default function ExportPage() {
     return { headers, rows }
   }
 
+  // Build summary statistics
+  const buildSummaryStats = () => {
+    const totalSales = sales.length
+    const totalDays = sales.reduce((acc, sale) => acc + calculateDuration(sale.start_date, sale.end_date), 0)
+    const avgDiscount = sales.length > 0
+      ? Math.round(sales.reduce((acc, sale) => acc + (sale.discount_percentage || 0), 0) / sales.length)
+      : 0
+
+    // Group by status
+    const byStatus: Record<string, number> = {}
+    sales.forEach(sale => {
+      byStatus[sale.status] = (byStatus[sale.status] || 0) + 1
+    })
+
+    // Group by platform
+    const byPlatform: Record<string, number> = {}
+    sales.forEach(sale => {
+      const platformName = sale.platforms?.name || 'Unknown'
+      byPlatform[platformName] = (byPlatform[platformName] || 0) + 1
+    })
+
+    // Group by client
+    const byClient: Record<string, number> = {}
+    sales.forEach(sale => {
+      const clientName = sale.products?.games?.clients?.name || 'Unknown'
+      byClient[clientName] = (byClient[clientName] || 0) + 1
+    })
+
+    return {
+      totalSales,
+      totalDays,
+      avgDiscount,
+      byStatus,
+      byPlatform,
+      byClient
+    }
+  }
+
+  // Build structured export for multi-sheet Excel
+  const buildStructuredExport = (wb: XLSX.WorkBook) => {
+    const stats = buildSummaryStats()
+
+    // Summary sheet
+    if (includeSummary) {
+      const summaryData: (string | number)[][] = [
+        ['Sales Export Summary'],
+        [],
+        ['Total Sales', stats.totalSales],
+        ['Total Sale Days', stats.totalDays],
+        ['Average Discount', `${stats.avgDiscount}%`],
+        [],
+        ['By Status'],
+        ...Object.entries(stats.byStatus).map(([status, count]) => [`  ${status}`, count]),
+        [],
+        ['By Platform'],
+        ...Object.entries(stats.byPlatform).sort((a, b) => b[1] - a[1]).map(([platform, count]) => [`  ${platform}`, count]),
+        [],
+        ['By Client'],
+        ...Object.entries(stats.byClient).sort((a, b) => b[1] - a[1]).map(([client, count]) => [`  ${client}`, count]),
+        [],
+        [`Generated: ${format(new Date(), 'MMMM d, yyyy HH:mm')}`]
+      ]
+      const summaryWs = XLSX.utils.aoa_to_sheet(summaryData)
+      summaryWs['!cols'] = [{ wch: 25 }, { wch: 15 }]
+      XLSX.utils.book_append_sheet(wb, summaryWs, 'Summary')
+    }
+
+    if (exportStructure === 'flat') {
+      // Single flat sheet with all data
+      const { headers, rows } = buildExportData()
+      const wsData = [headers, ...rows]
+      const ws = XLSX.utils.aoa_to_sheet(wsData)
+      ws['!cols'] = [
+        { wch: 18 }, // Client
+        { wch: 20 }, // Game
+        { wch: 20 }, // Product
+        { wch: 14 }, // Platform
+        { wch: 12 }, // Start
+        { wch: 12 }, // End
+        { wch: 8 },  // Duration
+        { wch: 10 }, // Discount
+        { wch: 25 }, // Sale Name
+        { wch: 12 }, // Sale Type
+        { wch: 12 }, // Status
+        { wch: 14 }, // Cooldown End
+      ]
+      XLSX.utils.book_append_sheet(wb, ws, 'All Sales')
+
+    } else if (exportStructure === 'by-client') {
+      // Group sales by client, each client gets a sheet
+      const clientGroups: Record<string, Sale[]> = {}
+      sales.forEach(sale => {
+        const clientName = sale.products?.games?.clients?.name || 'No Client'
+        if (!clientGroups[clientName]) clientGroups[clientName] = []
+        clientGroups[clientName].push(sale)
+      })
+
+      Object.entries(clientGroups).forEach(([clientName, clientSales]) => {
+        const headers = ['Game', 'Product', 'Platform', 'Start Date', 'End Date', 'Duration', 'Discount %', 'Sale Name', 'Status']
+        const rows = clientSales.map(sale => [
+          sale.products?.games?.name || '',
+          sale.products?.name || '',
+          sale.platforms?.name || '',
+          sale.start_date,
+          sale.end_date,
+          calculateDuration(sale.start_date, sale.end_date),
+          sale.discount_percentage || '',
+          sale.sale_name || '',
+          sale.status
+        ])
+        const wsData = [
+          [`Client: ${clientName}`],
+          [`Total Sales: ${clientSales.length}`],
+          [],
+          headers,
+          ...rows
+        ]
+        const ws = XLSX.utils.aoa_to_sheet(wsData)
+        ws['!cols'] = [{ wch: 20 }, { wch: 20 }, { wch: 14 }, { wch: 12 }, { wch: 12 }, { wch: 8 }, { wch: 10 }, { wch: 25 }, { wch: 12 }]
+        // Truncate sheet name to 31 chars (Excel limit)
+        const sheetName = clientName.substring(0, 31).replace(/[\\/\\?\\*\\[\\]]/g, '')
+        XLSX.utils.book_append_sheet(wb, ws, sheetName)
+      })
+
+    } else if (exportStructure === 'by-game') {
+      // Group sales by game, each game gets a sheet
+      const gameGroups: Record<string, Sale[]> = {}
+      sales.forEach(sale => {
+        const gameName = sale.products?.games?.name || 'No Game'
+        if (!gameGroups[gameName]) gameGroups[gameName] = []
+        gameGroups[gameName].push(sale)
+      })
+
+      Object.entries(gameGroups).forEach(([gameName, gameSales]) => {
+        const clientName = gameSales[0]?.products?.games?.clients?.name || ''
+        const headers = ['Product', 'Platform', 'Start Date', 'End Date', 'Duration', 'Discount %', 'Sale Name', 'Status']
+        const rows = gameSales.map(sale => [
+          sale.products?.name || '',
+          sale.platforms?.name || '',
+          sale.start_date,
+          sale.end_date,
+          calculateDuration(sale.start_date, sale.end_date),
+          sale.discount_percentage || '',
+          sale.sale_name || '',
+          sale.status
+        ])
+        const wsData = [
+          [`Game: ${gameName}`],
+          [`Client: ${clientName}`],
+          [`Total Sales: ${gameSales.length}`],
+          [],
+          headers,
+          ...rows
+        ]
+        const ws = XLSX.utils.aoa_to_sheet(wsData)
+        ws['!cols'] = [{ wch: 20 }, { wch: 14 }, { wch: 12 }, { wch: 12 }, { wch: 8 }, { wch: 10 }, { wch: 25 }, { wch: 12 }]
+        const sheetName = gameName.substring(0, 31).replace(/[\\/\\?\\*\\[\\]]/g, '')
+        XLSX.utils.book_append_sheet(wb, ws, sheetName)
+      })
+
+    } else if (exportStructure === 'by-platform') {
+      // Group sales by platform, each platform gets a sheet
+      const platformGroups: Record<string, Sale[]> = {}
+      sales.forEach(sale => {
+        const platformName = sale.platforms?.name || 'No Platform'
+        if (!platformGroups[platformName]) platformGroups[platformName] = []
+        platformGroups[platformName].push(sale)
+      })
+
+      Object.entries(platformGroups).forEach(([platformName, platformSales]) => {
+        const headers = ['Client', 'Game', 'Product', 'Start Date', 'End Date', 'Duration', 'Discount %', 'Sale Name', 'Status']
+        const rows = platformSales.map(sale => [
+          sale.products?.games?.clients?.name || '',
+          sale.products?.games?.name || '',
+          sale.products?.name || '',
+          sale.start_date,
+          sale.end_date,
+          calculateDuration(sale.start_date, sale.end_date),
+          sale.discount_percentage || '',
+          sale.sale_name || '',
+          sale.status
+        ])
+        const wsData = [
+          [`Platform: ${platformName}`],
+          [`Total Sales: ${platformSales.length}`],
+          [],
+          headers,
+          ...rows
+        ]
+        const ws = XLSX.utils.aoa_to_sheet(wsData)
+        ws['!cols'] = [{ wch: 18 }, { wch: 20 }, { wch: 20 }, { wch: 12 }, { wch: 12 }, { wch: 8 }, { wch: 10 }, { wch: 25 }, { wch: 12 }]
+        const sheetName = platformName.substring(0, 31).replace(/[\\/\\?\\*\\[\\]]/g, '')
+        XLSX.utils.book_append_sheet(wb, ws, sheetName)
+      })
+    }
+  }
+
   const handleExport = async () => {
     setIsExporting(true)
-    
+
     try {
       const { headers, rows } = buildExportData()
-      const filename = `gamedrive-sales-export-${new Date().toISOString().split('T')[0]}`
+      const structureSuffix = exportStructure === 'flat' ? '' : `-by-${exportStructure.replace('by-', '')}`
+      const filename = `gamedrive-sales-export${structureSuffix}-${format(new Date(), 'yyyy-MM-dd')}`
 
       if (exportFormat === 'xlsx') {
-        // Create workbook and worksheet
+        // Create workbook with structured sheets
         const wb = XLSX.utils.book_new()
-        const wsData = [headers, ...rows]
-        const ws = XLSX.utils.aoa_to_sheet(wsData)
-
-        // Set column widths
-        ws['!cols'] = [
-          { wch: 20 }, // Game Name
-          { wch: 20 }, // Product
-          { wch: 12 }, // Platform
-          { wch: 12 }, // Start Date
-          { wch: 12 }, // End Date
-          { wch: 8 },  // Duration
-          { wch: 10 }, // Discount
-          { wch: 25 }, // Sale Name
-          { wch: 12 }, // Status
-          { wch: 14 }, // Cooldown End
-        ]
-
-        XLSX.utils.book_append_sheet(wb, ws, 'Sales')
+        buildStructuredExport(wb)
         XLSX.writeFile(wb, `${filename}.xlsx`)
       } else {
-        // CSV export
+        // CSV export (flat only for CSV)
         const csvContent = [
           headers.join(','),
           ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
@@ -221,7 +421,7 @@ export default function ExportPage() {
           }}>
             <h2 style={{ fontSize: '16px', fontWeight: 600, color: '#1e293b', margin: '0 0 16px 0' }}>Export Options</h2>
             
-            <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap', marginBottom: '20px' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, color: '#374151', marginBottom: '6px' }}>
                   Date Range
@@ -265,30 +465,74 @@ export default function ExportPage() {
                 </select>
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'flex-end' }}>
-                <button
-                  onClick={handleExport}
-                  disabled={isExporting || sales.length === 0}
+              <div>
+                <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, color: '#374151', marginBottom: '6px' }}>
+                  Structure {exportFormat === 'csv' && <span style={{ color: '#9ca3af', fontWeight: 400 }}>(xlsx only)</span>}
+                </label>
+                <select
+                  value={exportStructure}
+                  onChange={(e) => setExportStructure(e.target.value as ExportStructure)}
+                  disabled={exportFormat === 'csv'}
                   style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    padding: '10px 24px',
-                    backgroundColor: sales.length === 0 ? '#94a3b8' : '#2563eb',
-                    color: 'white',
-                    border: 'none',
+                    padding: '10px 12px',
+                    border: '1px solid #e2e8f0',
                     borderRadius: '8px',
                     fontSize: '14px',
-                    fontWeight: 500,
-                    cursor: sales.length === 0 ? 'not-allowed' : 'pointer'
+                    minWidth: '180px',
+                    backgroundColor: exportFormat === 'csv' ? '#f8fafc' : 'white'
                   }}
                 >
-                  <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                  {isExporting ? 'Exporting...' : `Download ${exportFormat.toUpperCase()}`}
-                </button>
+                  <option value="flat">Flat (All Sales)</option>
+                  <option value="by-client">By Client (sheets)</option>
+                  <option value="by-game">By Game (sheets)</option>
+                  <option value="by-platform">By Platform (sheets)</option>
+                </select>
               </div>
+            </div>
+
+            {/* Additional Options */}
+            {exportFormat === 'xlsx' && (
+              <div style={{ display: 'flex', gap: '20px', marginBottom: '20px', paddingTop: '16px', borderTop: '1px solid #e2e8f0' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={includeSummary}
+                    onChange={(e) => setIncludeSummary(e.target.checked)}
+                    style={{ width: '16px', height: '16px', accentColor: '#2563eb' }}
+                  />
+                  <span style={{ fontSize: '14px', color: '#374151' }}>
+                    Include Summary Sheet
+                  </span>
+                  <span style={{ fontSize: '12px', color: '#9ca3af' }}>
+                    (stats, breakdowns by status/platform/client)
+                  </span>
+                </label>
+              </div>
+            )}
+
+            <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+              <button
+                onClick={handleExport}
+                disabled={isExporting || sales.length === 0}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '10px 24px',
+                  backgroundColor: sales.length === 0 ? '#94a3b8' : '#2563eb',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  fontWeight: 500,
+                  cursor: sales.length === 0 ? 'not-allowed' : 'pointer'
+                }}
+              >
+                <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                {isExporting ? 'Exporting...' : `Download ${exportFormat.toUpperCase()}`}
+              </button>
             </div>
           </div>
 

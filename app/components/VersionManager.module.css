@@ -207,6 +207,90 @@
   color: #6b7280;
 }
 
+/* Skeleton loading state */
+.skeletonGrid {
+  display: grid;
+  gap: 16px;
+}
+
+.skeletonCard {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 16px;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.skeletonHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 12px;
+}
+
+.skeletonTitle {
+  height: 20px;
+  width: 60%;
+  background: #e5e7eb;
+  border-radius: 4px;
+}
+
+.skeletonDate {
+  height: 12px;
+  width: 80px;
+  background: #e5e7eb;
+  border-radius: 4px;
+}
+
+.skeletonStats {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.skeletonStat {
+  height: 16px;
+  width: 70px;
+  background: #e5e7eb;
+  border-radius: 4px;
+}
+
+.skeletonBadges {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.skeletonBadge {
+  height: 20px;
+  width: 60px;
+  background: #e5e7eb;
+  border-radius: 4px;
+}
+
+.skeletonActions {
+  display: flex;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid #f3f4f6;
+}
+
+.skeletonButton {
+  height: 30px;
+  width: 70px;
+  background: #e5e7eb;
+  border-radius: 4px;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
 .emptyState p {
   margin: 0 0 8px 0;
 }

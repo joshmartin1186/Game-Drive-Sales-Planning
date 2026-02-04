@@ -496,3 +496,53 @@
 .doneBtn:hover {
   background: #111827;
 }
+
+/* Platform selection checkboxes */
+.platformCheckboxes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.platformCheckbox {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 0.875rem;
+}
+
+.platformCheckbox:hover {
+  border-color: #3b82f6;
+  background: #f0f9ff;
+}
+
+.platformCheckbox input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: #3b82f6;
+}
+
+.platformCheckbox input[type="checkbox"]:checked + .platformColorDot + span {
+  font-weight: 500;
+}
+
+.platformColorDot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.selectedCount {
+  margin-top: 8px;
+  font-size: 0.8rem;
+  color: #3b82f6;
+  font-weight: 500;
+}

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo, useEffect } from 'react'
-import { format, parseISO, addMonths } from 'date-fns'
+import { format, parseISO, addMonths, addDays } from 'date-fns'
 import { CalendarVariation, GeneratedSale, generateSaleCalendar, getDefaultSelectedPlatforms } from '@/lib/sale-calendar-generator'
 import { Platform, PlatformEvent, SaleWithDetails } from '@/lib/types'
 import CalendarExport from './CalendarExport'
@@ -18,6 +18,8 @@ interface SaleCalendarPreviewModalProps {
   existingSales: SaleWithDetails[]
   onApply: (sales: GeneratedSale[]) => Promise<void>
   isApplying: boolean
+  // Optional: Pre-selected platform IDs (from product's available platforms)
+  initialPlatformIds?: string[]
 }
 
 export default function SaleCalendarPreviewModal({
@@ -30,31 +32,60 @@ export default function SaleCalendarPreviewModal({
   platformEvents,
   existingSales,
   onApply,
-  isApplying
+  isApplying,
+  initialPlatformIds
 }: SaleCalendarPreviewModalProps) {
-  // Step 1: Platform selection, Step 2: Strategy selection
+  // Mode selection: 'choose' = pick mode, 'quick' = quick generate, 'advanced' = full wizard
+  type GenerationMode = 'choose' | 'quick' | 'advanced'
+  const [mode, setMode] = useState<GenerationMode>('choose')
+
+  // Step 1: Platform selection, Step 2: Strategy selection (for advanced mode)
   const [step, setStep] = useState<1 | 2>(1)
   const [selectedPlatformIds, setSelectedPlatformIds] = useState<string[]>([])
   const [variations, setVariations] = useState<CalendarVariation[]>([])
   const [selectedVariation, setSelectedVariation] = useState(1) // Default to "Balanced"
   const [selectedPlatform, setSelectedPlatform] = useState<string | 'all'>('all')
   const [showExport, setShowExport] = useState(false)
+
+  // Timeframe options
+  type TimeframeMode = 'months' | 'custom'
+  const [timeframeMode, setTimeframeMode] = useState<TimeframeMode>('months')
+  const [monthCount, setMonthCount] = useState(12) // Default: 12 months
+  const [customEndDate, setCustomEndDate] = useState('')
   
-  // Initialize selected platforms (exclude 0-day cooldown by default)
+  // Initialize selected platforms (use initialPlatformIds if provided, otherwise exclude 0-day cooldown by default)
   useEffect(() => {
     if (isOpen && platforms.length > 0) {
-      setSelectedPlatformIds(getDefaultSelectedPlatforms(platforms))
+      if (initialPlatformIds && initialPlatformIds.length > 0) {
+        // Use pre-selected platforms from product's available platforms
+        setSelectedPlatformIds(initialPlatformIds)
+      } else {
+        // Default behavior: exclude 0-day cooldown platforms
+        setSelectedPlatformIds(getDefaultSelectedPlatforms(platforms))
+      }
+      setMode('choose')
       setStep(1)
       setVariations([])
+      // Reset timeframe to defaults
+      setTimeframeMode('months')
+      setMonthCount(12)
+      setCustomEndDate('')
     }
-  }, [isOpen, platforms])
+  }, [isOpen, platforms, initialPlatformIds])
   
   const currentVariation = variations[selectedVariation]
   
-  // Calculate period end (12 months from launch)
+  // Calculate period end based on selected timeframe
+  const periodEndDate = useMemo(() => {
+    if (timeframeMode === 'custom' && customEndDate) {
+      return parseISO(customEndDate)
+    }
+    return addDays(addMonths(parseISO(launchDate), monthCount), -1)
+  }, [launchDate, timeframeMode, monthCount, customEndDate])
+
   const periodEnd = useMemo(() => {
-    return format(addMonths(parseISO(launchDate), 12), 'MMM d, yyyy')
-  }, [launchDate])
+    return format(periodEndDate, 'MMM d, yyyy')
+  }, [periodEndDate])
   
   // Get unique platforms from the sales for filtering
   const variationPlatforms = useMemo(() => {
@@ -110,10 +141,39 @@ export default function SaleCalendarPreviewModal({
     setSelectedPlatformIds([])
   }
   
-  // Generate calendar with selected platforms
+  // Generate calendar with selected platforms and timeframe
   const handleGenerate = () => {
     if (selectedPlatformIds.length === 0) return
-    
+
+    const params: Parameters<typeof generateSaleCalendar>[0] = {
+      productId,
+      platforms,
+      platformEvents,
+      launchDate,
+      defaultDiscount: 50,
+      existingSales,
+      selectedPlatformIds
+    }
+
+    // Add timeframe parameters based on mode
+    if (timeframeMode === 'custom' && customEndDate) {
+      params.endDate = customEndDate
+    } else if (monthCount !== 12) {
+      params.monthCount = monthCount
+    }
+
+    const newVariations = generateSaleCalendar(params)
+
+    setVariations(newVariations)
+    setSelectedVariation(1) // Default to Balanced
+    setSelectedPlatform('all')
+    setStep(2)
+  }
+
+  // Quick generate: Use defaults (selected platforms, 12 months, balanced strategy)
+  const handleQuickGenerate = () => {
+    if (selectedPlatformIds.length === 0) return
+
     const newVariations = generateSaleCalendar({
       productId,
       platforms,
@@ -123,14 +183,26 @@ export default function SaleCalendarPreviewModal({
       existingSales,
       selectedPlatformIds
     })
-    
+
     setVariations(newVariations)
-    setSelectedVariation(1) // Default to Balanced
+    setSelectedVariation(1) // Balanced strategy
     setSelectedPlatform('all')
-    setStep(2)
+    setMode('quick')
   }
-  
-  // Go back to platform selection
+
+  // Enter advanced mode
+  const handleAdvancedMode = () => {
+    setMode('advanced')
+    setStep(1)
+  }
+
+  // Go back to mode selection
+  const handleBackToModeSelection = () => {
+    setMode('choose')
+    setVariations([])
+  }
+
+  // Go back to platform selection (advanced mode)
   const handleBack = () => {
     setStep(1)
   }
@@ -172,9 +244,9 @@ export default function SaleCalendarPreviewModal({
               <span className={styles.launchBadge}>🚀 Launch: {format(parseISO(launchDate), 'MMM d, yyyy')}</span>
               <span className={styles.periodBadge}>📅 Planning through {periodEnd}</span>
             </div>
-            {step === 2 && (
+            {(mode === 'quick' || (mode === 'advanced' && step === 2)) && variations.length > 0 && (
               <div className={styles.headerActions}>
-                <button 
+                <button
                   className={styles.exportPngButton}
                   onClick={() => setShowExport(true)}
                   title="Export all variations as PNG for client proposals"
@@ -185,22 +257,180 @@ export default function SaleCalendarPreviewModal({
             )}
             <button className={styles.closeButton} onClick={onClose}>×</button>
           </div>
-          
-          {/* Step Indicator */}
-          <div className={styles.stepIndicator}>
-            <div className={`${styles.step} ${step >= 1 ? styles.activeStep : ''}`}>
-              <span className={styles.stepNumber}>1</span>
-              <span className={styles.stepLabel}>Select Platforms</span>
+
+          {/* Mode Selection Screen */}
+          {mode === 'choose' && (
+            <div className={styles.modeSelection}>
+              <h3 className={styles.modeTitle}>How would you like to generate the calendar?</h3>
+              <div className={styles.modeCards}>
+                <button
+                  className={styles.modeCard}
+                  onClick={handleQuickGenerate}
+                  disabled={selectedPlatformIds.length === 0}
+                >
+                  <span className={styles.modeIcon}>⚡</span>
+                  <span className={styles.modeName}>Quick Generate</span>
+                  <span className={styles.modeDesc}>
+                    Use recommended settings for a balanced sales calendar.
+                    Best for most products.
+                  </span>
+                  <div className={styles.modeDetails}>
+                    <span>✓ {selectedPlatformIds.length} platforms</span>
+                    <span>✓ 12-month period</span>
+                    <span>✓ Balanced strategy</span>
+                  </div>
+                </button>
+
+                <button
+                  className={styles.modeCard}
+                  onClick={handleAdvancedMode}
+                >
+                  <span className={styles.modeIcon}>⚙️</span>
+                  <span className={styles.modeName}>Advanced Options</span>
+                  <span className={styles.modeDesc}>
+                    Customize platforms, timeframe, and strategy.
+                    More control over the generated calendar.
+                  </span>
+                  <div className={styles.modeDetails}>
+                    <span>• Choose platforms</span>
+                    <span>• Set timeframe</span>
+                    <span>• Compare strategies</span>
+                  </div>
+                </button>
+              </div>
+              {selectedPlatformIds.length === 0 && (
+                <p className={styles.modeWarning}>
+                  ⚠️ No platforms available for this product. Please configure platforms first.
+                </p>
+              )}
             </div>
-            <div className={styles.stepConnector} />
-            <div className={`${styles.step} ${step >= 2 ? styles.activeStep : ''}`}>
-              <span className={styles.stepNumber}>2</span>
-              <span className={styles.stepLabel}>Choose Strategy</span>
+          )}
+
+          {/* Quick Mode: Show preview of balanced strategy */}
+          {mode === 'quick' && currentVariation && (
+            <>
+              {/* Quick Stats Bar */}
+              <div className={styles.quickModeHeader}>
+                <span className={styles.quickModeBadge}>⚡ Quick Generate</span>
+                <span className={styles.quickModeStrategy}>Balanced Strategy</span>
+              </div>
+
+              <div className={styles.quickStats}>
+                <div className={styles.quickStat}>
+                  <span className={styles.quickStatValue}>{currentVariation.stats.totalSales}</span>
+                  <span className={styles.quickStatLabel}>Total</span>
+                </div>
+                <div className={styles.quickStatDivider} />
+                <div className={styles.quickStat}>
+                  <span className={styles.quickStatValue}>{currentVariation.stats.totalDaysOnSale}</span>
+                  <span className={styles.quickStatLabel}>Days</span>
+                </div>
+                <div className={styles.quickStatDivider} />
+                <div className={styles.quickStat}>
+                  <span className={styles.quickStatValue}>{currentVariation.stats.eventSales}</span>
+                  <span className={styles.quickStatLabel}>Events</span>
+                </div>
+                <div className={styles.quickStatDivider} />
+                <div className={styles.quickStat}>
+                  <span className={styles.quickStatValue}>{currentVariation.stats.customSales}</span>
+                  <span className={styles.quickStatLabel}>Custom</span>
+                </div>
+                <div className={styles.quickStatDivider} />
+                <div className={styles.quickStat}>
+                  <span className={styles.quickStatValue}>{currentVariation.stats.percentageOnSale}%</span>
+                  <span className={styles.quickStatLabel}>Coverage</span>
+                </div>
+              </div>
+
+              {/* Platform Filter */}
+              <div className={styles.filterBar}>
+                <label>Preview by Platform:</label>
+                <div className={styles.platformTabs}>
+                  <button
+                    className={`${styles.platformTab} ${selectedPlatform === 'all' ? styles.activePlatformTab : ''}`}
+                    onClick={() => setSelectedPlatform('all')}
+                  >
+                    All ({currentVariation.sales.length})
+                  </button>
+                  {variationPlatforms.map(platform => {
+                    const count = currentVariation.sales.filter(s => s.platform_id === platform.id).length
+                    return (
+                      <button
+                        key={platform.id}
+                        className={`${styles.platformTab} ${selectedPlatform === platform.id ? styles.activePlatformTab : ''}`}
+                        onClick={() => setSelectedPlatform(platform.id)}
+                        style={{
+                          '--platform-color': platform.color,
+                          backgroundColor: selectedPlatform === platform.id ? platform.color : undefined
+                        } as React.CSSProperties}
+                      >
+                        {platform.name} ({count})
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Sales List */}
+              <div className={styles.salesList}>
+                {Object.entries(salesByMonth).map(([month, sales]) => (
+                  <div key={month} className={styles.monthGroup}>
+                    <h3 className={styles.monthHeader}>{month}</h3>
+                    <div className={styles.salesGrid}>
+                      {sales.map(sale => (
+                        <div
+                          key={sale.id}
+                          className={`${styles.saleCard} ${sale.is_event ? styles.eventSale : ''}`}
+                          style={{ borderLeftColor: sale.platform_color }}
+                        >
+                          <div className={styles.saleHeader}>
+                            <span
+                              className={styles.platformBadge}
+                              style={{ backgroundColor: sale.platform_color }}
+                            >
+                              {sale.platform_name}
+                            </span>
+                            {sale.is_event && (
+                              <span className={styles.eventBadge}>★ Event</span>
+                            )}
+                          </div>
+                          <div className={styles.saleName}>{sale.sale_name}</div>
+                          <div className={styles.saleDates}>
+                            {format(parseISO(sale.start_date), 'MMM d')} - {format(parseISO(sale.end_date), 'MMM d, yyyy')}
+                          </div>
+                          <div className={styles.saleDiscount}>-{sale.discount_percentage}%</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+
+                {filteredSales.length === 0 && (
+                  <div className={styles.emptySales}>
+                    <p>No sales generated for this selection.</p>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+
+          {/* Advanced Mode: Step Indicator */}
+          {mode === 'advanced' && (
+            <div className={styles.stepIndicator}>
+              <div className={`${styles.step} ${step >= 1 ? styles.activeStep : ''}`}>
+                <span className={styles.stepNumber}>1</span>
+                <span className={styles.stepLabel}>Select Platforms</span>
+              </div>
+              <div className={styles.stepConnector} />
+              <div className={`${styles.step} ${step >= 2 ? styles.activeStep : ''}`}>
+                <span className={styles.stepNumber}>2</span>
+                <span className={styles.stepLabel}>Choose Strategy</span>
+              </div>
             </div>
-          </div>
-          
-          {/* Step 1: Platform Selection */}
-          {step === 1 && (
+          )}
+
+          {/* Step 1: Platform Selection (Advanced Mode) */}
+          {mode === 'advanced' && step === 1 && (
             <div className={styles.platformSelection}>
               <div className={styles.platformHeader}>
                 <h3>Which platforms should be included?</h3>
@@ -262,22 +492,102 @@ export default function SaleCalendarPreviewModal({
               <div className={styles.platformSummary}>
                 <span className={styles.summaryText}>
                   {selectedCount} of {platforms.length} platforms selected
-                  {zeroCooldownCount > 0 && selectedPlatformIds.filter(id => 
+                  {zeroCooldownCount > 0 && selectedPlatformIds.filter(id =>
                     platforms.find(p => p.id === id)?.cooldown_days === 0
                   ).length > 0 && (
                     <span className={styles.warningText}>
-                      (includes {selectedPlatformIds.filter(id => 
+                      (includes {selectedPlatformIds.filter(id =>
                         platforms.find(p => p.id === id)?.cooldown_days === 0
                       ).length} with no cooldown)
                     </span>
                   )}
                 </span>
               </div>
+
+              {/* Timeframe Selection */}
+              <div className={styles.timeframeSection}>
+                <h3>Planning Timeframe</h3>
+                <p className={styles.timeframeSubtext}>
+                  How far ahead should we plan sales?
+                </p>
+
+                <div className={styles.timeframeModes}>
+                  <label className={`${styles.timeframeOption} ${timeframeMode === 'months' ? styles.timeframeSelected : ''}`}>
+                    <input
+                      type="radio"
+                      name="timeframeMode"
+                      checked={timeframeMode === 'months'}
+                      onChange={() => setTimeframeMode('months')}
+                    />
+                    <span className={styles.timeframeOptionContent}>
+                      <span className={styles.timeframeOptionTitle}>📅 Month Duration</span>
+                      <span className={styles.timeframeOptionDesc}>Plan for a set number of months</span>
+                    </span>
+                  </label>
+
+                  <label className={`${styles.timeframeOption} ${timeframeMode === 'custom' ? styles.timeframeSelected : ''}`}>
+                    <input
+                      type="radio"
+                      name="timeframeMode"
+                      checked={timeframeMode === 'custom'}
+                      onChange={() => setTimeframeMode('custom')}
+                    />
+                    <span className={styles.timeframeOptionContent}>
+                      <span className={styles.timeframeOptionTitle}>🎯 Custom End Date</span>
+                      <span className={styles.timeframeOptionDesc}>Specify exact end date</span>
+                    </span>
+                  </label>
+                </div>
+
+                {/* Month Count Selector */}
+                {timeframeMode === 'months' && (
+                  <div className={styles.monthSelector}>
+                    <label htmlFor="monthCount">Duration:</label>
+                    <select
+                      id="monthCount"
+                      value={monthCount}
+                      onChange={(e) => setMonthCount(Number(e.target.value))}
+                      className={styles.monthSelect}
+                    >
+                      <option value={3}>3 months</option>
+                      <option value={6}>6 months</option>
+                      <option value={9}>9 months</option>
+                      <option value={12}>12 months (default)</option>
+                      <option value={18}>18 months</option>
+                      <option value={24}>24 months (2 years)</option>
+                      <option value={36}>36 months (3 years)</option>
+                    </select>
+                    <span className={styles.datePreview}>
+                      Through {format(addDays(addMonths(parseISO(launchDate), monthCount), -1), 'MMM d, yyyy')}
+                    </span>
+                  </div>
+                )}
+
+                {/* Custom End Date Picker */}
+                {timeframeMode === 'custom' && (
+                  <div className={styles.customDatePicker}>
+                    <label htmlFor="customEndDate">End Date:</label>
+                    <input
+                      type="date"
+                      id="customEndDate"
+                      value={customEndDate}
+                      onChange={(e) => setCustomEndDate(e.target.value)}
+                      min={format(addMonths(parseISO(launchDate), 1), 'yyyy-MM-dd')}
+                      className={styles.dateInput}
+                    />
+                    {customEndDate && (
+                      <span className={styles.datePreview}>
+                        {Math.ceil((parseISO(customEndDate).getTime() - parseISO(launchDate).getTime()) / (1000 * 60 * 60 * 24 * 30))} months of planning
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           )}
           
-          {/* Step 2: Strategy Selection */}
-          {step === 2 && (
+          {/* Step 2: Strategy Selection (Advanced Mode) */}
+          {mode === 'advanced' && step === 2 && (
             <>
               {/* Big Variation Selector */}
               <div className={styles.variationSelector}>
@@ -414,20 +724,52 @@ export default function SaleCalendarPreviewModal({
           
           {/* Footer Actions */}
           <div className={styles.footer}>
-            {step === 1 ? (
+            {/* Mode Selection Footer */}
+            {mode === 'choose' && (
+              <button className={styles.cancelButton} onClick={onClose}>
+                Cancel
+              </button>
+            )}
+
+            {/* Quick Mode Footer */}
+            {mode === 'quick' && (
               <>
-                <button className={styles.cancelButton} onClick={onClose}>
-                  Cancel
+                <button className={styles.backButton} onClick={handleBackToModeSelection}>
+                  ← Back
                 </button>
-                <button 
-                  className={styles.generateButton} 
+                <div className={styles.footerRight}>
+                  <button className={styles.cancelButton} onClick={onClose} disabled={isApplying}>
+                    Cancel
+                  </button>
+                  <button
+                    className={styles.applyButton}
+                    onClick={handleApply}
+                    disabled={isApplying || !currentVariation || currentVariation.sales.length === 0}
+                  >
+                    {isApplying ? 'Creating Sales...' : `Apply ${currentVariation?.stats.totalSales || 0} Sales`}
+                  </button>
+                </div>
+              </>
+            )}
+
+            {/* Advanced Mode Step 1 Footer */}
+            {mode === 'advanced' && step === 1 && (
+              <>
+                <button className={styles.backButton} onClick={handleBackToModeSelection}>
+                  ← Back
+                </button>
+                <button
+                  className={styles.generateButton}
                   onClick={handleGenerate}
                   disabled={selectedPlatformIds.length === 0}
                 >
                   Generate Calendar →
                 </button>
               </>
-            ) : (
+            )}
+
+            {/* Advanced Mode Step 2 Footer */}
+            {mode === 'advanced' && step === 2 && (
               <>
                 <button className={styles.backButton} onClick={handleBack}>
                   ← Back to Platforms
@@ -436,8 +778,8 @@ export default function SaleCalendarPreviewModal({
                   <button className={styles.cancelButton} onClick={onClose} disabled={isApplying}>
                     Cancel
                   </button>
-                  <button 
-                    className={styles.applyButton} 
+                  <button
+                    className={styles.applyButton}
                     onClick={handleApply}
                     disabled={isApplying || !currentVariation || currentVariation.sales.length === 0}
                   >
@@ -456,6 +798,7 @@ export default function SaleCalendarPreviewModal({
         onClose={() => setShowExport(false)}
         productName={productName}
         launchDate={launchDate}
+        endDate={format(periodEndDate, 'yyyy-MM-dd')}
         variations={variations}
       />
     </>

@@ -2,23 +2,24 @@
 
 import { useState } from 'react'
 import { format } from 'date-fns'
-import { Client, Game, Product } from '@/lib/types'
+import { Client, Game, Platform, Product } from '@/lib/types'
 import styles from './ProductManager.module.css'
 
 interface ProductManagerProps {
   clients: Client[]
   games: (Game & { client: Client })[]
   products: (Product & { game: Game & { client: Client } })[]
+  platforms: Platform[]
   onClientCreate: (client: Omit<Client, 'id' | 'created_at'>) => Promise<void>
-  onGameCreate: (game: Omit<Game, 'id' | 'created_at'>) => Promise<void>
-  onProductCreate: (product: Omit<Product, 'id' | 'created_at'>) => Promise<Product | void>
+  onGameCreate: (game: Omit<Game, 'id' | 'created_at'>) => Promise<(Game & { client: Client }) | void>
+  onProductCreate: (product: Omit<Product, 'id' | 'created_at'>, platformIds?: string[]) => Promise<Product | void>
   onClientDelete?: (id: string) => Promise<void>
   onGameDelete?: (id: string) => Promise<void>
   onProductDelete?: (id: string) => Promise<void>
   onClientUpdate?: (id: string, updates: Partial<Client>) => Promise<void>
   onGameUpdate?: (id: string, updates: Partial<Game>) => Promise<void>
-  onProductUpdate?: (id: string, updates: Partial<Product>) => Promise<void>
-  onGenerateCalendar?: (productId: string, productName: string, launchDate?: string) => void
+  onProductUpdate?: (id: string, updates: Partial<Product>, platformIds?: string[]) => Promise<void>
+  onGenerateCalendar?: (productId: string, productName: string, launchDate?: string, platformIds?: string[]) => void
   onClose: () => void
 }
 
@@ -34,6 +35,7 @@ export default function ProductManager({
   clients,
   games,
   products,
+  platforms,
   onClientCreate,
   onGameCreate,
   onProductCreate,
@@ -60,6 +62,8 @@ export default function ProductManager({
   const [gameName, setGameName] = useState('')
   const [gameClientId, setGameClientId] = useState('')
   const [steamAppId, setSteamAppId] = useState('')
+  const [autoCreateBaseProduct, setAutoCreateBaseProduct] = useState(true)
+  const [baseLaunchDate, setBaseLaunchDate] = useState(format(new Date(), 'yyyy-MM-dd'))
   
   // Product form
   const [productName, setProductName] = useState('')
@@ -68,6 +72,10 @@ export default function ProductManager({
   const [steamProductId, setSteamProductId] = useState('')
   const [launchDate, setLaunchDate] = useState(format(new Date(), 'yyyy-MM-dd'))
   const [autoGenerateCalendar, setAutoGenerateCalendar] = useState(true)
+  // Selected platforms for the product (default: all platforms)
+  const [selectedPlatformIds, setSelectedPlatformIds] = useState<string[]>([])
+  // Game form selected platforms for auto-created base product
+  const [baseProductPlatformIds, setBaseProductPlatformIds] = useState<string[]>([])
 
   const handleCreateClient = async () => {
     if (!clientName.trim()) {
@@ -98,18 +106,52 @@ export default function ProductManager({
       setError('Game name and client are required')
       return
     }
-    
+
     setLoading(true)
     setError(null)
-    
+
+    const gameNameTrimmed = gameName.trim()
+    const steamAppIdTrimmed = steamAppId.trim() || undefined
+    const shouldAutoCreate = autoCreateBaseProduct
+    const launchDateToUse = baseLaunchDate
+
     try {
-      await onGameCreate({
-        name: gameName.trim(),
+      // Create the game and get the returned data
+      const createdGame = await onGameCreate({
+        name: gameNameTrimmed,
         client_id: gameClientId,
-        steam_app_id: steamAppId.trim() || undefined
+        steam_app_id: steamAppIdTrimmed
       })
+
+      // If auto-create base product is enabled and we got the game back
+      if (shouldAutoCreate && createdGame) {
+        // Use selected platforms, or all platforms if none selected
+        const platformsToUse = baseProductPlatformIds.length > 0 ? baseProductPlatformIds : platforms.map(p => p.id)
+
+        try {
+          const createdProduct = await onProductCreate({
+            name: gameNameTrimmed, // Same name as game
+            game_id: createdGame.id,
+            product_type: 'base',
+            steam_product_id: steamAppIdTrimmed,
+            launch_date: launchDateToUse
+          }, platformsToUse)
+
+          // Optionally auto-generate calendar for the base product
+          if (createdProduct && onGenerateCalendar && autoGenerateCalendar) {
+            onGenerateCalendar(createdProduct.id, createdProduct.name, launchDateToUse, platformsToUse)
+          }
+        } catch (productErr: any) {
+          console.error('Failed to auto-create base product:', productErr)
+          // Show error but don't block - game was created successfully
+          setError(`Game created, but base product failed: ${productErr.message}`)
+        }
+      }
+
       setGameName('')
       setSteamAppId('')
+      setBaseLaunchDate(format(new Date(), 'yyyy-MM-dd'))
+      setBaseProductPlatformIds([])
     } catch (err: any) {
       setError(err.message)
     } finally {
@@ -128,7 +170,9 @@ export default function ProductManager({
     
     const nameToCreate = productName.trim()
     const launchDateToUse = launchDate
-    
+    // Use selected platforms, or all platforms if none selected
+    const platformsToUse = selectedPlatformIds.length > 0 ? selectedPlatformIds : platforms.map(p => p.id)
+
     try {
       const createdProduct = await onProductCreate({
         name: nameToCreate,
@@ -136,15 +180,17 @@ export default function ProductManager({
         product_type: productType,
         steam_product_id: steamProductId.trim() || undefined,
         launch_date: launchDateToUse
-      })
-      
+      }, platformsToUse)
+
       if (autoGenerateCalendar && createdProduct && onGenerateCalendar) {
-        onGenerateCalendar(createdProduct.id, createdProduct.name, launchDateToUse)
+        // Pass platform IDs to calendar generator so it only generates for selected platforms
+        onGenerateCalendar(createdProduct.id, createdProduct.name, launchDateToUse, platformsToUse)
       }
-      
+
       setProductName('')
       setSteamProductId('')
       setLaunchDate(format(new Date(), 'yyyy-MM-dd'))
+      setSelectedPlatformIds([])
     } catch (err: any) {
       setError(err.message)
     } finally {
@@ -438,12 +484,97 @@ export default function ProductManager({
                       placeholder="e.g., 1234567"
                     />
                   </div>
-                  <button 
+
+                  {/* Auto-create base product checkbox */}
+                  <div className={styles.checkboxField}>
+                    <label className={styles.checkboxLabel}>
+                      <input
+                        type="checkbox"
+                        checked={autoCreateBaseProduct}
+                        onChange={(e) => setAutoCreateBaseProduct(e.target.checked)}
+                      />
+                      <span className={styles.checkboxText}>
+                        🎮 Auto-create base game product
+                      </span>
+                    </label>
+                    <p className={styles.checkboxHint}>
+                      Automatically create a &quot;base game&quot; product with the same name
+                    </p>
+                  </div>
+
+                  {autoCreateBaseProduct && (
+                    <>
+                      <div className={styles.field}>
+                        <label>Base Game Launch Date *</label>
+                        <input
+                          type="date"
+                          value={baseLaunchDate}
+                          onChange={(e) => setBaseLaunchDate(e.target.value)}
+                        />
+                        <p className={styles.fieldHint}>Launch date for the base product</p>
+                      </div>
+
+                      {onGenerateCalendar && (
+                        <div className={styles.checkboxField}>
+                          <label className={styles.checkboxLabel}>
+                            <input
+                              type="checkbox"
+                              checked={autoGenerateCalendar}
+                              onChange={(e) => setAutoGenerateCalendar(e.target.checked)}
+                            />
+                            <span className={styles.checkboxText}>
+                              🗓️ Auto-generate sales calendar
+                            </span>
+                          </label>
+                          <p className={styles.checkboxHint}>
+                            Create a 12-month sales plan from launch date
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Platform Selection for auto-created base product */}
+                      <div className={styles.field}>
+                        <label>Available Platforms</label>
+                        <p className={styles.fieldHint}>
+                          Select which platforms the base product is available on. Leave empty for all platforms.
+                        </p>
+                        <div className={styles.platformCheckboxes}>
+                          {platforms.map(platform => (
+                            <label key={platform.id} className={styles.platformCheckbox}>
+                              <input
+                                type="checkbox"
+                                checked={baseProductPlatformIds.includes(platform.id)}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setBaseProductPlatformIds(prev => [...prev, platform.id])
+                                  } else {
+                                    setBaseProductPlatformIds(prev => prev.filter(id => id !== platform.id))
+                                  }
+                                }}
+                              />
+                              <span
+                                className={styles.platformColorDot}
+                                style={{ backgroundColor: platform.color_hex }}
+                              />
+                              <span>{platform.name}</span>
+                            </label>
+                          ))}
+                        </div>
+                        {baseProductPlatformIds.length > 0 && (
+                          <p className={styles.selectedCount}>
+                            {baseProductPlatformIds.length} platform{baseProductPlatformIds.length === 1 ? '' : 's'} selected
+                          </p>
+                        )}
+                      </div>
+                    </>
+                  )}
+
+                  <button
                     className={styles.addBtn}
                     onClick={handleCreateGame}
                     disabled={loading}
                   >
-                    {loading ? 'Adding...' : '+ Add Game'}
+                    {loading ? 'Adding...' : autoCreateBaseProduct ? '+ Add Game & Base Product' : '+ Add Game'}
                   </button>
                 </div>
               )}
@@ -604,8 +735,43 @@ export default function ProductManager({
                       </p>
                     </div>
                   )}
-                  
-                  <button 
+
+                  {/* Platform Selection */}
+                  <div className={styles.field}>
+                    <label>Available Platforms</label>
+                    <p className={styles.fieldHint}>
+                      Select which platforms this product is available on. Leave empty for all platforms.
+                    </p>
+                    <div className={styles.platformCheckboxes}>
+                      {platforms.map(platform => (
+                        <label key={platform.id} className={styles.platformCheckbox}>
+                          <input
+                            type="checkbox"
+                            checked={selectedPlatformIds.includes(platform.id)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedPlatformIds(prev => [...prev, platform.id])
+                              } else {
+                                setSelectedPlatformIds(prev => prev.filter(id => id !== platform.id))
+                              }
+                            }}
+                          />
+                          <span
+                            className={styles.platformColorDot}
+                            style={{ backgroundColor: platform.color_hex }}
+                          />
+                          <span>{platform.name}</span>
+                        </label>
+                      ))}
+                    </div>
+                    {selectedPlatformIds.length > 0 && (
+                      <p className={styles.selectedCount}>
+                        {selectedPlatformIds.length} platform{selectedPlatformIds.length === 1 ? '' : 's'} selected
+                      </p>
+                    )}
+                  </div>
+
+                  <button
                     className={styles.addBtn}
                     onClick={handleCreateProduct}
                     disabled={loading}
