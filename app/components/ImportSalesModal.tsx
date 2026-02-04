@@ -12,6 +12,11 @@ interface ImportSalesModalProps {
   platforms: Platform[]
   existingSales: Sale[]
   onImport: (sales: Omit<Sale, 'id' | 'created_at'>[]) => Promise<void>
+  // New props for client scoping and product creation
+  clients: Client[]
+  games: (Game & { client: Client })[]
+  onProductCreate?: (product: Omit<Product, 'id' | 'created_at'>) => Promise<Product | undefined>
+  onGameCreate?: (game: Omit<Game, 'id' | 'created_at'>) => Promise<(Game & { client: Client }) | undefined>
 }
 
 interface ParsedRow {
@@ -31,6 +36,16 @@ interface ParsedRow {
   errors: string[]
   warnings: string[]
   isValid: boolean
+  // Track missing product name for creation
+  missingProductName?: string
+}
+
+// Track products to create
+interface ProductToCreate {
+  name: string
+  gameId: string
+  gameName: string
+  rowCount: number // How many rows reference this product
 }
 
 interface ColumnMapping {
@@ -267,7 +282,11 @@ export default function ImportSalesModal({
   products,
   platforms,
   existingSales,
-  onImport
+  onImport,
+  clients,
+  games,
+  onProductCreate,
+  onGameCreate
 }: ImportSalesModalProps) {
   const [file, setFile] = useState<File | null>(null)
   const [headers, setHeaders] = useState<string[]>([])
@@ -284,10 +303,33 @@ export default function ImportSalesModal({
   const [skipDuplicates, setSkipDuplicates] = useState(true) // Append mode: skip duplicates by default
   const [detectedPreset, setDetectedPreset] = useState<ImportPreset | null>(null)
 
-  // Create lookup maps for matching
+  // Client scoping and product creation
+  const [selectedClientId, setSelectedClientId] = useState<string>('')
+  const [productsToCreate, setProductsToCreate] = useState<Map<string, ProductToCreate>>(new Map())
+  const [selectedProductsToCreate, setSelectedProductsToCreate] = useState<Set<string>>(new Set())
+  const [isCreatingProducts, setIsCreatingProducts] = useState(false)
+  const [createdProductIds, setCreatedProductIds] = useState<Map<string, string>>(new Map()) // productName -> productId
+
+  // Filter products by selected client
+  const filteredProducts = useMemo(() => {
+    if (!selectedClientId) return products
+    return products.filter(p => p.game?.client_id === selectedClientId)
+  }, [products, selectedClientId])
+
+  // Filter games by selected client
+  const filteredGames = useMemo(() => {
+    if (!selectedClientId) return games
+    return games.filter(g => g.client_id === selectedClientId)
+  }, [games, selectedClientId])
+
+  // Create lookup maps for matching (scoped to selected client if set)
   const productLookup = useMemo(() => {
     const map = new Map<string, string>()
-    products.forEach(p => {
+    // Also include created products from this session
+    createdProductIds.forEach((productId, productName) => {
+      map.set(productName.toLowerCase(), productId)
+    })
+    filteredProducts.forEach(p => {
       // Multiple ways to match product
       map.set(p.name.toLowerCase(), p.id)
       map.set(p.id.toLowerCase(), p.id)
@@ -301,7 +343,7 @@ export default function ImportSalesModal({
       }
     })
     return map
-  }, [products])
+  }, [filteredProducts, createdProductIds])
 
   const platformLookup = useMemo(() => {
     const map = new Map<string, string>()
@@ -469,10 +511,13 @@ export default function ImportSalesModal({
   }, [])
 
   const processRows = useCallback(() => {
+    const missingProducts = new Map<string, ProductToCreate>()
+
     const processed: ParsedRow[] = rawRows.map((row, idx) => {
       const errors: string[] = []
       const warnings: string[] = []
-      
+      let missingProductName: string | undefined
+
       // Extract values based on mapping
       const productValue = mapping.product ? row[mapping.product] : ''
       const platformValue = mapping.platform ? row[mapping.platform] : ''
@@ -481,13 +526,32 @@ export default function ImportSalesModal({
       const discountValue = mapping.discount ? row[mapping.discount] : ''
       const saleNameValue = mapping.saleName ? row[mapping.saleName] : ''
       const notesValue = mapping.notes ? row[mapping.notes] : ''
-      
+
       // Match product
       let productId: string | undefined
       if (productValue) {
         productId = productLookup.get(productValue.toLowerCase())
         if (!productId) {
           errors.push(`Product "${productValue}" not found`)
+          missingProductName = productValue.trim()
+
+          // Track missing product for potential creation (only if client is selected)
+          if (selectedClientId && missingProductName) {
+            const key = missingProductName.toLowerCase()
+            const existing = missingProducts.get(key)
+            if (existing) {
+              existing.rowCount++
+            } else {
+              // Try to find a matching game for this product
+              const defaultGame = filteredGames.length === 1 ? filteredGames[0] : undefined
+              missingProducts.set(key, {
+                name: missingProductName,
+                gameId: defaultGame?.id || '',
+                gameName: defaultGame?.name || '',
+                rowCount: 1
+              })
+            }
+          }
         }
       } else {
         errors.push('Product is required')
@@ -599,13 +663,19 @@ export default function ImportSalesModal({
         notes: notesValue || undefined,
         errors,
         warnings,
-        isValid: errors.length === 0
+        isValid: errors.length === 0,
+        missingProductName
       }
     })
-    
+
     setParsedRows(processed)
+    setProductsToCreate(missingProducts)
+    // Auto-select all missing products for creation if onProductCreate is available
+    if (onProductCreate && missingProducts.size > 0) {
+      setSelectedProductsToCreate(new Set(missingProducts.keys()))
+    }
     setStep('preview')
-  }, [rawRows, mapping, productLookup, platformLookup, existingSales, skipDuplicates, normalizePlatformValue, platforms])
+  }, [rawRows, mapping, productLookup, platformLookup, existingSales, skipDuplicates, normalizePlatformValue, platforms, selectedClientId, filteredGames, onProductCreate])
 
   const validRows = useMemo(() => parsedRows.filter(r => r.isValid), [parsedRows])
   const invalidRows = useMemo(() => parsedRows.filter(r => !r.isValid), [parsedRows])
@@ -649,8 +719,117 @@ export default function ImportSalesModal({
       setRawRows([])
       setMapping(DEFAULT_MAPPING)
       setParsedRows([])
+      setProductsToCreate(new Map())
+      setSelectedProductsToCreate(new Set())
+      setCreatedProductIds(new Map())
     }
   }, [step])
+
+  // Handle updating game assignment for a product to create
+  const handleProductGameChange = useCallback((productKey: string, gameId: string) => {
+    setProductsToCreate(prev => {
+      const newMap = new Map(prev)
+      const product = newMap.get(productKey)
+      if (product) {
+        const game = filteredGames.find(g => g.id === gameId)
+        newMap.set(productKey, {
+          ...product,
+          gameId,
+          gameName: game?.name || ''
+        })
+      }
+      return newMap
+    })
+  }, [filteredGames])
+
+  // Toggle product selection for creation
+  const toggleProductSelection = useCallback((productKey: string) => {
+    setSelectedProductsToCreate(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(productKey)) {
+        newSet.delete(productKey)
+      } else {
+        newSet.add(productKey)
+      }
+      return newSet
+    })
+  }, [])
+
+  // Create selected products and reprocess rows
+  const handleCreateProducts = useCallback(async () => {
+    if (!onProductCreate || selectedProductsToCreate.size === 0) return
+
+    setIsCreatingProducts(true)
+    setImportError(null)
+
+    try {
+      const newCreatedIds = new Map(createdProductIds)
+      const selectedKeys = Array.from(selectedProductsToCreate)
+
+      for (const productKey of selectedKeys) {
+        const productInfo = productsToCreate.get(productKey)
+        if (!productInfo || !productInfo.gameId) {
+          setImportError(`Please select a game for "${productInfo?.name || productKey}"`)
+          setIsCreatingProducts(false)
+          return
+        }
+
+        const created = await onProductCreate({
+          game_id: productInfo.gameId,
+          name: productInfo.name,
+          product_type: 'base' // Default to base product
+        })
+
+        if (created) {
+          newCreatedIds.set(productInfo.name.toLowerCase(), created.id)
+        }
+      }
+
+      setCreatedProductIds(newCreatedIds)
+      setSelectedProductsToCreate(new Set())
+      setProductsToCreate(new Map())
+
+      // Reprocess rows with the newly created products
+      // This will be handled by the useEffect watching createdProductIds
+    } catch (err) {
+      console.error('Error creating products:', err)
+      setImportError(err instanceof Error ? err.message : 'Failed to create products')
+    } finally {
+      setIsCreatingProducts(false)
+    }
+  }, [onProductCreate, selectedProductsToCreate, productsToCreate, createdProductIds])
+
+  // Reprocess rows when new products are created
+  const reprocessRowsWithNewProducts = useCallback(() => {
+    if (createdProductIds.size === 0 || parsedRows.length === 0) return
+
+    const reprocessed = parsedRows.map(row => {
+      if (row.missingProductName && !row.productId) {
+        const productId = createdProductIds.get(row.missingProductName.toLowerCase())
+        if (productId) {
+          // Product was created, update this row
+          const newErrors = row.errors.filter(e => !e.includes('not found'))
+          return {
+            ...row,
+            productId,
+            errors: newErrors,
+            isValid: newErrors.length === 0
+          }
+        }
+      }
+      return row
+    })
+
+    setParsedRows(reprocessed)
+  }, [createdProductIds, parsedRows])
+
+  // Effect to reprocess rows when products are created
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useMemo(() => {
+    if (createdProductIds.size > 0 && step === 'preview') {
+      reprocessRowsWithNewProducts()
+    }
+  }, [createdProductIds])
 
   if (!isOpen) return null
 
@@ -692,6 +871,26 @@ export default function ImportSalesModal({
             <div className={styles.uploadStep}>
               {/* Import Options */}
               <div className={styles.importOptions}>
+                {/* Client Selection */}
+                <div className={styles.optionGroup}>
+                  <label className={styles.optionLabel}>Import for Client <span className={styles.required}>*</span></label>
+                  <select
+                    value={selectedClientId}
+                    onChange={(e) => setSelectedClientId(e.target.value)}
+                    className={styles.presetSelect}
+                  >
+                    <option value="">-- Select a client --</option>
+                    {clients.map(c => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                  <p className={styles.optionHint}>
+                    {selectedClientId
+                      ? `Products will be matched against ${clients.find(c => c.id === selectedClientId)?.name}'s catalog. Missing products can be created.`
+                      : 'Select a client to scope the import and enable product creation'}
+                  </p>
+                </div>
+
                 <div className={styles.optionGroup}>
                   <label className={styles.optionLabel}>Import Format</label>
                   <select
@@ -930,6 +1129,49 @@ export default function ImportSalesModal({
                   <span className={styles.summaryLabel}>With warnings</span>
                 </div>
               </div>
+
+              {/* Create Missing Products Section */}
+              {onProductCreate && productsToCreate.size > 0 && selectedClientId && (
+                <div className={styles.createProductsSection}>
+                  <div className={styles.createProductsHeader}>
+                    <h4>🆕 Create Missing Products</h4>
+                    <p>These products were not found. Select the ones you want to create:</p>
+                  </div>
+                  <div className={styles.createProductsList}>
+                    {Array.from(productsToCreate.entries()).map(([key, product]) => (
+                      <div key={key} className={styles.createProductItem}>
+                        <label className={styles.createProductCheckbox}>
+                          <input
+                            type="checkbox"
+                            checked={selectedProductsToCreate.has(key)}
+                            onChange={() => toggleProductSelection(key)}
+                          />
+                          <span className={styles.productName}>{product.name}</span>
+                          <span className={styles.rowCountBadge}>{product.rowCount} row{product.rowCount > 1 ? 's' : ''}</span>
+                        </label>
+                        <select
+                          value={product.gameId}
+                          onChange={(e) => handleProductGameChange(key, e.target.value)}
+                          className={styles.gameSelect}
+                          disabled={!selectedProductsToCreate.has(key)}
+                        >
+                          <option value="">-- Select Game --</option>
+                          {filteredGames.map(g => (
+                            <option key={g.id} value={g.id}>{g.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                    ))}
+                  </div>
+                  <button
+                    className={styles.createProductsBtn}
+                    onClick={handleCreateProducts}
+                    disabled={selectedProductsToCreate.size === 0 || isCreatingProducts || Array.from(selectedProductsToCreate).some(k => !productsToCreate.get(k)?.gameId)}
+                  >
+                    {isCreatingProducts ? 'Creating...' : `Create ${selectedProductsToCreate.size} Product${selectedProductsToCreate.size !== 1 ? 's' : ''} & Re-process`}
+                  </button>
+                </div>
+              )}
 
               {invalidRows.length > 0 && (
                 <div className={styles.errorList}>
