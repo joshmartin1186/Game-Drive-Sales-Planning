@@ -189,10 +189,35 @@ export default function GameDriveDashboard() {
   const handleRestoreVersion = useCallback(async (salesSnapshot: SaleSnapshot[]) => {
     const currentSaleIds = sales.map(s => s.id)
     try {
-      for (const id of currentSaleIds) { const { error } = await supabase.from('sales').delete().eq('id', id); if (error) throw error }
-      if (salesSnapshot.length > 0) { const salesToCreate = salesSnapshot.map(s => ({ product_id: s.product_id, platform_id: s.platform_id, start_date: s.start_date, end_date: s.end_date, discount_percentage: s.discount_percentage, sale_name: s.sale_name, sale_type: s.sale_type, status: s.status, notes: s.notes })); const { error } = await supabase.from('sales').insert(salesToCreate); if (error) throw error }
+      // Delete all current sales in a single batch operation (much faster than one-by-one)
+      if (currentSaleIds.length > 0) {
+        const { error: deleteError } = await supabase.from('sales').delete().in('id', currentSaleIds)
+        if (deleteError) throw deleteError
+      }
+      // Insert all snapshot sales in a single batch
+      if (salesSnapshot.length > 0) {
+        const salesToCreate = salesSnapshot.map(s => ({
+          product_id: s.product_id,
+          platform_id: s.platform_id,
+          start_date: s.start_date,
+          end_date: s.end_date,
+          discount_percentage: s.discount_percentage,
+          sale_name: s.sale_name,
+          sale_type: s.sale_type,
+          status: s.status,
+          notes: s.notes
+        }))
+        const { error: insertError } = await supabase.from('sales').insert(salesToCreate)
+        if (insertError) throw insertError
+      }
       await fetchSales()
-    } catch (err: unknown) { const errorMessage = err instanceof Error ? err.message : 'Failed to restore version'; console.error('Error restoring version:', err); setError(errorMessage); await fetchSales(); throw new Error(errorMessage) }
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to restore version'
+      console.error('Error restoring version:', err)
+      setError(errorMessage)
+      await fetchSales()
+      throw new Error(errorMessage)
+    }
   }, [sales])
 
   const handleSaleEdit = useCallback((sale: SaleWithDetails) => { setEditingSale(sale) }, [])
