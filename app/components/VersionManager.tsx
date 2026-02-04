@@ -21,6 +21,8 @@ interface VersionManagerProps {
   productName?: string | null  // Display name for product filter
   clientId?: string | null  // Legacy client filter (for backward compatibility)
   clientName?: string | null  // Display name for client filter
+  hasUnsavedChanges?: boolean  // Whether the active version has unsaved edits
+  onSaveVersion?: () => Promise<void>  // Save unsaved changes to version
 }
 
 export default function VersionManager({
@@ -33,7 +35,9 @@ export default function VersionManager({
   productId,
   productName,
   clientId,
-  clientName
+  clientName,
+  hasUnsavedChanges,
+  onSaveVersion
 }: VersionManagerProps) {
   const supabase = createClientComponentClient()
   const [versions, setVersions] = useState<CalendarVersion[]>([])
@@ -360,6 +364,22 @@ export default function VersionManager({
 
   // Activate a version (switch to viewing it) - no data deletion!
   const handleActivateVersion = async (version: CalendarVersion | null) => {
+    // Check if switching away from a version with unsaved changes
+    if (hasUnsavedChanges && activeVersionId) {
+      const choice = window.confirm(
+        'You have unsaved changes to the current version.\n\n' +
+        'Click OK to save your changes before switching.\n' +
+        'Click Cancel to discard changes and switch anyway.'
+      )
+      if (choice) {
+        // User wants to save first
+        if (onSaveVersion) {
+          await onSaveVersion()
+        }
+      }
+      // Either way, proceed with the switch (changes are either saved or discarded)
+    }
+
     setActivating(true)
     setError(null)
 
