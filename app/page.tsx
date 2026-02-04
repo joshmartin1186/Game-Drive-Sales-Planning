@@ -75,6 +75,8 @@ export default function GameDriveDashboard() {
   const [filterProductId, setFilterProductId] = useState<string>('')  // For version management
   const [activeVersionId, setActiveVersionId] = useState<string | null>(null)  // null = working draft
   const [activeVersionSnapshot, setActiveVersionSnapshot] = useState<SaleSnapshot[] | null>(null)  // Snapshot data when viewing a version
+  const [versionSnapshotModified, setVersionSnapshotModified] = useState(false)  // Track unsaved changes to version
+  const [savingVersion, setSavingVersion] = useState(false)  // Track saving state
   const { pushAction, setHandlers } = useUndo()
 
   useEffect(() => {
@@ -197,11 +199,137 @@ export default function GameDriveDashboard() {
     setActiveVersionId(versionId)
     // Store snapshot data for display when viewing a saved version
     setActiveVersionSnapshot(snapshot || null)
+    setVersionSnapshotModified(false)  // Reset modified state
     // No need to re-fetch sales - we display from snapshot when version is active
   }, [])
 
+  // Update a sale in the version snapshot (for editing versions)
+  const handleVersionSnapshotUpdate = useCallback((snapshotIndex: number, updates: Partial<SaleSnapshot>) => {
+    if (!activeVersionSnapshot) return
+    setActiveVersionSnapshot(prev => {
+      if (!prev) return prev
+      return prev.map((snap, idx) => idx === snapshotIndex ? { ...snap, ...updates } : snap)
+    })
+    setVersionSnapshotModified(true)
+  }, [activeVersionSnapshot])
+
+  // Delete a sale from the version snapshot
+  const handleVersionSnapshotDelete = useCallback((snapshotIndex: number) => {
+    if (!activeVersionSnapshot) return
+    if (!confirm('Are you sure you want to delete this sale from the version?')) return
+    setActiveVersionSnapshot(prev => {
+      if (!prev) return prev
+      return prev.filter((_, idx) => idx !== snapshotIndex)
+    })
+    setVersionSnapshotModified(true)
+  }, [activeVersionSnapshot])
+
+  // Add a new sale to the version snapshot
+  const handleVersionSnapshotCreate = useCallback((sale: Omit<Sale, 'id' | 'created_at'>) => {
+    if (!activeVersionSnapshot) return null
+    const product = products.find(p => p.id === sale.product_id)
+    const platform = platforms.find(p => p.id === sale.platform_id)
+    const newSnapshotSale: SaleSnapshot = {
+      product_id: sale.product_id,
+      platform_id: sale.platform_id,
+      start_date: sale.start_date,
+      end_date: sale.end_date,
+      discount_percentage: sale.discount_percentage || null,
+      sale_name: sale.sale_name || null,
+      sale_type: sale.sale_type,
+      status: sale.status,
+      notes: sale.notes || null,
+      product_name: product?.name,
+      platform_name: platform?.name
+    }
+    setActiveVersionSnapshot(prev => {
+      if (!prev) return [newSnapshotSale]
+      return [...prev, newSnapshotSale].sort((a, b) => new Date(a.start_date).getTime() - new Date(b.start_date).getTime())
+    })
+    setVersionSnapshotModified(true)
+    setShowAddModal(false)
+    setSalePrefill(null)
+    return { id: `snapshot-new-${Date.now()}` } as Sale  // Return fake sale for UI
+  }, [activeVersionSnapshot, products, platforms])
+
+  // Save the modified version snapshot back to the database
+  const handleSaveVersionSnapshot = useCallback(async () => {
+    if (!activeVersionId || !activeVersionSnapshot) return
+    setSavingVersion(true)
+    try {
+      // Calculate updated metadata
+      const productIds = new Set(activeVersionSnapshot.map(s => s.product_id))
+      const platformSummary: Record<string, number> = {}
+      activeVersionSnapshot.forEach(sale => {
+        const platformName = sale.platform_name || platforms.find(p => p.id === sale.platform_id)?.name || 'Unknown'
+        platformSummary[platformName] = (platformSummary[platformName] || 0) + 1
+      })
+      const dates = activeVersionSnapshot.map(s => s.start_date).concat(activeVersionSnapshot.map(s => s.end_date))
+      const sortedDates = dates.sort()
+
+      const { error } = await supabase
+        .from('calendar_versions')
+        .update({
+          sales_snapshot: activeVersionSnapshot,
+          product_count: productIds.size,
+          sale_count: activeVersionSnapshot.length,
+          platform_summary: platformSummary,
+          date_range_start: sortedDates[0] || null,
+          date_range_end: sortedDates[sortedDates.length - 1] || null,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', activeVersionId)
+
+      if (error) throw error
+      setVersionSnapshotModified(false)
+    } catch (err) {
+      console.error('Error saving version:', err)
+      setError(err instanceof Error ? err.message : 'Failed to save version')
+    } finally {
+      setSavingVersion(false)
+    }
+  }, [activeVersionId, activeVersionSnapshot, platforms, supabase])
+
   const handleSaleEdit = useCallback((sale: SaleWithDetails) => { setEditingSale(sale) }, [])
   const handleSaleDuplicate = useCallback((sale: SaleWithDetails) => { setDuplicatingSale(sale) }, [])
+
+  // Wrapper for sale update - routes to version snapshot or live sales
+  const handleSaleUpdateWrapper = useCallback(async (saleId: string, updates: Partial<Sale>) => {
+    if (activeVersionId && activeVersionSnapshot && saleId.startsWith('snapshot-')) {
+      // Extract index from synthetic ID (e.g., "snapshot-5" -> 5)
+      const indexMatch = saleId.match(/^snapshot-(\d+)$/)
+      if (indexMatch) {
+        const idx = parseInt(indexMatch[1], 10)
+        handleVersionSnapshotUpdate(idx, updates as Partial<SaleSnapshot>)
+      }
+      return
+    }
+    // Normal mode: update live sales
+    await handleSaleUpdate(saleId, updates)
+  }, [activeVersionId, activeVersionSnapshot, handleVersionSnapshotUpdate, handleSaleUpdate])
+
+  // Wrapper for sale delete - routes to version snapshot or live sales
+  const handleSaleDeleteWrapper = useCallback(async (saleId: string) => {
+    if (activeVersionId && activeVersionSnapshot && saleId.startsWith('snapshot-')) {
+      const indexMatch = saleId.match(/^snapshot-(\d+)$/)
+      if (indexMatch) {
+        const idx = parseInt(indexMatch[1], 10)
+        handleVersionSnapshotDelete(idx)
+      }
+      return
+    }
+    // Normal mode: delete from live sales
+    await handleSaleDelete(saleId)
+  }, [activeVersionId, activeVersionSnapshot, handleVersionSnapshotDelete, handleSaleDelete])
+
+  // Wrapper for sale create - routes to version snapshot or live sales
+  const handleSaleCreateWrapper = useCallback(async (sale: Omit<Sale, 'id' | 'created_at'>) => {
+    if (activeVersionId && activeVersionSnapshot) {
+      return handleVersionSnapshotCreate(sale)
+    }
+    // Normal mode: create in live sales
+    return handleSaleCreate(sale)
+  }, [activeVersionId, activeVersionSnapshot, handleVersionSnapshotCreate, handleSaleCreate])
 
   const handleTimelineCreate = useCallback(async (prefill: SalePrefill) => {
     if (prefill.directCreate) { const newSale: Omit<Sale, 'id' | 'created_at'> = { product_id: prefill.productId, platform_id: prefill.platformId, start_date: prefill.startDate, end_date: prefill.endDate, sale_name: prefill.saleName, discount_percentage: prefill.discountPercentage, sale_type: (prefill.saleType || 'regular') as Sale['sale_type'], status: 'planned' }; await handleSaleCreate(newSale); return }
@@ -467,23 +595,43 @@ export default function GameDriveDashboard() {
 
       {/* Version viewing banner */}
       {activeVersionId && (
-        <div className={styles.versionBanner}>
-          <span>📋 Viewing saved version. Changes are disabled.</span>
-          <button onClick={() => { setActiveVersionId(null); setActiveVersionSnapshot(null) }}>✏️ Return to Working Draft</button>
+        <div className={`${styles.versionBanner} ${versionSnapshotModified ? styles.versionBannerModified : ''}`}>
+          <span>
+            {versionSnapshotModified
+              ? '📋 Editing version - unsaved changes'
+              : '📋 Viewing saved version - edits will modify this version'}
+          </span>
+          <div className={styles.versionBannerActions}>
+            {versionSnapshotModified && (
+              <button
+                className={styles.saveVersionBtn}
+                onClick={handleSaveVersionSnapshot}
+                disabled={savingVersion}
+              >
+                {savingVersion ? 'Saving...' : '💾 Save Version'}
+              </button>
+            )}
+            <button onClick={() => {
+              if (versionSnapshotModified && !confirm('You have unsaved changes. Discard them?')) return
+              setActiveVersionId(null)
+              setActiveVersionSnapshot(null)
+              setVersionSnapshotModified(false)
+            }}>✏️ Return to Working Draft</button>
+          </div>
         </div>
       )}
 
       <div className={styles.toolbar}>
         <div className={styles.viewToggle}><button className={`${styles.toggleBtn} ${viewMode === 'gantt' ? styles.active : ''}`} onClick={() => setViewMode('gantt')}>Timeline</button><button className={`${styles.toggleBtn} ${viewMode === 'table' ? styles.active : ''}`} onClick={() => setViewMode('table')}>Table</button></div>
-        <div className={styles.actions}>{!activeVersionId && <button className={styles.primaryBtn} onClick={() => setShowAddModal(true)}>+ Add Sale</button>}{!activeVersionId && <button className={styles.secondaryBtn} onClick={() => setShowImportModal(true)}>Import CSV</button>}<button className={styles.secondaryBtn} onClick={() => setShowVersionManager(true)}>📚 Versions</button>{!activeVersionId && <button className={styles.secondaryBtn} onClick={() => setShowProductManager(true)}>Manage Products</button>}{!activeVersionId && <button className={styles.secondaryBtn} onClick={() => setShowPlatformSettings(true)}>Platform Settings</button>}<button className={styles.secondaryBtn} onClick={() => setShowExportModal(true)}>Export</button>{!activeVersionId && <button className={styles.secondaryBtn} onClick={fetchData}>Refresh</button>}</div>
+        <div className={styles.actions}><button className={styles.primaryBtn} onClick={() => setShowAddModal(true)}>+ Add Sale</button>{!activeVersionId && <button className={styles.secondaryBtn} onClick={() => setShowImportModal(true)}>Import CSV</button>}<button className={styles.secondaryBtn} onClick={() => setShowVersionManager(true)}>📚 Versions</button>{!activeVersionId && <button className={styles.secondaryBtn} onClick={() => setShowProductManager(true)}>Manage Products</button>}{!activeVersionId && <button className={styles.secondaryBtn} onClick={() => setShowPlatformSettings(true)}>Platform Settings</button>}<button className={styles.secondaryBtn} onClick={() => setShowExportModal(true)}>Export</button>{!activeVersionId && <button className={styles.secondaryBtn} onClick={fetchData}>Refresh</button>}</div>
       </div>
 
       <div className={styles.mainContent}>
-        {viewMode === 'gantt' ? (<GanttChart sales={filteredSales} products={filteredProducts} platforms={platforms} platformEvents={platformEvents} timelineStart={timelineStart} monthCount={monthCount} onSaleUpdate={handleSaleUpdate} onSaleDelete={handleSaleDelete} onSaleEdit={handleSaleEdit} onSaleDuplicate={handleSaleDuplicate} onCreateSale={handleTimelineCreate} onGenerateCalendar={handleGenerateCalendar} onClearSales={handleClearSales} onLaunchDateChange={handleLaunchDateChange} onEditLaunchDate={handleEditLaunchDate} onLaunchSaleDurationChange={handleLaunchSaleDurationChange} allSales={sales} showEvents={showEvents} />) : (<SalesTable sales={filteredSales} platforms={platforms} onDelete={handleSaleDelete} onEdit={handleSaleEdit} onDuplicate={handleSaleDuplicate} onBulkEdit={handleBulkEdit} />)}
+        {viewMode === 'gantt' ? (<GanttChart sales={filteredSales} products={filteredProducts} platforms={platforms} platformEvents={platformEvents} timelineStart={timelineStart} monthCount={monthCount} onSaleUpdate={handleSaleUpdateWrapper} onSaleDelete={handleSaleDeleteWrapper} onSaleEdit={handleSaleEdit} onSaleDuplicate={handleSaleDuplicate} onCreateSale={handleTimelineCreate} onGenerateCalendar={handleGenerateCalendar} onClearSales={handleClearSales} onLaunchDateChange={handleLaunchDateChange} onEditLaunchDate={handleEditLaunchDate} onLaunchSaleDurationChange={handleLaunchSaleDurationChange} allSales={activeVersionId ? [] : sales} showEvents={showEvents} />) : (<SalesTable sales={filteredSales} platforms={platforms} onDelete={handleSaleDeleteWrapper} onEdit={handleSaleEdit} onDuplicate={handleSaleDuplicate} onBulkEdit={handleBulkEdit} />)}
       </div>
 
-      {showAddModal && (<AddSaleModal products={products} platforms={platforms} existingSales={sales} onSave={handleSaleCreate} onClose={handleCloseAddModal} initialDate={salePrefill ? parseISO(salePrefill.startDate) : undefined} initialEndDate={salePrefill ? parseISO(salePrefill.endDate) : undefined} initialProductId={salePrefill?.productId} initialPlatformId={salePrefill?.platformId} />)}
-      {editingSale && (<EditSaleModal sale={editingSale} products={products} platforms={platforms} existingSales={sales} onSave={handleSaleUpdate} onDelete={handleSaleDelete} onDuplicate={handleSaleDuplicate} onClose={() => setEditingSale(null)} />)}
+      {showAddModal && (<AddSaleModal products={products} platforms={platforms} existingSales={activeVersionId ? [] : sales} onSave={handleSaleCreateWrapper} onClose={handleCloseAddModal} initialDate={salePrefill ? parseISO(salePrefill.startDate) : undefined} initialEndDate={salePrefill ? parseISO(salePrefill.endDate) : undefined} initialProductId={salePrefill?.productId} initialPlatformId={salePrefill?.platformId} />)}
+      {editingSale && (<EditSaleModal sale={editingSale} products={products} platforms={platforms} existingSales={activeVersionId ? [] : sales} onSave={handleSaleUpdateWrapper} onDelete={handleSaleDeleteWrapper} onDuplicate={handleSaleDuplicate} onClose={() => setEditingSale(null)} />)}
       {duplicatingSale && (<DuplicateSaleModal sale={duplicatingSale} products={products} platforms={platforms} existingSales={sales} onDuplicate={handleDuplicateSales} onClose={() => setDuplicatingSale(null)} />)}
       <BulkEditSalesModal isOpen={bulkEditSales.length > 0} onClose={() => setBulkEditSales([])} selectedSales={bulkEditSales} platforms={platforms} onBulkUpdate={handleBulkUpdate} onBulkDelete={handleBulkDelete} />
       <ImportSalesModal isOpen={showImportModal} onClose={() => setShowImportModal(false)} products={products} platforms={platforms} existingSales={sales} onImport={handleBulkImport} clients={clients} games={games} onProductCreate={handleProductCreate} onGameCreate={handleGameCreate} />
