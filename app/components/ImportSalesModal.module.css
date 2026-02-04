@@ -808,6 +808,23 @@
   cursor: not-allowed;
 }
 
+.noGamesWarning {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+  background: #fef3c7;
+  border: 1px solid #f59e0b;
+  border-radius: 8px;
+  margin-top: 10px;
+  font-size: 13px;
+  color: #92400e;
+}
+
+.noGamesWarning .warningIcon {
+  font-size: 16px;
+}
+
 /* Required field indicator */
 .required {
   color: #ef4444;

@@ -1128,7 +1128,12 @@ export default function ImportSalesModal({
                   <div className={styles.createProductsHeader}>
                     <h4>🆕 Create Missing Products</h4>
                     <p>These products were not found. Select the ones you want to create:</p>
-                    {filteredGames.length > 0 && (
+                    {filteredGames.length === 0 ? (
+                      <div className={styles.noGamesWarning}>
+                        <span className={styles.warningIcon}>⚠️</span>
+                        <span>No games found for this client. Please create a game first in the Product Manager.</span>
+                      </div>
+                    ) : (
                       <div className={styles.bulkGameSelect}>
                         <label>Assign all to game:</label>
                         <select
@@ -1156,39 +1161,43 @@ export default function ImportSalesModal({
                       </div>
                     )}
                   </div>
-                  <div className={styles.createProductsList}>
-                    {Array.from(productsToCreate.entries()).map(([key, product]) => (
-                      <div key={key} className={styles.createProductItem}>
-                        <label className={styles.createProductCheckbox}>
-                          <input
-                            type="checkbox"
-                            checked={selectedProductsToCreate.has(key)}
-                            onChange={() => toggleProductSelection(key)}
-                          />
-                          <span className={styles.productName}>{product.name}</span>
-                          <span className={styles.rowCountBadge}>{product.rowCount} row{product.rowCount > 1 ? 's' : ''}</span>
-                        </label>
-                        <select
-                          value={product.gameId}
-                          onChange={(e) => handleProductGameChange(key, e.target.value)}
-                          className={styles.gameSelect}
-                          disabled={!selectedProductsToCreate.has(key)}
-                        >
-                          <option value="">-- Select Game --</option>
-                          {filteredGames.map(g => (
-                            <option key={g.id} value={g.id}>{g.name}</option>
-                          ))}
-                        </select>
+                  {filteredGames.length > 0 && (
+                    <>
+                      <div className={styles.createProductsList}>
+                        {Array.from(productsToCreate.entries()).map(([key, product]) => (
+                          <div key={key} className={styles.createProductItem}>
+                            <label className={styles.createProductCheckbox}>
+                              <input
+                                type="checkbox"
+                                checked={selectedProductsToCreate.has(key)}
+                                onChange={() => toggleProductSelection(key)}
+                              />
+                              <span className={styles.productName}>{product.name}</span>
+                              <span className={styles.rowCountBadge}>{product.rowCount} row{product.rowCount > 1 ? 's' : ''}</span>
+                            </label>
+                            <select
+                              value={product.gameId}
+                              onChange={(e) => handleProductGameChange(key, e.target.value)}
+                              className={styles.gameSelect}
+                              disabled={!selectedProductsToCreate.has(key)}
+                            >
+                              <option value="">-- Select Game --</option>
+                              {filteredGames.map(g => (
+                                <option key={g.id} value={g.id}>{g.name}</option>
+                              ))}
+                            </select>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
-                  <button
-                    className={styles.createProductsBtn}
-                    onClick={handleCreateProducts}
-                    disabled={selectedProductsToCreate.size === 0 || isCreatingProducts || Array.from(selectedProductsToCreate).some(k => !productsToCreate.get(k)?.gameId)}
-                  >
-                    {isCreatingProducts ? 'Creating...' : `Create ${selectedProductsToCreate.size} Product${selectedProductsToCreate.size !== 1 ? 's' : ''} & Re-process`}
-                  </button>
+                      <button
+                        className={styles.createProductsBtn}
+                        onClick={handleCreateProducts}
+                        disabled={selectedProductsToCreate.size === 0 || isCreatingProducts || Array.from(selectedProductsToCreate).some(k => !productsToCreate.get(k)?.gameId)}
+                      >
+                        {isCreatingProducts ? 'Creating...' : `Create ${selectedProductsToCreate.size} Product${selectedProductsToCreate.size !== 1 ? 's' : ''} & Re-process`}
+                      </button>
+                    </>
+                  )}
                 </div>
               )}
 
