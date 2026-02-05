@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 import { serverSupabase as supabase } from '@/lib/supabase';
 
-// PlayStation Partners Analytics API Authentication endpoint
-const PSN_AUTH_URL = 'https://analytics.playstation.net/api/oauth/token';
+// Domo-powered analytics API (PlayStation Partners uses Domo under the hood)
+const PSN_AUTH_URL = 'https://api.domo.com/oauth/token';
 
 // GET - Fetch all PlayStation API credentials with client info
 export async function GET() {
@@ -224,7 +224,7 @@ async function validatePlayStationCredentials(
 // List available datasets using the access token
 async function listDatasets(accessToken: string): Promise<{ datasets?: string[]; error?: string }> {
   try {
-    const response = await fetch('https://analytics.playstation.net/api/datasets', {
+    const response = await fetch('https://api.domo.com/v1/datasets', {
       headers: {
         'Authorization': `Bearer ${accessToken}`,
         'Accept': 'application/json'

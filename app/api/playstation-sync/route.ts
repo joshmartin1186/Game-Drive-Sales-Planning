@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server';
 import { serverSupabase as supabase } from '@/lib/supabase';
 
-// PlayStation Partners Analytics API endpoints
-const PSN_AUTH_URL = 'https://analytics.playstation.net/api/oauth/token';
-const PSN_DATASETS_URL = 'https://analytics.playstation.net/api/datasets';
-const PSN_EXPORT_URL = 'https://analytics.playstation.net/api/datasets/{datasetId}/export';
-const PSN_QUERY_URL = 'https://analytics.playstation.net/api/datasets/{datasetId}/query';
+// Domo-powered analytics API endpoints (PlayStation Partners uses Domo under the hood)
+const PSN_AUTH_URL = 'https://api.domo.com/oauth/token';
+const PSN_DATASETS_URL = 'https://api.domo.com/v1/datasets';
+const PSN_EXPORT_URL = 'https://api.domo.com/v1/datasets/{datasetId}/data';
+const PSN_QUERY_URL = 'https://api.domo.com/v1/datasets/query/execute/{datasetId}';
 
 interface PSNSalesRecord {
   date: string;
