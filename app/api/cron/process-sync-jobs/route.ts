@@ -443,8 +443,14 @@ async function processPlayStationJob(job: SyncJob) {
     });
 
     // If no sales datasets found, fall back to all non-empty datasets
-    const targetDatasets = salesDatasets.length > 0 ? salesDatasets : datasetsResult.datasets.filter(d => d.rows > 0);
-    console.log(`[Cron/PS] ${salesDatasets.length} sales datasets, ${targetDatasets.length} target datasets to process`);
+    // Sort by row count (smallest first) so smaller datasets get processed before timeout
+    // Skip datasets > 100K rows for now (too large for 60s cron window)
+    const MAX_ROWS_PER_DATASET = 100000;
+    const allTargets = salesDatasets.length > 0 ? salesDatasets : datasetsResult.datasets.filter(d => d.rows > 0);
+    const targetDatasets = allTargets
+      .filter(d => d.rows <= MAX_ROWS_PER_DATASET)
+      .sort((a, b) => a.rows - b.rows);
+    console.log(`[Cron/PS] ${salesDatasets.length} sales datasets, ${targetDatasets.length} target datasets (after size filter), skipped ${allTargets.length - targetDatasets.length} large datasets`);
 
     // Step 3: Export data from each dataset
     let totalImported = job.rows_imported || 0;
@@ -645,12 +651,19 @@ async function exportDomoDataset(
 ): Promise<{ imported: number; skipped: number }> {
   const url = DOMO_EXPORT_URL.replace('{datasetId}', datasetId) + '?includeHeader=true';
 
+  // 45s timeout to leave room for DB operations within the 60s cron window
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 45000);
+
   const response = await fetch(url, {
     headers: {
       'Authorization': `Bearer ${accessToken}`,
       'Accept': 'text/csv'
-    }
+    },
+    signal: controller.signal
   });
+
+  clearTimeout(timeout);
 
   if (!response.ok) {
     throw new Error(`Domo export failed: ${response.status}`);
