@@ -323,14 +323,14 @@ export default function AnalyticsPage() {
 
       // Build a map of client_id -> connected platforms
       const platformMap: Record<string, string[]> = {}
-      for (const row of (steamResult.data || [])) {
+      for (const row of (steamResult.data || []) as Record<string, unknown>[]) {
         const client = row.clients as { id: string; name: string } | null
         if (client) {
           if (!platformMap[client.id]) platformMap[client.id] = []
           if (!platformMap[client.id].includes('Steam')) platformMap[client.id].push('Steam')
         }
       }
-      for (const row of (psResult.data || [])) {
+      for (const row of (psResult.data || []) as Record<string, unknown>[]) {
         const client = row.clients as { id: string; name: string } | null
         if (client) {
           if (!platformMap[client.id]) platformMap[client.id] = []
