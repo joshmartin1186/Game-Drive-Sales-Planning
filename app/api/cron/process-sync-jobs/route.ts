@@ -433,7 +433,18 @@ async function processPlayStationJob(job: SyncJob) {
       return NextResponse.json({ error: 'No datasets found' }, { status: 404 });
     }
 
-    console.log(`[Cron/PS] Found ${datasetsResult.datasets.length} datasets`);
+    console.log(`[Cron/PS] Found ${datasetsResult.datasets.length} total datasets`);
+
+    // Filter to only sales-relevant datasets (skip engagement, trophies, news, etc.)
+    const SALES_KEYWORDS = ['sales', 'voucher', 'monetisation', 'dlc'];
+    const salesDatasets = datasetsResult.datasets.filter(d => {
+      const name = d.name.toLowerCase();
+      return SALES_KEYWORDS.some(kw => name.includes(kw)) && d.rows > 0;
+    });
+
+    // If no sales datasets found, fall back to all non-empty datasets
+    const targetDatasets = salesDatasets.length > 0 ? salesDatasets : datasetsResult.datasets.filter(d => d.rows > 0);
+    console.log(`[Cron/PS] ${salesDatasets.length} sales datasets, ${targetDatasets.length} target datasets to process`);
 
     // Step 3: Export data from each dataset
     let totalImported = job.rows_imported || 0;
@@ -442,7 +453,7 @@ async function processPlayStationJob(job: SyncJob) {
 
     // Process one dataset per cron run to stay within timeout
     const alreadyProcessed = job.dates_processed || 0;
-    const datasetsToProcess = datasetsResult.datasets.slice(alreadyProcessed, alreadyProcessed + 1);
+    const datasetsToProcess = targetDatasets.slice(alreadyProcessed, alreadyProcessed + 1);
 
     if (datasetsToProcess.length === 0) {
       await supabase
@@ -469,7 +480,7 @@ async function processPlayStationJob(job: SyncJob) {
     if (job.total_dates === 0) {
       await supabase
         .from('sync_jobs')
-        .update({ total_dates: datasetsResult.datasets.length })
+        .update({ total_dates: targetDatasets.length })
         .eq('id', job.id);
     }
 
@@ -488,7 +499,7 @@ async function processPlayStationJob(job: SyncJob) {
     }
 
     const newProcessed = alreadyProcessed + datasetsToProcess.length;
-    const isComplete = newProcessed >= datasetsResult.datasets.length;
+    const isComplete = newProcessed >= targetDatasets.length;
 
     // Update job progress
     await supabase
@@ -540,7 +551,7 @@ async function processPlayStationJob(job: SyncJob) {
       message: isComplete ? 'PlayStation sync completed' : 'PlayStation batch processed, more pending',
       jobId: job.id,
       datasetsProcessed: newProcessed,
-      totalDatasets: datasetsResult.datasets.length,
+      totalDatasets: targetDatasets.length,
       rowsImported: totalImported,
       rowsSkipped: totalSkipped,
       isComplete
@@ -596,9 +607,9 @@ async function getDomoAccessToken(
 // List Domo datasets
 async function listDomoDatasets(
   accessToken: string
-): Promise<{ success: boolean; datasets?: Array<{ id: string; name: string }>; error?: string }> {
+): Promise<{ success: boolean; datasets?: Array<{ id: string; name: string; rows: number }>; error?: string }> {
   try {
-    const response = await fetch(DOMO_DATASETS_URL, {
+    const response = await fetch(`${DOMO_DATASETS_URL}?limit=50&offset=0`, {
       headers: {
         'Authorization': `Bearer ${accessToken}`,
         'Accept': 'application/json'
@@ -611,9 +622,10 @@ async function listDomoDatasets(
 
     const data = await response.json();
     const datasets = Array.isArray(data)
-      ? data.map((d: { id?: string; name?: string; datasetId?: string; displayName?: string }) => ({
+      ? data.map((d: { id?: string; name?: string; datasetId?: string; displayName?: string; rows?: number }) => ({
         id: d.id || d.datasetId || '',
-        name: d.name || d.displayName || d.id || 'Unknown'
+        name: d.name || d.displayName || d.id || 'Unknown',
+        rows: d.rows || 0
       })).filter(d => d.id)
       : [];
 
@@ -647,14 +659,21 @@ async function exportDomoDataset(
   const csvText = await response.text();
   const records = parseCSVToRecords(csvText);
 
+  // Log the first record's keys to help debug column mapping
+  if (records.length > 0) {
+    console.log(`[Cron/PS] CSV columns found: ${Object.keys(records[0]).join(', ')}`);
+  }
+
   console.log(`[Cron/PS] Parsed ${records.length} records from dataset ${datasetId}`);
 
   // Filter by date range if specified
   const filteredRecords = records.filter(record => {
-    const date = record.date;
+    // Try multiple date column names from the Domo CSV
+    const date = (record.date || record.month_start_date || record.week_start_date || '') as string;
     if (!date) return false;
-    if (startDate && date < startDate) return false;
-    if (endDate && date > endDate) return false;
+    const dateStr = date.split('T')[0]; // normalize
+    if (startDate && dateStr < startDate) return false;
+    if (endDate && dateStr > endDate) return false;
     return true;
   });
 
@@ -671,20 +690,39 @@ async function exportDomoDataset(
   // Batch upsert in chunks of 100
   const chunkSize = 100;
   for (let i = 0; i < filteredRecords.length; i += chunkSize) {
-    const chunk = filteredRecords.slice(i, i + chunkSize).map(record => ({
-      client_id: clientId,
-      date: (record.date || '').toString().split('T')[0],
-      product_name: (record.product_name || record.title_name || record.title || record.sku || 'Unknown') as string,
-      platform: 'PlayStation',
-      country_code: (record.country || record.region || 'Unknown') as string,
-      region: (record.region || 'Unknown') as string,
-      gross_units_sold: Number(record.units_sold || record.quantity || 0),
-      net_units_sold: Number(record.units_sold || record.quantity || 0),
-      gross_revenue_usd: Number(record.gross_revenue || record.revenue || 0),
-      net_revenue_usd: Number(record.net_revenue || record.revenue || 0),
-      currency: (record.currency || 'USD') as string,
-      updated_at: new Date().toISOString()
-    }));
+    const chunk = filteredRecords.slice(i, i + chunkSize).map(record => {
+      // Map actual Domo/PlayStation CSV columns to our schema
+      // Domo columns: Date, Title Name, Product Name, Platform, Country Code,
+      // Country/Region, SIE Region, Sales Quantity, Sales Incl Tax $, Sales Exc Tax $,
+      // Local Currency, Transaction Type
+      const date = (record.date || record.month_start_date || record.week_start_date || '') as string;
+      const productName = (record.product_name || record.title_name || record.concept || record.title || record.sku || 'Unknown') as string;
+      // Normalize platform to "PlayStation" to match the connected-platforms filter
+      // Raw data has PS4/PS5 but the analytics filter groups by connected platform name
+      const platform = 'PlayStation';
+      const countryCode = (record.country_code || record['country/region'] || record.country || 'Unknown') as string;
+      const region = (record.sie_region || record['country/region'] || record.region || 'Unknown') as string;
+      // Sales data columns from PlayStation Domo CSV
+      const unitsSold = Number(record.sales_quantity || record.units_sold || record.quantity || 0);
+      const grossRevenue = Number(record['sales_incl_tax_$'] || record.sales_incl_tax_usd || record.gross_revenue || record.revenue || 0);
+      const netRevenue = Number(record['sales_exc_tax_$'] || record.sales_exc_tax_usd || record.net_revenue || record.revenue || 0);
+      const currency = (record.local_currency || record.currency || 'USD') as string;
+
+      return {
+        client_id: clientId,
+        date: date.toString().split('T')[0],
+        product_name: productName,
+        platform,
+        country_code: countryCode,
+        region,
+        gross_units_sold: unitsSold,
+        net_units_sold: unitsSold,
+        gross_revenue_usd: grossRevenue,
+        net_revenue_usd: netRevenue,
+        currency,
+        updated_at: new Date().toISOString()
+      };
+    });
 
     const { error, count } = await supabase
       .from('performance_metrics')

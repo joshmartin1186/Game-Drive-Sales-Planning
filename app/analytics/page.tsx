@@ -2549,7 +2549,7 @@ export default function AnalyticsPage() {
               </svg>
             </div>
             <h3 className={styles.emptyTitle}>No Performance Data Yet</h3>
-            <p className={styles.emptyDescription}>Import your Steam sales data to see analytics and performance metrics.</p>
+            <p className={styles.emptyDescription}>Sync your platform data or import a CSV to see analytics and performance metrics.</p>
             <button className={styles.emptyButton} onClick={() => setShowImportModal(true)}>
               <svg className={styles.buttonIcon} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
