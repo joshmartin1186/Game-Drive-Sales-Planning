@@ -292,6 +292,7 @@ export default function AnalyticsPage() {
   const [editingWidget, setEditingWidget] = useState<DashboardWidget | null>(null)
   const [products, setProducts] = useState<string[]>([])
   const [clients, setClients] = useState<{id: string, name: string}[]>([])
+  const [clientPlatformMap, setClientPlatformMap] = useState<Record<string, string[]>>({})
   const [regions, setRegions] = useState<string[]>([])
   const [platforms, setPlatforms] = useState<string[]>([])
   const [showImportModal, setShowImportModal] = useState(false)
@@ -319,6 +320,24 @@ export default function AnalyticsPage() {
           .select('client_id, clients (id, name)')
           .eq('is_active', true)
       ])
+
+      // Build a map of client_id -> connected platforms
+      const platformMap: Record<string, string[]> = {}
+      for (const row of (steamResult.data || [])) {
+        const client = row.clients as { id: string; name: string } | null
+        if (client) {
+          if (!platformMap[client.id]) platformMap[client.id] = []
+          if (!platformMap[client.id].includes('Steam')) platformMap[client.id].push('Steam')
+        }
+      }
+      for (const row of (psResult.data || [])) {
+        const client = row.clients as { id: string; name: string } | null
+        if (client) {
+          if (!platformMap[client.id]) platformMap[client.id] = []
+          if (!platformMap[client.id].includes('PlayStation')) platformMap[client.id].push('PlayStation')
+        }
+      }
+      setClientPlatformMap(platformMap)
 
       const allRows = [
         ...(steamResult.data || []),
@@ -449,12 +468,19 @@ export default function AnalyticsPage() {
 
         const uniqueProducts = Array.from(new Set(allData.map(row => row.product_name).filter(Boolean)))
         const uniqueRegions = Array.from(new Set(allData.map(row => row.region).filter(Boolean))) as string[]
-        const uniquePlatforms = Array.from(new Set(allData.map(row => row.platform).filter(Boolean)))
-        
+        const dataPlatforms = Array.from(new Set(allData.map(row => row.platform).filter(Boolean)))
+
+        // Merge data-derived platforms with connected platforms for this client
+        const connectedPlatforms = selectedClient !== 'all' ? (clientPlatformMap[selectedClient] || []) : []
+        const mergedPlatforms = Array.from(new Set([...dataPlatforms, ...connectedPlatforms]))
+
         setProducts(uniqueProducts)
         setRegions(uniqueRegions)
-        setPlatforms(uniquePlatforms)
+        setPlatforms(mergedPlatforms)
       } else {
+        // Even with no data, show connected platforms for this client
+        const connectedPlatforms = selectedClient !== 'all' ? (clientPlatformMap[selectedClient] || []) : []
+        setPlatforms(connectedPlatforms)
         setSummaryStats(null)
       }
     } catch (error) {
@@ -462,7 +488,7 @@ export default function AnalyticsPage() {
     } finally {
       setIsLoading(false)
     }
-  }, [supabase, dateRange, selectedProduct, selectedClient, selectedRegion, selectedPlatform])
+  }, [supabase, dateRange, selectedProduct, selectedClient, selectedRegion, selectedPlatform, clientPlatformMap])
 
   useEffect(() => {
     fetchPerformanceData()
