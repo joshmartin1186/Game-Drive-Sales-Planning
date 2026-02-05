@@ -643,7 +643,7 @@ async function exportDomoDataset(
   startDate: string | null,
   endDate: string | null
 ): Promise<{ imported: number; skipped: number }> {
-  const url = DOMO_EXPORT_URL.replace('{datasetId}', datasetId);
+  const url = DOMO_EXPORT_URL.replace('{datasetId}', datasetId) + '?includeHeader=true';
 
   const response = await fetch(url, {
     headers: {
