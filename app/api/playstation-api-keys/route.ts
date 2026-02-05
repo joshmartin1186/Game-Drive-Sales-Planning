@@ -48,7 +48,10 @@ export async function POST(request: Request) {
 
     if (!validationResult.valid) {
       return NextResponse.json(
-        { error: `Invalid credentials: ${validationResult.message}` },
+        {
+          error: `Invalid credentials: ${validationResult.message}`,
+          debug: validationResult.debug
+        },
         { status: 400 }
       );
     }
@@ -143,10 +146,20 @@ async function validatePlayStationCredentials(
   clientId: string,
   clientSecret: string,
   scope?: string
-): Promise<{ valid: boolean; message: string; datasets?: string[] }> {
+): Promise<{ valid: boolean; message: string; datasets?: string[]; debug?: unknown }> {
   try {
     // Create Basic auth header from client_id:client_secret
     const basicAuth = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+    const effectiveScope = scope || 'psn:analytics';
+
+    console.log('[PlayStation API] Attempting auth to:', PSN_AUTH_URL);
+    console.log('[PlayStation API] Using scope:', effectiveScope);
+    console.log('[PlayStation API] Client ID length:', clientId.length);
+
+    const requestBody = new URLSearchParams({
+      grant_type: 'client_credentials',
+      scope: effectiveScope
+    });
 
     const response = await fetch(PSN_AUTH_URL, {
       method: 'POST',
@@ -154,26 +167,34 @@ async function validatePlayStationCredentials(
         'Authorization': `Basic ${basicAuth}`,
         'Content-Type': 'application/x-www-form-urlencoded'
       },
-      body: new URLSearchParams({
-        grant_type: 'client_credentials',
-        scope: scope || 'psn:analytics'
-      })
+      body: requestBody
     });
 
     if (!response.ok) {
       const errorText = await response.text();
       console.error('[PlayStation API] Auth failed:', response.status, errorText);
+      console.error('[PlayStation API] Response headers:', Object.fromEntries(response.headers.entries()));
 
       if (response.status === 401) {
         return {
           valid: false,
-          message: 'Invalid Client ID or Client Secret. Check your credentials in PlayStation Partners.'
+          message: 'Invalid Client ID or Client Secret. Check your credentials in PlayStation Partners.',
+          debug: { status: 401, error: errorText, url: PSN_AUTH_URL, scope: effectiveScope }
+        };
+      }
+
+      if (response.status === 403) {
+        return {
+          valid: false,
+          message: `Access forbidden (403). This usually means: 1) Your credentials haven't been provisioned for API access yet, 2) The scope "${effectiveScope}" is not authorized, or 3) Your IP may need to be whitelisted. Contact PlayStation Partners support.`,
+          debug: { status: 403, error: errorText, url: PSN_AUTH_URL, scope: effectiveScope }
         };
       }
 
       return {
         valid: false,
-        message: `Authentication failed with status ${response.status}`
+        message: `Authentication failed with status ${response.status}: ${errorText}`,
+        debug: { status: response.status, error: errorText, url: PSN_AUTH_URL, scope: effectiveScope }
       };
     }
 
