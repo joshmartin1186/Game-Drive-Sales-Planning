@@ -264,7 +264,7 @@ async function getAccessToken(
       },
       body: new URLSearchParams({
         grant_type: 'client_credentials',
-        scope: scope || 'psn:analytics'
+        scope: scope || 'data'  // Use provisioned scope
       })
     });
 
