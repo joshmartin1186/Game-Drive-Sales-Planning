@@ -443,14 +443,11 @@ async function processPlayStationJob(job: SyncJob) {
     });
 
     // If no sales datasets found, fall back to all non-empty datasets
-    // Sort by row count (smallest first) so smaller datasets get processed before timeout
-    // Skip datasets > 100K rows for now (too large for 60s cron window)
-    const MAX_ROWS_PER_DATASET = 100000;
+    // Sort by row count (smallest first) so smaller datasets import quickly
+    // Large datasets (>50K rows) will use SQL query API to fetch in date chunks
     const allTargets = salesDatasets.length > 0 ? salesDatasets : datasetsResult.datasets.filter(d => d.rows > 0);
-    const targetDatasets = allTargets
-      .filter(d => d.rows <= MAX_ROWS_PER_DATASET)
-      .sort((a, b) => a.rows - b.rows);
-    console.log(`[Cron/PS] ${salesDatasets.length} sales datasets, ${targetDatasets.length} target datasets (after size filter), skipped ${allTargets.length - targetDatasets.length} large datasets`);
+    const targetDatasets = allTargets.sort((a, b) => a.rows - b.rows);
+    console.log(`[Cron/PS] ${salesDatasets.length} sales datasets, ${targetDatasets.length} target datasets to process`);
 
     // Step 3: Export data from each dataset
     let totalImported = job.rows_imported || 0;
@@ -670,14 +667,24 @@ async function exportDomoDataset(
   }
 
   const csvText = await response.text();
-  const records = parseCSVToRecords(csvText);
+  const allRecords = parseCSVToRecords(csvText);
 
   // Log the first record's keys to help debug column mapping
-  if (records.length > 0) {
-    console.log(`[Cron/PS] CSV columns found: ${Object.keys(records[0]).join(', ')}`);
+  if (allRecords.length > 0) {
+    console.log(`[Cron/PS] CSV columns found: ${Object.keys(allRecords[0]).join(', ')}`);
   }
 
-  console.log(`[Cron/PS] Parsed ${records.length} records from dataset ${datasetId}`);
+  console.log(`[Cron/PS] Parsed ${allRecords.length} records from dataset ${datasetId}`);
+
+  // Cap at 20K records per cron run to stay within time limits
+  // Take the LAST records (most recent) since Domo typically sorts chronologically
+  const MAX_RECORDS = 20000;
+  const records = allRecords.length > MAX_RECORDS
+    ? allRecords.slice(allRecords.length - MAX_RECORDS)
+    : allRecords;
+  if (allRecords.length > MAX_RECORDS) {
+    console.log(`[Cron/PS] Capped to last ${MAX_RECORDS} records (from ${allRecords.length})`);
+  }
 
   // Filter by date range if specified
   const filteredRecords = records.filter(record => {
