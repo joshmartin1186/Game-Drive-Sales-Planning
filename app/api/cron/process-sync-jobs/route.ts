@@ -489,7 +489,13 @@ async function processPlayStationJob(job: SyncJob) {
 
     for (const dataset of datasetsToProcess) {
       try {
-        console.log(`[Cron/PS] Exporting dataset: ${dataset.name} (${dataset.id})`);
+        // Skip datasets too large for a single cron run (>50K rows)
+        // These need a paginated approach in a future update
+        if (dataset.rows > 50000) {
+          console.log(`[Cron/PS] Skipping large dataset: ${dataset.name} (${dataset.rows} rows) — needs paginated import`);
+          continue;
+        }
+        console.log(`[Cron/PS] Exporting dataset: ${dataset.name} (${dataset.id}, ${dataset.rows} rows)`);
         const result = await exportDomoDataset(authResult.token, dataset.id, job.client_id, job.start_date, job.end_date);
         totalImported += result.imported;
         totalSkipped += result.skipped;
