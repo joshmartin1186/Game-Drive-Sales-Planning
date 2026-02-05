@@ -114,7 +114,7 @@ export default function SettingsPage() {
     client_id: '',
     ps_client_id: '',
     client_secret: '',
-    scope: 'psn:analytics'
+    scope: 'data'  // Use provisioned scope - can be space-separated for multiple (e.g., "data dashboard")
   });
 
   const [testingPSKey, setTestingPSKey] = useState<string | null>(null);
@@ -465,7 +465,7 @@ export default function SettingsPage() {
 
       if (res.ok) {
         setShowAddPSModal(false);
-        setPsFormData({ client_id: '', ps_client_id: '', client_secret: '', scope: 'psn:analytics' });
+        setPsFormData({ client_id: '', ps_client_id: '', client_secret: '', scope: 'data' });
         fetchData();
       } else {
         const err = await res.json();
@@ -1291,11 +1291,11 @@ export default function SettingsPage() {
               <label>Scope</label>
               <input
                 type="text"
-                placeholder="psn:analytics"
+                placeholder="data"
                 value={psFormData.scope}
                 onChange={e => setPsFormData({...psFormData, scope: e.target.value})}
               />
-              <small>OAuth scope for API access (usually psn:analytics)</small>
+              <small>OAuth scope for API access (e.g., &quot;data&quot; or &quot;data dashboard&quot; for multiple)</small>
             </div>
 
             <div className={styles.modalActions}>

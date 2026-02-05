@@ -71,7 +71,7 @@ export async function POST(request: Request) {
         .update({
           ps_client_id,
           client_secret,
-          scope: scope || 'psn:analytics',
+          scope: scope || 'data',
           updated_at: new Date().toISOString()
         })
         .eq('client_id', client_id)
@@ -88,7 +88,7 @@ export async function POST(request: Request) {
           client_id,
           ps_client_id,
           client_secret,
-          scope: scope || 'psn:analytics',
+          scope: scope || 'data',
           is_active: true
         })
         .select()
@@ -150,7 +150,8 @@ async function validatePlayStationCredentials(
   try {
     // Create Basic auth header from client_id:client_secret
     const basicAuth = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
-    const effectiveScope = scope || 'psn:analytics';
+    // Default to 'data' scope - use space-separated values for multiple scopes (e.g., "data dashboard")
+    const effectiveScope = scope || 'data';
 
     console.log('[PlayStation API] Attempting auth to:', PSN_AUTH_URL);
     console.log('[PlayStation API] Using scope:', effectiveScope);
