@@ -1,11 +1,68 @@
 # GameDrive Project Tracker
 
 ## 🚀 Next Priority
+- [ ] **Continue troubleshooting PlayStation Partners Analytics API**
+  - Getting 403 errors despite correct credentials/scopes
+  - May need IP whitelisting or additional API provisioning from PlayStation Partners support
+  - Test with `data` and `dashboard` scopes once provisioning confirmed
+
 - [ ] **Optimize default dashboard for client presentation**
   - Make charts interactive/clickable for drill-down
   - Add export functionality for charts/data
   - Improve visual polish (animations, hover states)
   - Add filtering controls within charts
+
+## ✅ Completed (Session: 2026-02-05)
+
+### Version Manager Enhancements
+- [x] **Fixed version activation** - Versions now properly display snapshot data in timeline
+  - Fixed `useEffect` bug that cleared `activeVersionId` when only `filterClientId` was set
+  - Versions are now PRODUCT-scoped (not client-scoped)
+- [x] **Made saved versions editable** - Can now edit sales in a saved version and save changes back
+  - Added `handleVersionSnapshotUpdate`, `handleVersionSnapshotDelete`, `handleVersionSnapshotCreate` handlers
+  - Added wrapper handlers that route edits to snapshot or live sales based on `activeVersionId`
+  - Added "Save Version" button in version banner when changes are detected
+- [x] **Unsaved changes prompt** - Now prompts when switching versions with unsaved edits
+  - Added `hasUnsavedChanges` and `onSaveVersion` props to VersionManager
+  - Confirmation dialog offers to save or discard changes before switching
+
+### PlayStation Partners Analytics API Integration
+- [x] **Added PlayStation API integration** (existing from prior session)
+  - OAuth 2.0 client credentials flow authentication
+  - Dataset listing and querying endpoints
+  - Sales data sync to `performance_metrics` table
+- [x] **Improved error handling** for 403 errors
+  - Added detailed debug logging (URL, scope, client ID length)
+  - Better error messages explaining possible causes (IP whitelisting, scope authorization)
+- [x] **Fixed default scope** - Changed from `psn:analytics` to `data` (user's provisioned scope)
+- [x] **Multi-select scope dropdown** (PR #60)
+  - Replaced text input with checkbox-based multi-select UI
+  - Shows `data` and `dashboard` scope options with descriptions
+  - Scopes automatically joined with spaces for OAuth API
+
+### PRs Merged
+- PR #54 - Add scope indicator to VersionManager
+- PR #55 - Fix version activation when filtering by client
+- PR #56 - Add version snapshot editing with save functionality
+- PR #57 - Add unsaved changes prompt when switching versions
+- PR #58 - Improve PlayStation API 403 error messages
+- PR #59 - Change PlayStation default scope to 'data'
+- PR #60 - Add multi-select dropdown for PlayStation API scopes
+
+**Files Modified:**
+- `app/page.tsx` - Version editing handlers, snapshot state management
+- `app/components/VersionManager.tsx` - Unsaved changes handling, version activation
+- `app/api/playstation-api-keys/route.ts` - Scope fix, improved error messages
+- `app/api/playstation-sync/route.ts` - Scope fix
+- `app/settings/page.tsx` - Multi-select scope UI
+
+### Known Issue (Carry Forward)
+- PlayStation API still returning 403 errors - likely needs:
+  1. IP whitelisting with PlayStation Partners
+  2. API access provisioning confirmation
+  3. Contact PlayStation Partners support for resolution
+
+---
 
 ## ✅ Completed (Session: 2026-01-30)
 
