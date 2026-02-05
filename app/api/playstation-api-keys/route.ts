@@ -153,22 +153,18 @@ async function validatePlayStationCredentials(
     // Default to 'data' scope - use space-separated values for multiple scopes (e.g., "data dashboard")
     const effectiveScope = scope || 'data';
 
-    console.log('[PlayStation API] Attempting auth to:', PSN_AUTH_URL);
+    // Domo API expects grant_type and scope as URL query parameters with a GET request
+    const authUrl = `${PSN_AUTH_URL}?grant_type=client_credentials&scope=${encodeURIComponent(effectiveScope)}`;
+
+    console.log('[PlayStation API] Attempting auth to:', authUrl);
     console.log('[PlayStation API] Using scope:', effectiveScope);
     console.log('[PlayStation API] Client ID length:', clientId.length);
 
-    const requestBody = new URLSearchParams({
-      grant_type: 'client_credentials',
-      scope: effectiveScope
-    });
-
-    const response = await fetch(PSN_AUTH_URL, {
-      method: 'POST',
+    const response = await fetch(authUrl, {
+      method: 'GET',
       headers: {
-        'Authorization': `Basic ${basicAuth}`,
-        'Content-Type': 'application/x-www-form-urlencoded'
-      },
-      body: requestBody
+        'Authorization': `Basic ${basicAuth}`
+      }
     });
 
     if (!response.ok) {

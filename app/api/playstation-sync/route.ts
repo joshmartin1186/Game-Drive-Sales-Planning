@@ -255,17 +255,16 @@ async function getAccessToken(
 ): Promise<{ success: boolean; token?: string; error?: string }> {
   try {
     const basicAuth = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+    const effectiveScope = scope || 'data';
 
-    const response = await fetch(PSN_AUTH_URL, {
-      method: 'POST',
+    // Domo API expects grant_type and scope as URL query parameters with a GET request
+    const authUrl = `${PSN_AUTH_URL}?grant_type=client_credentials&scope=${encodeURIComponent(effectiveScope)}`;
+
+    const response = await fetch(authUrl, {
+      method: 'GET',
       headers: {
-        'Authorization': `Basic ${basicAuth}`,
-        'Content-Type': 'application/x-www-form-urlencoded'
-      },
-      body: new URLSearchParams({
-        grant_type: 'client_credentials',
-        scope: scope || 'data'  // Use provisioned scope
-      })
+        'Authorization': `Basic ${basicAuth}`
+      }
     });
 
     if (!response.ok) {
