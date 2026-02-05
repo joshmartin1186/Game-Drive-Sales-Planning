@@ -56,47 +56,23 @@ export async function POST(request: Request) {
       );
     }
 
-    // Check if credentials exist for this client
-    const { data: existing } = await supabase
+    // Upsert credentials - insert or update if client already has a row
+    const { data: result, error } = await supabase
       .from('playstation_api_keys')
-      .select('id')
-      .eq('client_id', client_id)
+      .upsert({
+        client_id,
+        ps_client_id,
+        client_secret,
+        scope: scope || 'data',
+        is_active: true,
+        updated_at: new Date().toISOString()
+      }, {
+        onConflict: 'client_id'
+      })
+      .select()
       .single();
 
-    let result;
-    if (existing) {
-      // Update existing
-      const { data, error } = await supabase
-        .from('playstation_api_keys')
-        .update({
-          ps_client_id,
-          client_secret,
-          scope: scope || 'data',
-          updated_at: new Date().toISOString()
-        })
-        .eq('client_id', client_id)
-        .select()
-        .single();
-
-      if (error) throw error;
-      result = data;
-    } else {
-      // Create new
-      const { data, error } = await supabase
-        .from('playstation_api_keys')
-        .insert({
-          client_id,
-          ps_client_id,
-          client_secret,
-          scope: scope || 'data',
-          is_active: true
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-      result = data;
-    }
+    if (error) throw error;
 
     return NextResponse.json({
       ...result,
