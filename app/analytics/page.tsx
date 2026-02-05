@@ -305,19 +305,32 @@ export default function AnalyticsPage() {
   const [committedVersion, setCommittedVersion] = useState<CommittedVersion | null>(null)
   const gridRef = useRef<HTMLDivElement>(null)
 
-  // Fetch only clients that have API keys configured
+  // Fetch clients that have ANY API keys configured (Steam or PlayStation)
   useEffect(() => {
     const fetchClients = async () => {
-      const { data } = await supabase
-        .from('steam_api_keys')
-        .select('client_id, clients (id, name)')
-        .eq('is_active', true)
-      if (data) {
-        const clientList = data
+      // Query both Steam and PlayStation API key tables in parallel
+      const [steamResult, psResult] = await Promise.all([
+        supabase
+          .from('steam_api_keys')
+          .select('client_id, clients (id, name)')
+          .eq('is_active', true),
+        supabase
+          .from('playstation_api_keys')
+          .select('client_id, clients (id, name)')
+          .eq('is_active', true)
+      ])
+
+      const allRows = [
+        ...(steamResult.data || []),
+        ...(psResult.data || [])
+      ]
+
+      if (allRows.length > 0) {
+        const clientList = allRows
           .map((row: Record<string, unknown>) => row.clients as { id: string; name: string } | null)
           .filter((c): c is { id: string; name: string } => c !== null)
           .sort((a, b) => a.name.localeCompare(b.name))
-        // Deduplicate in case a client has multiple keys
+        // Deduplicate clients that have both Steam and PlayStation keys
         const seen = new Set<string>()
         const unique = clientList.filter(c => {
           if (seen.has(c.id)) return false
@@ -382,7 +395,7 @@ export default function AnalyticsPage() {
 
       while (hasMore) {
         let query = supabase
-          .from('steam_performance_data_view')
+          .from('analytics_data_view')
           .select(columns)
           .order('date', { ascending: true })
           .range(offset, offset + batchSize - 1)
@@ -2374,7 +2387,7 @@ export default function AnalyticsPage() {
         
         <div className={styles.header}>
           <div className={styles.headerLeft}>
-            <h1 className={styles.title}>Steam Analytics</h1>
+            <h1 className={styles.title}>Analytics</h1>
             <p className={styles.subtitle}>Performance metrics and sales analysis</p>
           </div>
           <div className={styles.headerRight}>
@@ -2654,7 +2667,7 @@ export default function AnalyticsPage() {
             products={products}
             clients={clients}
             regions={regions}
-            platforms={['Steam', 'Epic', 'GOG', 'Itch.io']}
+            platforms={['Steam', 'PlayStation', 'Epic', 'GOG', 'Itch.io']}
           />
         )}
       </div>
