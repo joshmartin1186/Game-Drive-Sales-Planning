@@ -1288,14 +1288,59 @@ export default function SettingsPage() {
             </div>
 
             <div className={styles.formGroup}>
-              <label>Scope</label>
-              <input
-                type="text"
-                placeholder="data"
-                value={psFormData.scope}
-                onChange={e => setPsFormData({...psFormData, scope: e.target.value})}
-              />
-              <small>OAuth scope for API access (e.g., &quot;data&quot; or &quot;data dashboard&quot; for multiple)</small>
+              <label>Scopes</label>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '4px' }}>
+                {[
+                  { value: 'data', label: 'data', description: 'Access to analytics data exports and queries' },
+                  { value: 'dashboard', label: 'dashboard', description: 'Access to dashboard and reporting features' }
+                ].map(scopeOption => {
+                  const selectedScopes = psFormData.scope.split(' ').filter(s => s.trim());
+                  const isChecked = selectedScopes.includes(scopeOption.value);
+                  return (
+                    <label
+                      key={scopeOption.value}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        gap: '8px',
+                        padding: '10px 12px',
+                        background: isChecked ? '#e0e7ff' : '#f8fafc',
+                        border: isChecked ? '1px solid #6366f1' : '1px solid #e2e8f0',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease'
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={e => {
+                          const currentScopes = psFormData.scope.split(' ').filter(s => s.trim());
+                          let newScopes: string[];
+                          if (e.target.checked) {
+                            newScopes = [...currentScopes, scopeOption.value];
+                          } else {
+                            newScopes = currentScopes.filter(s => s !== scopeOption.value);
+                          }
+                          setPsFormData({...psFormData, scope: newScopes.join(' ')});
+                        }}
+                        style={{ marginTop: '2px' }}
+                      />
+                      <div>
+                        <div style={{ fontWeight: 500, fontFamily: 'monospace', fontSize: '14px' }}>
+                          {scopeOption.label}
+                        </div>
+                        <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>
+                          {scopeOption.description}
+                        </div>
+                      </div>
+                    </label>
+                  );
+                })}
+              </div>
+              <small style={{ marginTop: '8px', display: 'block' }}>
+                Select the scopes your credentials are provisioned for. Contact PlayStation Partners if unsure.
+              </small>
             </div>
 
             <div className={styles.modalActions}>
