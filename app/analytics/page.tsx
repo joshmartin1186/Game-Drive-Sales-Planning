@@ -1440,7 +1440,7 @@ export default function AnalyticsPage() {
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '12px', marginTop: '8px', maxHeight: '120px', overflowY: 'auto', flexShrink: 0, padding: '0 16px 8px' }}>
             {productRevenueData.map((segment, i) => {
-              const percentage = (segment.value / totalValue) * 100
+              const percentage = totalValue > 0 ? (segment.value / totalValue) * 100 : 0
               return (
                 <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <div style={{ width: '14px', height: '14px', backgroundColor: pieColors[i % pieColors.length], borderRadius: '3px', flexShrink: 0 }} />
@@ -2239,7 +2239,7 @@ export default function AnalyticsPage() {
         {/* Product legend */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '12px', marginTop: '8px', maxHeight: '120px', overflowY: 'auto', flexShrink: 0 }}>
           {productRevenueData.map((segment, i) => {
-            const percentage = (segment.value / totalValue) * 100
+            const percentage = totalValue > 0 ? (segment.value / totalValue) * 100 : 0
             return (
               <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <div style={{ width: '14px', height: '14px', backgroundColor: pieColors[i % pieColors.length], borderRadius: '3px', flexShrink: 0 }} />

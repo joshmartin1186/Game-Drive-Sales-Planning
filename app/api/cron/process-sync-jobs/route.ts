@@ -460,16 +460,25 @@ async function processPlayStationJob(job: SyncJob) {
 
       console.log(`[Cron/PS] Found ${datasetsResult.datasets.length} total datasets`);
 
-      // Filter to sales-relevant datasets (skip engagement, trophies, news, etc.)
-      const SALES_KEYWORDS = ['sales', 'voucher', 'monetisation', 'dlc'];
-      const salesDatasets = datasetsResult.datasets.filter(d => {
+      // Focus on the Daily Sales dataset — it's the only one with revenue/units columns
+      // Other datasets (vouchers, PS Plus, hourly) have different schemas and import as $0
+      const dailySalesDatasets = datasetsResult.datasets.filter(d => {
         const name = d.name.toLowerCase();
-        return SALES_KEYWORDS.some(kw => name.includes(kw)) && d.rows > 0;
+        return name.includes('daily sales') && d.rows > 0;
       });
 
-      // Sort smallest-first so quick wins import fast, large datasets last
-      const allTargets = salesDatasets.length > 0 ? salesDatasets : datasetsResult.datasets.filter(d => d.rows > 0);
-      const sorted = allTargets.sort((a, b) => a.rows - b.rows);
+      // Fallback: if no daily sales found, try broader sales filter
+      const SALES_KEYWORDS = ['sales', 'monetisation', 'dlc'];
+      const salesDatasets = dailySalesDatasets.length > 0
+        ? dailySalesDatasets
+        : datasetsResult.datasets.filter(d => {
+            const name = d.name.toLowerCase();
+            return SALES_KEYWORDS.some(kw => name.includes(kw)) && d.rows > 0;
+          });
+
+      const sorted = salesDatasets.length > 0
+        ? salesDatasets.sort((a, b) => a.rows - b.rows)
+        : datasetsResult.datasets.filter(d => d.rows > 0).sort((a, b) => a.rows - b.rows);
 
       state = {
         datasets: sorted.map(d => ({
@@ -851,7 +860,7 @@ async function queryDomoDatasetDates(
         'Accept': 'application/json',
       },
       body: JSON.stringify({
-        sql: 'SELECT DISTINCT `Date` FROM table ORDER BY `Date` ASC',
+        sql: 'SELECT DISTINCT `Date` FROM table ORDER BY `Date` DESC',
       }),
     });
 
