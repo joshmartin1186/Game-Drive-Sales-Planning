@@ -8,7 +8,7 @@ const DOMO_EXPORT_URL = 'https://api.domo.com/v1/datasets/{datasetId}/data';
 const DOMO_QUERY_URL = 'https://api.domo.com/v1/datasets/query/execute/{datasetId}';
 const MAX_DATES_PER_RUN = 1; // Process 1 date per cron execution to avoid timeout
 const LARGE_DATASET_THRESHOLD = 50000; // Datasets above this use SQL query API with date chunking
-const DATES_PER_PS_RUN = 5; // Process 5 dates per cron run for large datasets
+const DATES_PER_PS_RUN = 15; // Process 15 dates per cron run for large datasets
 
 // Force dynamic rendering - required for accessing request headers
 export const dynamic = 'force-dynamic';
