@@ -920,6 +920,13 @@ async function queryDomoDatasetByDate(
 
   console.log(`[Cron/PS] SQL query for ${dateStr}: ${rows.length} rows, columns: ${columns.join(', ')}`);
 
+  // Log first row raw data for debugging column mapping
+  if (rows.length > 0) {
+    const sampleRow: Record<string, string> = {};
+    columns.forEach((col, idx) => { sampleRow[col] = rows[0][idx]; });
+    console.log(`[Cron/PS] Sample raw row: ${JSON.stringify(sampleRow)}`);
+  }
+
   if (rows.length === 0) {
     return { imported: 0, skipped: 0 };
   }
@@ -936,6 +943,13 @@ async function queryDomoDatasetByDate(
     }
     return record;
   });
+
+  // Log first mapped record for debugging
+  if (records.length > 0) {
+    const r = records[0];
+    console.log(`[Cron/PS] Sample normalized keys: ${Object.keys(r).join(', ')}`);
+    console.log(`[Cron/PS] Revenue fields: sales_incl_tax_$=${r['sales_incl_tax_$']}, sales_exc_tax_$=${r['sales_exc_tax_$']}, sales_quantity=${r.sales_quantity}`);
+  }
 
   // Reuse the same upsert logic as CSV export
   return await upsertPSNRecords(records, clientId);
