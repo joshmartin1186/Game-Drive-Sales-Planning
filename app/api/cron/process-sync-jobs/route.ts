@@ -5,7 +5,10 @@ const STEAM_PARTNER_API = 'https://partner.steam-api.com';
 const DOMO_AUTH_URL = 'https://api.domo.com/oauth/token';
 const DOMO_DATASETS_URL = 'https://api.domo.com/v1/datasets';
 const DOMO_EXPORT_URL = 'https://api.domo.com/v1/datasets/{datasetId}/data';
+const DOMO_QUERY_URL = 'https://api.domo.com/v1/datasets/query/execute/{datasetId}';
 const MAX_DATES_PER_RUN = 1; // Process 1 date per cron execution to avoid timeout
+const LARGE_DATASET_THRESHOLD = 50000; // Datasets above this use SQL query API with date chunking
+const DATES_PER_PS_RUN = 5; // Process 5 dates per cron run for large datasets
 
 // Force dynamic rendering - required for accessing request headers
 export const dynamic = 'force-dynamic';
@@ -371,7 +374,24 @@ interface SyncJob {
   dates_processed: number;
   rows_imported: number;
   rows_skipped: number;
+  result_data: PSJobState | null;
   [key: string]: unknown;
+}
+
+// Tracks PlayStation sync progress across multiple cron runs
+// Mirrors Steam's date-chunking pattern: process a bit each run, requeue
+interface PSJobState {
+  // List of dataset IDs + metadata to process
+  datasets: Array<{
+    id: string;
+    name: string;
+    rows: number;
+    completed: boolean;
+    // For large datasets: track date-level chunking (like Steam's date-per-run)
+    dates?: string[];        // All distinct dates in the dataset
+    datesProcessed?: number; // How many dates have been processed
+  }>;
+  currentDatasetIndex: number;
 }
 
 async function processPlayStationJob(job: SyncJob) {
@@ -417,139 +437,190 @@ async function processPlayStationJob(job: SyncJob) {
 
     console.log('[Cron/PS] Authenticated with Domo API');
 
-    // Step 2: List available datasets
-    const datasetsResult = await listDomoDatasets(authResult.token);
+    // Step 2: Initialize or restore job state
+    // Mirrors Steam pattern: track progress in result_data, process a chunk per run, requeue
+    let state: PSJobState = (job.result_data as PSJobState) || { datasets: [], currentDatasetIndex: 0 };
 
-    if (!datasetsResult.success || !datasetsResult.datasets?.length) {
+    // First run: discover datasets and build the processing plan
+    if (state.datasets.length === 0) {
+      const datasetsResult = await listDomoDatasets(authResult.token);
+
+      if (!datasetsResult.success || !datasetsResult.datasets?.length) {
+        await supabase
+          .from('sync_jobs')
+          .update({
+            status: 'failed',
+            completed_at: new Date().toISOString(),
+            error_message: 'No datasets available from Domo API'
+          })
+          .eq('id', job.id);
+
+        return NextResponse.json({ error: 'No datasets found' }, { status: 404 });
+      }
+
+      console.log(`[Cron/PS] Found ${datasetsResult.datasets.length} total datasets`);
+
+      // Filter to sales-relevant datasets (skip engagement, trophies, news, etc.)
+      const SALES_KEYWORDS = ['sales', 'voucher', 'monetisation', 'dlc'];
+      const salesDatasets = datasetsResult.datasets.filter(d => {
+        const name = d.name.toLowerCase();
+        return SALES_KEYWORDS.some(kw => name.includes(kw)) && d.rows > 0;
+      });
+
+      // Sort smallest-first so quick wins import fast, large datasets last
+      const allTargets = salesDatasets.length > 0 ? salesDatasets : datasetsResult.datasets.filter(d => d.rows > 0);
+      const sorted = allTargets.sort((a, b) => a.rows - b.rows);
+
+      state = {
+        datasets: sorted.map(d => ({
+          id: d.id,
+          name: d.name,
+          rows: d.rows,
+          completed: false,
+        })),
+        currentDatasetIndex: 0,
+      };
+
+      // Calculate total processing steps for progress tracking
+      // Small datasets = 1 step each, large datasets will add date steps later
+      const totalSteps = sorted.length;
       await supabase
         .from('sync_jobs')
-        .update({
-          status: 'failed',
-          completed_at: new Date().toISOString(),
-          error_message: 'No datasets available from Domo API'
-        })
+        .update({ total_dates: totalSteps, result_data: state })
         .eq('id', job.id);
 
-      return NextResponse.json({ error: 'No datasets found' }, { status: 404 });
+      console.log(`[Cron/PS] ${salesDatasets.length} sales datasets, ${sorted.length} total to process`);
     }
 
-    console.log(`[Cron/PS] Found ${datasetsResult.datasets.length} total datasets`);
-
-    // Filter to only sales-relevant datasets (skip engagement, trophies, news, etc.)
-    const SALES_KEYWORDS = ['sales', 'voucher', 'monetisation', 'dlc'];
-    const salesDatasets = datasetsResult.datasets.filter(d => {
-      const name = d.name.toLowerCase();
-      return SALES_KEYWORDS.some(kw => name.includes(kw)) && d.rows > 0;
-    });
-
-    // If no sales datasets found, fall back to all non-empty datasets
-    // Sort by row count (smallest first) so smaller datasets import quickly
-    // Large datasets (>50K rows) will use SQL query API to fetch in date chunks
-    const allTargets = salesDatasets.length > 0 ? salesDatasets : datasetsResult.datasets.filter(d => d.rows > 0);
-    const targetDatasets = allTargets.sort((a, b) => a.rows - b.rows);
-    console.log(`[Cron/PS] ${salesDatasets.length} sales datasets, ${targetDatasets.length} target datasets to process`);
-
-    // Step 3: Export data from each dataset
+    // Step 3: Process the current dataset (one per cron run, like Steam's date-per-run)
     let totalImported = job.rows_imported || 0;
     let totalSkipped = job.rows_skipped || 0;
     const errors: string[] = [];
 
-    // Process one dataset per cron run to stay within timeout
-    const alreadyProcessed = job.dates_processed || 0;
-    const datasetsToProcess = targetDatasets.slice(alreadyProcessed, alreadyProcessed + 1);
-
-    if (datasetsToProcess.length === 0) {
-      await supabase
-        .from('sync_jobs')
-        .update({
-          status: 'completed',
-          completed_at: new Date().toISOString()
-        })
-        .eq('id', job.id);
-
-      // Update last_auto_sync timestamp
-      await supabase
-        .from('playstation_api_keys')
-        .update({
-          last_auto_sync: new Date().toISOString(),
-          last_sync_date: new Date().toISOString().split('T')[0]
-        })
-        .eq('client_id', job.client_id);
-
-      return NextResponse.json({ message: 'PlayStation sync completed' });
+    const currentDS = state.datasets[state.currentDatasetIndex];
+    if (!currentDS || currentDS.completed) {
+      // Find next incomplete dataset
+      const nextIdx = state.datasets.findIndex(d => !d.completed);
+      if (nextIdx === -1) {
+        // All datasets complete!
+        return await completePlayStationJob(job, totalImported, totalSkipped, state);
+      }
+      state.currentDatasetIndex = nextIdx;
     }
 
-    // Update total if first run
-    if (job.total_dates === 0) {
-      await supabase
-        .from('sync_jobs')
-        .update({ total_dates: targetDatasets.length })
-        .eq('id', job.id);
-    }
+    const dataset = state.datasets[state.currentDatasetIndex];
+    const isLargeDataset = dataset.rows > LARGE_DATASET_THRESHOLD;
 
-    for (const dataset of datasetsToProcess) {
-      try {
-        // Skip datasets too large for a single cron run (>50K rows)
-        // These need a paginated approach in a future update
-        if (dataset.rows > 50000) {
-          console.log(`[Cron/PS] Skipping large dataset: ${dataset.name} (${dataset.rows} rows) — needs paginated import`);
-          continue;
+    if (isLargeDataset) {
+      // === LARGE DATASET: SQL query API with date chunking (mirrors Steam pattern) ===
+      console.log(`[Cron/PS] Large dataset: ${dataset.name} (${dataset.rows} rows) — using SQL date chunking`);
+
+      // First time on this dataset: discover distinct dates
+      if (!dataset.dates || dataset.dates.length === 0) {
+        console.log(`[Cron/PS] Discovering dates for ${dataset.name}...`);
+        const datesResult = await queryDomoDatasetDates(authResult.token, dataset.id);
+
+        if (!datesResult.success || !datesResult.dates?.length) {
+          console.error(`[Cron/PS] Failed to get dates for ${dataset.name}: ${datesResult.error}`);
+          dataset.completed = true;
+          errors.push(`No dates found for ${dataset.name}: ${datesResult.error}`);
+        } else {
+          dataset.dates = datesResult.dates;
+          dataset.datesProcessed = 0;
+          // Update total_dates to reflect the actual work (original count + this dataset's dates)
+          const additionalSteps = datesResult.dates.length - 1; // -1 because the dataset was already counted as 1 step
+          await supabase
+            .from('sync_jobs')
+            .update({ total_dates: (job.total_dates || 0) + additionalSteps })
+            .eq('id', job.id);
+          console.log(`[Cron/PS] Found ${datesResult.dates.length} distinct dates in ${dataset.name}`);
         }
+      }
+
+      // Process a batch of dates for this dataset
+      if (dataset.dates && dataset.dates.length > 0 && !dataset.completed) {
+        const alreadyDone = dataset.datesProcessed || 0;
+        const remaining = dataset.dates.slice(alreadyDone);
+        const batch = remaining.slice(0, DATES_PER_PS_RUN);
+
+        if (batch.length === 0) {
+          dataset.completed = true;
+        } else {
+          for (const dateStr of batch) {
+            try {
+              console.log(`[Cron/PS] Querying ${dataset.name} for date ${dateStr}`);
+              const result = await queryDomoDatasetByDate(
+                authResult.token, dataset.id, dateStr, job.client_id
+              );
+              totalImported += result.imported;
+              totalSkipped += result.skipped;
+              console.log(`[Cron/PS] ${dataset.name} date ${dateStr}: imported=${result.imported}, skipped=${result.skipped}`);
+            } catch (error) {
+              const errorMsg = `Error querying ${dataset.name} date ${dateStr}: ${error instanceof Error ? error.message : String(error)}`;
+              console.error(`[Cron/PS] ${errorMsg}`);
+              errors.push(errorMsg);
+            }
+          }
+
+          dataset.datesProcessed = alreadyDone + batch.length;
+          if (dataset.datesProcessed >= dataset.dates.length) {
+            dataset.completed = true;
+            console.log(`[Cron/PS] Completed large dataset: ${dataset.name}`);
+          }
+        }
+      }
+    } else {
+      // === SMALL DATASET: CSV export (already works fine) ===
+      try {
         console.log(`[Cron/PS] Exporting dataset: ${dataset.name} (${dataset.id}, ${dataset.rows} rows)`);
         const result = await exportDomoDataset(authResult.token, dataset.id, job.client_id, job.start_date, job.end_date);
         totalImported += result.imported;
         totalSkipped += result.skipped;
         console.log(`[Cron/PS] Dataset ${dataset.name}: imported=${result.imported}, skipped=${result.skipped}`);
+        dataset.completed = true;
       } catch (error) {
         const errorMsg = `Error processing dataset ${dataset.name}: ${error instanceof Error ? error.message : String(error)}`;
         console.error(`[Cron/PS] ${errorMsg}`);
         errors.push(errorMsg);
+        dataset.completed = true; // Move on even if failed
       }
     }
 
-    const newProcessed = alreadyProcessed + datasetsToProcess.length;
-    const isComplete = newProcessed >= targetDatasets.length;
+    // Move to next dataset if current one is complete
+    if (dataset.completed) {
+      state.currentDatasetIndex++;
+    }
 
-    // Update job progress
+    // Calculate progress
+    let totalProcessed = 0;
+    for (const ds of state.datasets) {
+      if (ds.completed) {
+        totalProcessed += ds.dates ? ds.dates.length : 1;
+      } else if (ds.datesProcessed) {
+        totalProcessed += ds.datesProcessed;
+      }
+    }
+
+    const allComplete = state.datasets.every(d => d.completed);
+
+    // Save state and progress
     await supabase
       .from('sync_jobs')
       .update({
-        status: isComplete ? 'completed' : 'running',
-        dates_processed: newProcessed,
+        status: allComplete ? 'completed' : 'running',
+        dates_processed: totalProcessed,
         rows_imported: totalImported,
         rows_skipped: totalSkipped,
-        completed_at: isComplete ? new Date().toISOString() : null,
-        error_message: errors.length > 0 ? errors.join('; ') : null
+        completed_at: allComplete ? new Date().toISOString() : null,
+        error_message: errors.length > 0 ? errors.join('; ') : null,
+        result_data: state,
       })
       .eq('id', job.id);
 
-    if (isComplete) {
-      // Update last sync timestamps
-      await supabase
-        .from('playstation_api_keys')
-        .update({
-          last_auto_sync: new Date().toISOString(),
-          last_sync_date: new Date().toISOString().split('T')[0]
-        })
-        .eq('client_id', job.client_id);
-
-      // Schedule next sync if auto-sync is enabled
-      const { data: psKey } = await supabase
-        .from('playstation_api_keys')
-        .select('auto_sync_enabled, sync_frequency_hours')
-        .eq('client_id', job.client_id)
-        .single();
-
-      if (psKey?.auto_sync_enabled && job.is_auto_sync) {
-        const nextDue = new Date();
-        nextDue.setHours(nextDue.getHours() + (psKey.sync_frequency_hours || 24));
-        await supabase
-          .from('playstation_api_keys')
-          .update({ next_sync_due: nextDue.toISOString() })
-          .eq('client_id', job.client_id);
-      }
+    if (allComplete) {
+      return await completePlayStationJob(job, totalImported, totalSkipped, state);
     } else {
-      // Requeue for next cron run
+      // Requeue for next cron run (same pattern as Steam)
       await supabase
         .from('sync_jobs')
         .update({ status: 'pending' })
@@ -557,13 +628,12 @@ async function processPlayStationJob(job: SyncJob) {
     }
 
     return NextResponse.json({
-      message: isComplete ? 'PlayStation sync completed' : 'PlayStation batch processed, more pending',
+      message: allComplete ? 'PlayStation sync completed' : 'PlayStation batch processed, more pending',
       jobId: job.id,
-      datasetsProcessed: newProcessed,
-      totalDatasets: targetDatasets.length,
+      datesProcessed: totalProcessed,
       rowsImported: totalImported,
       rowsSkipped: totalSkipped,
-      isComplete
+      isComplete: allComplete,
     });
 
   } catch (error) {
@@ -579,6 +649,54 @@ async function processPlayStationJob(job: SyncJob) {
 
     return NextResponse.json({ error: 'PlayStation sync failed' }, { status: 500 });
   }
+}
+
+// Mark PlayStation job as complete and update sync timestamps
+async function completePlayStationJob(
+  job: SyncJob, totalImported: number, totalSkipped: number, state: PSJobState
+) {
+  await supabase
+    .from('sync_jobs')
+    .update({
+      status: 'completed',
+      completed_at: new Date().toISOString(),
+      rows_imported: totalImported,
+      rows_skipped: totalSkipped,
+      result_data: state,
+    })
+    .eq('id', job.id);
+
+  // Update last sync timestamps
+  await supabase
+    .from('playstation_api_keys')
+    .update({
+      last_auto_sync: new Date().toISOString(),
+      last_sync_date: new Date().toISOString().split('T')[0]
+    })
+    .eq('client_id', job.client_id);
+
+  // Schedule next sync if auto-sync is enabled
+  const { data: psKey } = await supabase
+    .from('playstation_api_keys')
+    .select('auto_sync_enabled, sync_frequency_hours')
+    .eq('client_id', job.client_id)
+    .single();
+
+  if (psKey?.auto_sync_enabled && job.is_auto_sync) {
+    const nextDue = new Date();
+    nextDue.setHours(nextDue.getHours() + (psKey.sync_frequency_hours || 24));
+    await supabase
+      .from('playstation_api_keys')
+      .update({ next_sync_due: nextDue.toISOString() })
+      .eq('client_id', job.client_id);
+  }
+
+  return NextResponse.json({
+    message: 'PlayStation sync completed',
+    jobId: job.id,
+    rowsImported: totalImported,
+    rowsSkipped: totalSkipped,
+  });
 }
 
 // Get Domo OAuth access token
@@ -709,53 +827,174 @@ async function exportDomoDataset(
     return { imported: 0, skipped: 0 };
   }
 
-  // Store in performance_metrics table
+  // Use shared upsert logic
+  return await upsertPSNRecords(filteredRecords, clientId);
+}
+
+// ============================================================
+// Domo SQL Query API — Date-chunked import for large datasets
+// Mirrors Steam's "1 date per cron run" pattern
+// ============================================================
+
+// Get distinct dates from a large Domo dataset via SQL query
+async function queryDomoDatasetDates(
+  accessToken: string,
+  datasetId: string
+): Promise<{ success: boolean; dates?: string[]; error?: string }> {
+  try {
+    const url = DOMO_QUERY_URL.replace('{datasetId}', datasetId);
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify({
+        sql: 'SELECT DISTINCT `Date` FROM table ORDER BY `Date` ASC',
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      return { success: false, error: `Domo SQL query failed: ${response.status} ${errorText}` };
+    }
+
+    const data = await response.json();
+    // Domo returns { columns: [...], rows: [[val], [val], ...], numRows: N, numColumns: N }
+    const rows = data.rows || [];
+    const dates = rows
+      .map((row: string[]) => {
+        const val = row[0];
+        if (!val) return null;
+        return val.split('T')[0]; // Normalize to YYYY-MM-DD
+      })
+      .filter((d: string | null): d is string => !!d);
+
+    console.log(`[Cron/PS] SQL query returned ${dates.length} distinct dates`);
+    return { success: true, dates };
+  } catch (error) {
+    return {
+      success: false,
+      error: `Domo SQL query error: ${error instanceof Error ? error.message : String(error)}`
+    };
+  }
+}
+
+// Query a specific date's data from a large Domo dataset and upsert to performance_metrics
+async function queryDomoDatasetByDate(
+  accessToken: string,
+  datasetId: string,
+  dateStr: string,
+  clientId: string
+): Promise<{ imported: number; skipped: number }> {
+  const url = DOMO_QUERY_URL.replace('{datasetId}', datasetId);
+
+  // 40s timeout to leave room for DB operations within the 60s cron window
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 40000);
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+    },
+    body: JSON.stringify({
+      sql: `SELECT * FROM table WHERE \`Date\` = '${dateStr}'`,
+    }),
+    signal: controller.signal,
+  });
+
+  clearTimeout(timeout);
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Domo SQL query failed for date ${dateStr}: ${response.status} ${errorText}`);
+  }
+
+  const data = await response.json();
+  const columns: string[] = data.columns || [];
+  const rows: string[][] = data.rows || [];
+
+  console.log(`[Cron/PS] SQL query for ${dateStr}: ${rows.length} rows, columns: ${columns.join(', ')}`);
+
+  if (rows.length === 0) {
+    return { imported: 0, skipped: 0 };
+  }
+
+  // Convert SQL result rows to PSNRecord objects (same format as CSV parser output)
+  const records: PSNRecord[] = rows.map(row => {
+    const record: PSNRecord = { date: '' };
+    columns.forEach((col, idx) => {
+      const normalizedKey = col.toLowerCase().replace(/\s+/g, '_');
+      record[normalizedKey] = row[idx] || '';
+    });
+    if (!record.date) {
+      record.date = (record.transaction_date || record.sale_date || '') as string;
+    }
+    return record;
+  });
+
+  // Reuse the same upsert logic as CSV export
+  return await upsertPSNRecords(records, clientId);
+}
+
+// Shared upsert logic for PSN records (used by both CSV export and SQL query paths)
+function mapPSNRecordToMetric(record: PSNRecord, clientId: string) {
+  // Map actual Domo/PlayStation columns to our schema
+  // Domo columns: Date, Title Name, Product Name, Platform, Country Code,
+  // Country/Region, SIE Region, Sales Quantity, Sales Incl Tax $, Sales Exc Tax $,
+  // Local Currency, Transaction Type
+  const date = (record.date || record.month_start_date || record.week_start_date || '') as string;
+  const productName = (record.product_name || record.title_name || record.concept || record.title || record.sku || 'Unknown') as string;
+  // Normalize platform to "PlayStation" to match the connected-platforms filter
+  const platform = 'PlayStation';
+  const countryCode = (record.country_code || record['country/region'] || record.country || 'Unknown') as string;
+  const region = (record.sie_region || record['country/region'] || record.region || 'Unknown') as string;
+  // Sales data columns from PlayStation Domo CSV
+  const unitsSold = Number(record.sales_quantity || record.units_sold || record.quantity || 0);
+  const grossRevenue = Number(record['sales_incl_tax_$'] || record.sales_incl_tax_usd || record.gross_revenue || record.revenue || 0);
+  const netRevenue = Number(record['sales_exc_tax_$'] || record.sales_exc_tax_usd || record.net_revenue || record.revenue || 0);
+  const currency = (record.local_currency || record.currency || 'USD') as string;
+
+  return {
+    client_id: clientId,
+    date: date.toString().split('T')[0],
+    product_name: productName,
+    platform,
+    country_code: countryCode,
+    region,
+    gross_units_sold: unitsSold,
+    net_units_sold: unitsSold,
+    gross_revenue_usd: grossRevenue,
+    net_revenue_usd: netRevenue,
+    currency,
+    updated_at: new Date().toISOString(),
+  };
+}
+
+async function upsertPSNRecords(
+  records: PSNRecord[],
+  clientId: string
+): Promise<{ imported: number; skipped: number }> {
   let imported = 0;
   let skipped = 0;
 
   // Batch upsert in chunks of 100
   const chunkSize = 100;
-  for (let i = 0; i < filteredRecords.length; i += chunkSize) {
-    const chunk = filteredRecords.slice(i, i + chunkSize).map(record => {
-      // Map actual Domo/PlayStation CSV columns to our schema
-      // Domo columns: Date, Title Name, Product Name, Platform, Country Code,
-      // Country/Region, SIE Region, Sales Quantity, Sales Incl Tax $, Sales Exc Tax $,
-      // Local Currency, Transaction Type
-      const date = (record.date || record.month_start_date || record.week_start_date || '') as string;
-      const productName = (record.product_name || record.title_name || record.concept || record.title || record.sku || 'Unknown') as string;
-      // Normalize platform to "PlayStation" to match the connected-platforms filter
-      // Raw data has PS4/PS5 but the analytics filter groups by connected platform name
-      const platform = 'PlayStation';
-      const countryCode = (record.country_code || record['country/region'] || record.country || 'Unknown') as string;
-      const region = (record.sie_region || record['country/region'] || record.region || 'Unknown') as string;
-      // Sales data columns from PlayStation Domo CSV
-      const unitsSold = Number(record.sales_quantity || record.units_sold || record.quantity || 0);
-      const grossRevenue = Number(record['sales_incl_tax_$'] || record.sales_incl_tax_usd || record.gross_revenue || record.revenue || 0);
-      const netRevenue = Number(record['sales_exc_tax_$'] || record.sales_exc_tax_usd || record.net_revenue || record.revenue || 0);
-      const currency = (record.local_currency || record.currency || 'USD') as string;
-
-      return {
-        client_id: clientId,
-        date: date.toString().split('T')[0],
-        product_name: productName,
-        platform,
-        country_code: countryCode,
-        region,
-        gross_units_sold: unitsSold,
-        net_units_sold: unitsSold,
-        gross_revenue_usd: grossRevenue,
-        net_revenue_usd: netRevenue,
-        currency,
-        updated_at: new Date().toISOString()
-      };
-    });
+  for (let i = 0; i < records.length; i += chunkSize) {
+    const chunk = records.slice(i, i + chunkSize).map(record =>
+      mapPSNRecordToMetric(record, clientId)
+    );
 
     const { error, count } = await supabase
       .from('performance_metrics')
       .upsert(chunk, {
         onConflict: 'client_id,date,product_name,platform,country_code',
         ignoreDuplicates: false,
-        count: 'exact'
+        count: 'exact',
       });
 
     if (error) {
