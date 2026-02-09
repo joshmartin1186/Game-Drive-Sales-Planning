@@ -433,6 +433,23 @@ export default function GameDriveDashboard() {
     }
   }
 
+  async function handlePlatformCreate(platform: { name: string }): Promise<Platform | undefined> {
+    try {
+      const res = await fetch('/api/platforms', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(platform)
+      })
+      if (!res.ok) throw new Error('Failed to create platform')
+      const data = await res.json()
+      setPlatforms(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)))
+      return data
+    } catch (err) {
+      console.error('Error creating platform:', err)
+      throw err
+    }
+  }
+
   async function handleClientUpdate(clientId: string, updates: Partial<Client>) { try { const { error } = await supabase.from('clients').update(updates).eq('id', clientId); if (error) throw error; setClients(prev => prev.map(c => c.id === clientId ? { ...c, ...updates } : c).sort((a, b) => a.name.localeCompare(b.name))); if (updates.name) { setGames(prev => prev.map(g => g.client_id === clientId ? { ...g, client: { ...g.client, ...updates } } : g)); setProducts(prev => prev.map(p => p.game?.client_id === clientId ? { ...p, game: { ...p.game, client: { ...p.game.client, ...updates } } } : p)) } } catch (err: unknown) { console.error('Error updating client:', err); throw err } }
   async function handleGameUpdate(gameId: string, updates: Partial<Game>) { try { const { data, error } = await supabase.from('games').update(updates).eq('id', gameId).select(`*, client:clients(*)`).single(); if (error) throw error; if (data) { setGames(prev => prev.map(g => g.id === gameId ? data : g).sort((a, b) => a.name.localeCompare(b.name))); setProducts(prev => prev.map(p => p.game_id === gameId ? { ...p, game: data } : p)) } } catch (err: unknown) { console.error('Error updating game:', err); throw err } }
   async function handleProductUpdate(productId: string, updates: Partial<Product>) { try { const { data, error } = await supabase.from('products').update(updates).eq('id', productId).select(`*, game:games(*, client:clients(*))`).single(); if (error) throw error; if (data) { setProducts(prev => prev.map(p => p.id === productId ? data : p).sort((a, b) => a.name.localeCompare(b.name))) } } catch (err: unknown) { console.error('Error updating product:', err); throw err } }
@@ -634,7 +651,7 @@ export default function GameDriveDashboard() {
       {editingSale && (<EditSaleModal sale={editingSale} products={products} platforms={platforms} existingSales={activeVersionId ? [] : sales} onSave={handleSaleUpdateWrapper} onDelete={handleSaleDeleteWrapper} onDuplicate={handleSaleDuplicate} onClose={() => setEditingSale(null)} />)}
       {duplicatingSale && (<DuplicateSaleModal sale={duplicatingSale} products={products} platforms={platforms} existingSales={sales} onDuplicate={handleDuplicateSales} onClose={() => setDuplicatingSale(null)} />)}
       <BulkEditSalesModal isOpen={bulkEditSales.length > 0} onClose={() => setBulkEditSales([])} selectedSales={bulkEditSales} platforms={platforms} onBulkUpdate={handleBulkUpdate} onBulkDelete={handleBulkDelete} />
-      <ImportSalesModal isOpen={showImportModal} onClose={() => setShowImportModal(false)} products={products} platforms={platforms} existingSales={sales} onImport={handleBulkImport} clients={clients} games={games} onProductCreate={handleProductCreate} onGameCreate={handleGameCreate} />
+      <ImportSalesModal isOpen={showImportModal} onClose={() => setShowImportModal(false)} products={products} platforms={platforms} existingSales={sales} onImport={handleBulkImport} clients={clients} games={games} onProductCreate={handleProductCreate} onGameCreate={handleGameCreate} onPlatformCreate={handlePlatformCreate} />
       <VersionManager isOpen={showVersionManager} onClose={() => setShowVersionManager(false)} currentSales={sales} platforms={platforms} onActivateVersion={handleActivateVersion} activeVersionId={activeVersionId} productId={filterProductId || null} productName={products.find(p => p.id === filterProductId)?.name || null} clientId={filterClientId || null} clientName={clients.find(c => c.id === filterClientId)?.name || null} hasUnsavedChanges={versionSnapshotModified} onSaveVersion={handleSaveVersionSnapshot} />
       {showProductManager && (<ProductManager clients={clients} games={games} products={products} platforms={platforms} onClientCreate={handleClientCreate} onGameCreate={handleGameCreate} onProductCreate={handleProductCreate} onClientDelete={handleClientDelete} onGameDelete={handleGameDelete} onProductDelete={handleProductDelete} onClientUpdate={handleClientUpdate} onGameUpdate={handleGameUpdate} onProductUpdate={handleProductUpdate} onGenerateCalendar={handleGenerateCalendar} onClose={() => setShowProductManager(false)} />)}
       <PlatformSettings isOpen={showPlatformSettings} onClose={() => setShowPlatformSettings(false)} onEventsChange={() => { fetchPlatformEvents(); fetchData() }} />

@@ -35,6 +35,43 @@ export async function GET() {
   }
 }
 
+// POST - Create a new platform (used by CSV import auto-creation)
+export async function POST(request: NextRequest) {
+  try {
+    const supabase = getSupabase()
+    const body = await request.json()
+    const { name } = body
+
+    if (!name || typeof name !== 'string' || !name.trim()) {
+      return NextResponse.json({ error: 'Platform name is required' }, { status: 400 })
+    }
+
+    const { data, error } = await supabase
+      .from('platforms')
+      .insert([{
+        name: name.trim(),
+        cooldown_days: 30,
+        approval_required: false,
+        color_hex: '#6B7280', // Neutral gray default — can be customized in Platform Settings
+        max_sale_days: 14,
+        special_sales_no_cooldown: false,
+        is_active: true
+      }])
+      .select()
+      .single()
+
+    if (error) {
+      console.error('Error creating platform:', error)
+      return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+
+    return NextResponse.json(data)
+  } catch (err) {
+    console.error('Platforms POST error:', err)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
+}
+
 // PUT - Update platform configuration
 export async function PUT(request: NextRequest) {
   try {

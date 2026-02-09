@@ -17,6 +17,7 @@ interface ImportSalesModalProps {
   games: (Game & { client: Client })[]
   onProductCreate?: (product: Omit<Product, 'id' | 'created_at'>) => Promise<Product | undefined>
   onGameCreate?: (game: Omit<Game, 'id' | 'created_at'>) => Promise<(Game & { client: Client }) | undefined>
+  onPlatformCreate?: (platform: { name: string }) => Promise<Platform | undefined>
 }
 
 interface ParsedRow {
@@ -36,8 +37,9 @@ interface ParsedRow {
   errors: string[]
   warnings: string[]
   isValid: boolean
-  // Track missing product name for creation
+  // Track missing names for creation
   missingProductName?: string
+  missingPlatformName?: string
 }
 
 // Track products to create
@@ -46,6 +48,12 @@ interface ProductToCreate {
   gameId: string
   gameName: string
   rowCount: number // How many rows reference this product
+}
+
+// Track platforms to create
+interface PlatformToCreate {
+  name: string
+  rowCount: number
 }
 
 interface ColumnMapping {
@@ -286,7 +294,8 @@ export default function ImportSalesModal({
   clients,
   games,
   onProductCreate,
-  onGameCreate
+  onGameCreate,
+  onPlatformCreate
 }: ImportSalesModalProps) {
   const [file, setFile] = useState<File | null>(null)
   const [headers, setHeaders] = useState<string[]>([])
@@ -309,6 +318,12 @@ export default function ImportSalesModal({
   const [selectedProductsToCreate, setSelectedProductsToCreate] = useState<Set<string>>(new Set())
   const [isCreatingProducts, setIsCreatingProducts] = useState(false)
   const [createdProductIds, setCreatedProductIds] = useState<Map<string, string>>(new Map()) // productName -> productId
+
+  // Platform creation
+  const [platformsToCreate, setPlatformsToCreate] = useState<Map<string, PlatformToCreate>>(new Map())
+  const [selectedPlatformsToCreate, setSelectedPlatformsToCreate] = useState<Set<string>>(new Set())
+  const [isCreatingPlatforms, setIsCreatingPlatforms] = useState(false)
+  const [createdPlatformIds, setCreatedPlatformIds] = useState<Map<string, string>>(new Map()) // platformName -> platformId
 
   // Filter products by selected client
   const filteredProducts = useMemo(() => {
@@ -347,6 +362,10 @@ export default function ImportSalesModal({
 
   const platformLookup = useMemo(() => {
     const map = new Map<string, string>()
+    // Include platforms created during this import session
+    createdPlatformIds.forEach((platformId, platformName) => {
+      map.set(platformName.toLowerCase(), platformId)
+    })
     platforms.forEach(p => {
       const name = p.name.toLowerCase()
       map.set(name, p.id)
@@ -357,13 +376,16 @@ export default function ImportSalesModal({
       const normalizedNoSpaceHyphen = name.replace(/\s*-\s*/g, '-') // "nintendo-eu"
       const normalizedSpaceOnly = name.replace(/\s*-\s*/g, ' ') // "nintendo eu"
       const normalizedNoSeparator = name.replace(/[\s-]+/g, '') // "nintendoeu"
+      // Strip all non-alphanumeric: "ps-siea (na)" → "pssieana"
+      const strippedAlpha = name.replace(/[^a-z0-9]/g, '')
 
       if (normalizedNoSpaceHyphen !== name) map.set(normalizedNoSpaceHyphen, p.id)
       if (normalizedSpaceOnly !== name) map.set(normalizedSpaceOnly, p.id)
       if (normalizedNoSeparator !== name) map.set(normalizedNoSeparator, p.id)
+      if (strippedAlpha !== name && strippedAlpha !== normalizedNoSeparator) map.set(strippedAlpha, p.id)
     })
     return map
-  }, [platforms])
+  }, [platforms, createdPlatformIds])
 
   // Helper to normalize platform value for matching
   const normalizePlatformValue = useCallback((value: string): string[] => {
@@ -374,6 +396,7 @@ export default function ImportSalesModal({
       lower.replace(/\s*-\s*/g, '-'), // "nintendo - eu" → "nintendo-eu"
       lower.replace(/\s*-\s*/g, ' '), // "nintendo - eu" → "nintendo eu"
       lower.replace(/[\s-]+/g, ''), // "nintendo - eu" → "nintendoeu"
+      lower.replace(/[^a-z0-9]/g, ''), // "ps-siea (na)" → "pssieana"
     ]
   }, [])
 
@@ -533,6 +556,7 @@ export default function ImportSalesModal({
 
   const processRows = useCallback(() => {
     const missingProducts = new Map<string, ProductToCreate>()
+    const missingPlatforms = new Map<string, PlatformToCreate>()
 
     // Filter out empty/separator rows before validation
     const dataRows = rawRows
@@ -543,6 +567,7 @@ export default function ImportSalesModal({
       const errors: string[] = []
       const warnings: string[] = []
       let missingProductName: string | undefined
+      let missingPlatformName: string | undefined
 
       // Extract values based on mapping
       const productValue = mapping.product ? row[mapping.product] : ''
@@ -594,6 +619,19 @@ export default function ImportSalesModal({
         }
         if (!platformId) {
           errors.push(`Platform "${platformValue}" not found. Available platforms: ${platforms.map(p => p.name).join(', ')}`)
+          missingPlatformName = platformValue.trim()
+
+          // Track missing platform for potential creation
+          const key = platformValue.trim().toLowerCase()
+          const existing = missingPlatforms.get(key)
+          if (existing) {
+            existing.rowCount++
+          } else {
+            missingPlatforms.set(key, {
+              name: platformValue.trim(),
+              rowCount: 1
+            })
+          }
         }
       } else {
         errors.push('Platform is required')
@@ -690,7 +728,8 @@ export default function ImportSalesModal({
         errors,
         warnings,
         isValid: errors.length === 0,
-        missingProductName
+        missingProductName,
+        missingPlatformName
       }
     })
 
@@ -700,8 +739,13 @@ export default function ImportSalesModal({
     if (onProductCreate && missingProducts.size > 0) {
       setSelectedProductsToCreate(new Set(missingProducts.keys()))
     }
+    setPlatformsToCreate(missingPlatforms)
+    // Auto-select all missing platforms for creation if onPlatformCreate is available
+    if (onPlatformCreate && missingPlatforms.size > 0) {
+      setSelectedPlatformsToCreate(new Set(missingPlatforms.keys()))
+    }
     setStep('preview')
-  }, [rawRows, mapping, productLookup, platformLookup, existingSales, skipDuplicates, normalizePlatformValue, platforms, selectedClientId, filteredGames, onProductCreate, isJunkRow])
+  }, [rawRows, mapping, productLookup, platformLookup, existingSales, skipDuplicates, normalizePlatformValue, platforms, selectedClientId, filteredGames, onProductCreate, onPlatformCreate, isJunkRow])
 
   const validRows = useMemo(() => parsedRows.filter(r => r.isValid), [parsedRows])
   const invalidRows = useMemo(() => parsedRows.filter(r => !r.isValid), [parsedRows])
@@ -748,6 +792,9 @@ export default function ImportSalesModal({
       setProductsToCreate(new Map())
       setSelectedProductsToCreate(new Set())
       setCreatedProductIds(new Map())
+      setPlatformsToCreate(new Map())
+      setSelectedPlatformsToCreate(new Set())
+      setCreatedPlatformIds(new Map())
     }
   }, [step])
 
@@ -848,6 +895,78 @@ export default function ImportSalesModal({
       setIsCreatingProducts(false)
     }
   }, [onProductCreate, selectedProductsToCreate, productsToCreate, createdProductIds, reprocessRowsWithNewProducts])
+
+  // Reprocess rows after platforms are created (mirrors reprocessRowsWithNewProducts)
+  const reprocessRowsWithNewPlatforms = useCallback((newPlatformIds: Map<string, string>) => {
+    setParsedRows(currentRows => {
+      if (newPlatformIds.size === 0 || currentRows.length === 0) return currentRows
+
+      return currentRows.map(row => {
+        if (row.missingPlatformName && !row.platformId) {
+          const platformId = newPlatformIds.get(row.missingPlatformName.toLowerCase())
+          if (platformId) {
+            // Platform was created, update this row
+            const newErrors = row.errors.filter(e => !e.includes('not found') || !e.includes('Platform'))
+            return {
+              ...row,
+              platformId,
+              errors: newErrors,
+              isValid: newErrors.length === 0
+            }
+          }
+        }
+        return row
+      })
+    })
+  }, [])
+
+  // Create selected platforms and reprocess rows
+  const handleCreatePlatforms = useCallback(async () => {
+    if (!onPlatformCreate || selectedPlatformsToCreate.size === 0) return
+
+    setIsCreatingPlatforms(true)
+    setImportError(null)
+
+    try {
+      const newCreatedIds = new Map(createdPlatformIds)
+      const selectedKeys = Array.from(selectedPlatformsToCreate)
+
+      for (const platformKey of selectedKeys) {
+        const platformInfo = platformsToCreate.get(platformKey)
+        if (!platformInfo) continue
+
+        const created = await onPlatformCreate({ name: platformInfo.name })
+
+        if (created) {
+          newCreatedIds.set(platformInfo.name.toLowerCase(), created.id)
+        }
+      }
+
+      setCreatedPlatformIds(newCreatedIds)
+      setSelectedPlatformsToCreate(new Set())
+      setPlatformsToCreate(new Map())
+
+      // Reprocess rows with the newly created platforms immediately
+      reprocessRowsWithNewPlatforms(newCreatedIds)
+    } catch (err) {
+      console.error('Error creating platforms:', err)
+      setImportError(err instanceof Error ? err.message : 'Failed to create platforms')
+    } finally {
+      setIsCreatingPlatforms(false)
+    }
+  }, [onPlatformCreate, selectedPlatformsToCreate, platformsToCreate, createdPlatformIds, reprocessRowsWithNewPlatforms])
+
+  const togglePlatformSelection = useCallback((key: string) => {
+    setSelectedPlatformsToCreate(prev => {
+      const next = new Set(prev)
+      if (next.has(key)) {
+        next.delete(key)
+      } else {
+        next.add(key)
+      }
+      return next
+    })
+  }, [])
 
   if (!isOpen) return null
 
@@ -1224,6 +1343,38 @@ export default function ImportSalesModal({
                       </button>
                     </>
                   )}
+                </div>
+              )}
+
+              {/* Create Missing Platforms Section */}
+              {onPlatformCreate && platformsToCreate.size > 0 && (
+                <div className={styles.createProductsSection}>
+                  <div className={styles.createProductsHeader}>
+                    <h4>🆕 Create Missing Platforms</h4>
+                    <p>These platforms were not found in the system. Select the ones you want to create:</p>
+                  </div>
+                  <div className={styles.createProductsList}>
+                    {Array.from(platformsToCreate.entries()).map(([key, platform]) => (
+                      <div key={key} className={styles.createProductItem}>
+                        <label className={styles.createProductCheckbox}>
+                          <input
+                            type="checkbox"
+                            checked={selectedPlatformsToCreate.has(key)}
+                            onChange={() => togglePlatformSelection(key)}
+                          />
+                          <span className={styles.productName}>{platform.name}</span>
+                          <span className={styles.rowCountBadge}>{platform.rowCount} row{platform.rowCount > 1 ? 's' : ''}</span>
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+                  <button
+                    className={styles.createProductsBtn}
+                    onClick={handleCreatePlatforms}
+                    disabled={selectedPlatformsToCreate.size === 0 || isCreatingPlatforms}
+                  >
+                    {isCreatingPlatforms ? 'Creating...' : `Create ${selectedPlatformsToCreate.size} Platform${selectedPlatformsToCreate.size !== 1 ? 's' : ''} & Re-process`}
+                  </button>
                 </div>
               )}
 
