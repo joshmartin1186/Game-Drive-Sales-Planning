@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server';
 import { serverSupabase as supabase } from '@/lib/supabase';
 
-// PlayStation Partners Analytics API endpoints
-const PSN_AUTH_URL = 'https://analytics.playstation.net/api/oauth/token';
-const PSN_DATASETS_URL = 'https://analytics.playstation.net/api/datasets';
-const PSN_EXPORT_URL = 'https://analytics.playstation.net/api/datasets/{datasetId}/export';
-const PSN_QUERY_URL = 'https://analytics.playstation.net/api/datasets/{datasetId}/query';
+// Domo-powered analytics API endpoints (PlayStation Partners uses Domo under the hood)
+const PSN_AUTH_URL = 'https://api.domo.com/oauth/token';
+const PSN_DATASETS_URL = 'https://api.domo.com/v1/datasets';
+const PSN_EXPORT_URL = 'https://api.domo.com/v1/datasets/{datasetId}/data';
+const PSN_QUERY_URL = 'https://api.domo.com/v1/datasets/query/execute/{datasetId}';
 
 interface PSNSalesRecord {
   date: string;
@@ -255,17 +255,16 @@ async function getAccessToken(
 ): Promise<{ success: boolean; token?: string; error?: string }> {
   try {
     const basicAuth = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+    const effectiveScope = scope || 'data';
 
-    const response = await fetch(PSN_AUTH_URL, {
-      method: 'POST',
+    // Domo API expects grant_type and scope as URL query parameters with a GET request
+    const authUrl = `${PSN_AUTH_URL}?grant_type=client_credentials&scope=${encodeURIComponent(effectiveScope)}`;
+
+    const response = await fetch(authUrl, {
+      method: 'GET',
       headers: {
-        'Authorization': `Basic ${basicAuth}`,
-        'Content-Type': 'application/x-www-form-urlencoded'
-      },
-      body: new URLSearchParams({
-        grant_type: 'client_credentials',
-        scope: scope || 'data'  // Use provisioned scope
-      })
+        'Authorization': `Basic ${basicAuth}`
+      }
     });
 
     if (!response.ok) {

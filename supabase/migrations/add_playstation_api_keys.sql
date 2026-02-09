@@ -4,7 +4,7 @@ CREATE TABLE IF NOT EXISTS playstation_api_keys (
   client_id UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
   ps_client_id TEXT NOT NULL, -- PlayStation Partners Client ID
   client_secret TEXT NOT NULL, -- PlayStation Partners Client Secret (encrypted at rest by Supabase)
-  scope TEXT DEFAULT 'psn:analytics', -- OAuth scope
+  scope TEXT DEFAULT 'data', -- OAuth scope (data, dashboard, or both space-separated)
   is_active BOOLEAN DEFAULT TRUE,
   last_sync_date DATE,
   auto_sync_enabled BOOLEAN DEFAULT FALSE,

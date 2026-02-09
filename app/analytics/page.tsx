@@ -293,6 +293,7 @@ export default function AnalyticsPage() {
   const [editingWidget, setEditingWidget] = useState<DashboardWidget | null>(null)
   const [products, setProducts] = useState<string[]>([])
   const [clients, setClients] = useState<{id: string, name: string}[]>([])
+  const [clientPlatformMap, setClientPlatformMap] = useState<Record<string, string[]>>({})
   const [regions, setRegions] = useState<string[]>([])
   const [platforms, setPlatforms] = useState<string[]>([])
   const [showImportModal, setShowImportModal] = useState(false)
@@ -306,19 +307,50 @@ export default function AnalyticsPage() {
   const [committedVersion, setCommittedVersion] = useState<CommittedVersion | null>(null)
   const gridRef = useRef<HTMLDivElement>(null)
 
-  // Fetch only clients that have API keys configured
+  // Fetch clients that have ANY API keys configured (Steam or PlayStation)
   useEffect(() => {
     const fetchClients = async () => {
-      const { data } = await supabase
-        .from('steam_api_keys')
-        .select('client_id, clients (id, name)')
-        .eq('is_active', true)
-      if (data) {
-        const clientList = data
+      // Query both Steam and PlayStation API key tables in parallel
+      const [steamResult, psResult] = await Promise.all([
+        supabase
+          .from('steam_api_keys')
+          .select('client_id, clients (id, name)')
+          .eq('is_active', true),
+        supabase
+          .from('playstation_api_keys')
+          .select('client_id, clients (id, name)')
+          .eq('is_active', true)
+      ])
+
+      // Build a map of client_id -> connected platforms
+      const platformMap: Record<string, string[]> = {}
+      for (const row of (steamResult.data || []) as Record<string, unknown>[]) {
+        const client = row.clients as { id: string; name: string } | null
+        if (client) {
+          if (!platformMap[client.id]) platformMap[client.id] = []
+          if (!platformMap[client.id].includes('Steam')) platformMap[client.id].push('Steam')
+        }
+      }
+      for (const row of (psResult.data || []) as Record<string, unknown>[]) {
+        const client = row.clients as { id: string; name: string } | null
+        if (client) {
+          if (!platformMap[client.id]) platformMap[client.id] = []
+          if (!platformMap[client.id].includes('PlayStation')) platformMap[client.id].push('PlayStation')
+        }
+      }
+      setClientPlatformMap(platformMap)
+
+      const allRows = [
+        ...(steamResult.data || []),
+        ...(psResult.data || [])
+      ]
+
+      if (allRows.length > 0) {
+        const clientList = allRows
           .map((row: Record<string, unknown>) => row.clients as { id: string; name: string } | null)
           .filter((c): c is { id: string; name: string } => c !== null)
           .sort((a, b) => a.name.localeCompare(b.name))
-        // Deduplicate in case a client has multiple keys
+        // Deduplicate clients that have both Steam and PlayStation keys
         const seen = new Set<string>()
         const unique = clientList.filter(c => {
           if (seen.has(c.id)) return false
@@ -410,7 +442,7 @@ export default function AnalyticsPage() {
 
       while (hasMore) {
         let query = supabase
-          .from('steam_performance_data_view')
+          .from('analytics_data_view')
           .select(columns)
           .order('date', { ascending: true })
           .range(offset, offset + batchSize - 1)
@@ -464,12 +496,19 @@ export default function AnalyticsPage() {
 
         const uniqueProducts = Array.from(new Set(allData.map(row => row.product_name).filter(Boolean)))
         const uniqueRegions = Array.from(new Set(allData.map(row => row.region).filter(Boolean))) as string[]
-        const uniquePlatforms = Array.from(new Set(allData.map(row => row.platform).filter(Boolean)))
-        
+        const dataPlatforms = Array.from(new Set(allData.map(row => row.platform).filter(Boolean)))
+
+        // Merge data-derived platforms with connected platforms for this client
+        const connectedPlatforms = selectedClient !== 'all' ? (clientPlatformMap[selectedClient] || []) : []
+        const mergedPlatforms = Array.from(new Set([...dataPlatforms, ...connectedPlatforms]))
+
         setProducts(uniqueProducts)
         setRegions(uniqueRegions)
-        setPlatforms(uniquePlatforms)
+        setPlatforms(mergedPlatforms)
       } else {
+        // Even with no data, show connected platforms for this client
+        const connectedPlatforms = selectedClient !== 'all' ? (clientPlatformMap[selectedClient] || []) : []
+        setPlatforms(connectedPlatforms)
         setSummaryStats(null)
       }
     } catch (error) {
@@ -477,7 +516,7 @@ export default function AnalyticsPage() {
     } finally {
       setIsLoading(false)
     }
-  }, [supabase, dateRange, selectedProduct, selectedClient, selectedRegion, selectedPlatform])
+  }, [supabase, dateRange, selectedProduct, selectedClient, selectedRegion, selectedPlatform, clientPlatformMap])
 
   useEffect(() => {
     fetchPerformanceData()
@@ -1507,7 +1546,7 @@ export default function AnalyticsPage() {
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '12px', marginTop: '8px', maxHeight: '120px', overflowY: 'auto', flexShrink: 0, padding: '0 16px 8px' }}>
             {productRevenueData.map((segment, i) => {
-              const percentage = (segment.value / totalValue) * 100
+              const percentage = totalValue > 0 ? (segment.value / totalValue) * 100 : 0
               return (
                 <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <div style={{ width: '14px', height: '14px', backgroundColor: pieColors[i % pieColors.length], borderRadius: '3px', flexShrink: 0 }} />
@@ -2316,7 +2355,7 @@ export default function AnalyticsPage() {
         {/* Product legend */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '12px', marginTop: '8px', maxHeight: '120px', overflowY: 'auto', flexShrink: 0 }}>
           {productRevenueData.map((segment, i) => {
-            const percentage = (segment.value / totalValue) * 100
+            const percentage = totalValue > 0 ? (segment.value / totalValue) * 100 : 0
             return (
               <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <div style={{ width: '14px', height: '14px', backgroundColor: pieColors[i % pieColors.length], borderRadius: '3px', flexShrink: 0 }} />
@@ -2490,7 +2529,7 @@ export default function AnalyticsPage() {
         
         <div className={styles.header}>
           <div className={styles.headerLeft}>
-            <h1 className={styles.title}>Steam Analytics</h1>
+            <h1 className={styles.title}>Analytics</h1>
             <p className={styles.subtitle}>Performance metrics and sales analysis</p>
           </div>
           <div className={styles.headerRight}>
@@ -2626,7 +2665,7 @@ export default function AnalyticsPage() {
               </svg>
             </div>
             <h3 className={styles.emptyTitle}>No Performance Data Yet</h3>
-            <p className={styles.emptyDescription}>Import your Steam sales data to see analytics and performance metrics.</p>
+            <p className={styles.emptyDescription}>Sync your platform data or import a CSV to see analytics and performance metrics.</p>
             <button className={styles.emptyButton} onClick={() => setShowImportModal(true)}>
               <svg className={styles.buttonIcon} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
@@ -2770,7 +2809,7 @@ export default function AnalyticsPage() {
             products={products}
             clients={clients}
             regions={regions}
-            platforms={['Steam', 'Epic', 'GOG', 'Itch.io']}
+            platforms={['Steam', 'PlayStation', 'Epic', 'GOG', 'Itch.io']}
           />
         )}
       </div>

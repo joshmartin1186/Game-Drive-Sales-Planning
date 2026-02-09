@@ -43,6 +43,8 @@ interface PlayStationApiKey {
   auto_sync_enabled?: boolean;
   sync_start_date?: string;
   sync_frequency_hours?: number;
+  last_auto_sync?: string;
+  next_sync_due?: string;
 }
 
 interface SyncDebugInfo {
@@ -124,6 +126,13 @@ export default function SettingsPage() {
   const [psSyncResult, setPsSyncResult] = useState<{success: boolean; message: string; rowsImported?: number} | null>(null);
   const [showPSSyncModal, setShowPSSyncModal] = useState(false);
   const [selectedPSKey, setSelectedPSKey] = useState<PlayStationApiKey | null>(null);
+  const [showPSAutoSyncModal, setShowPSAutoSyncModal] = useState(false);
+  const [psAutoSyncLoading, setPsAutoSyncLoading] = useState(false);
+  const [psAutoSyncError, setPsAutoSyncError] = useState<string | null>(null);
+  const [psAutoSyncConfig, setPsAutoSyncConfig] = useState({
+    start_date: new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    frequency_hours: 24
+  });
 
   const [autoSyncConfig, setAutoSyncConfig] = useState({
     start_date: new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
@@ -534,6 +543,99 @@ export default function SettingsPage() {
     }
   };
 
+  const handleTogglePSAutoSync = async (key: PlayStationApiKey) => {
+    if (key.auto_sync_enabled) {
+      if (!confirm('Are you sure you want to disable auto-sync? This will cancel any pending automatic syncs.')) return;
+
+      setPsAutoSyncLoading(true);
+      try {
+        const res = await fetch('/api/playstation-sync/auto-sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            client_id: key.client_id,
+            action: 'disable'
+          })
+        });
+
+        const data = await res.json();
+        if (data.success) {
+          fetchData();
+        } else {
+          alert('Failed to disable auto-sync: ' + (data.error || 'Unknown error'));
+        }
+      } catch (error) {
+        console.error('Error disabling PlayStation auto-sync:', error);
+        alert('Failed to disable auto-sync');
+      }
+      setPsAutoSyncLoading(false);
+    } else {
+      setSelectedPSKey(key);
+      setPsAutoSyncConfig({
+        start_date: '2024-01-01',
+        frequency_hours: 24
+      });
+      setShowPSAutoSyncModal(true);
+      setPsAutoSyncError(null);
+    }
+  };
+
+  const handleEnablePSAutoSync = async () => {
+    if (!selectedPSKey) return;
+
+    setPsAutoSyncLoading(true);
+    setPsAutoSyncError(null);
+    try {
+      const res = await fetch('/api/playstation-sync/auto-sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          client_id: selectedPSKey.client_id,
+          action: 'enable',
+          start_date: psAutoSyncConfig.start_date,
+          frequency_hours: psAutoSyncConfig.frequency_hours
+        })
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        setShowPSAutoSyncModal(false);
+        fetchData();
+      } else {
+        setPsAutoSyncError(data.error || 'Failed to enable auto-sync');
+      }
+    } catch (error) {
+      console.error('Error enabling PlayStation auto-sync:', error);
+      setPsAutoSyncError('Failed to enable auto-sync');
+    }
+    setPsAutoSyncLoading(false);
+  };
+
+  const handleTriggerPSManualSync = async (clientId: string) => {
+    setPsAutoSyncLoading(true);
+    try {
+      const res = await fetch('/api/playstation-sync/auto-sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          client_id: clientId,
+          action: 'trigger'
+        })
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        alert('Manual sync triggered! Check the status in a few moments.');
+      } else {
+        alert('Failed to trigger sync: ' + (data.error || 'Unknown error'));
+      }
+    } catch (error) {
+      console.error('Error triggering PlayStation manual sync:', error);
+      alert('Failed to trigger manual sync');
+    }
+    setPsAutoSyncLoading(false);
+  };
+
   // Get clients that don't have PlayStation credentials yet
   const availablePSClients = (clients || []).filter(
     client => !(playstationKeys || []).some(key => key.client_id === client.id)
@@ -828,6 +930,40 @@ export default function SettingsPage() {
                           <span>Scope: {key.scope}</span>
                           {key.last_sync_date && <span>Last sync: {key.last_sync_date}</span>}
                         </div>
+                        {key.auto_sync_enabled && (
+                          <div style={{ marginTop: '8px', padding: '8px', background: '#dbeafe', borderRadius: '4px', fontSize: '12px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M23 4v6h-6"/>
+                                <path d="M1 20v-6h6"/>
+                                <path d="M3.51 9a9 9 0 0114.85-3.36L23 10"/>
+                                <path d="M20.49 15a9 9 0 01-14.85 3.36L1 14"/>
+                              </svg>
+                              <strong style={{ color: '#1e40af' }}>Auto-sync enabled</strong>
+                            </div>
+                            <div style={{ color: '#1e3a8a', fontSize: '11px' }}>
+                              <div>Syncing from {key.sync_start_date} to present</div>
+                              <div>Every {key.sync_frequency_hours}h • Next: {formatNextSync(key.next_sync_due)}</div>
+                            </div>
+                            <button
+                              onClick={() => handleTriggerPSManualSync(key.client_id)}
+                              disabled={psAutoSyncLoading}
+                              style={{
+                                marginTop: '6px',
+                                padding: '4px 8px',
+                                background: '#3b82f6',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '4px',
+                                fontSize: '11px',
+                                cursor: psAutoSyncLoading ? 'not-allowed' : 'pointer',
+                                opacity: psAutoSyncLoading ? 0.6 : 1
+                              }}
+                            >
+                              Sync Now
+                            </button>
+                          </div>
+                        )}
                       </div>
                       {testingPSKey === key.client_id && psTestResult && (
                         <div className={`${styles.statusBadge} ${psTestResult.valid ? styles.valid : styles.invalid}`}>
@@ -837,6 +973,18 @@ export default function SettingsPage() {
                       )}
                     </div>
                     <div className={styles.keyActions}>
+                      <button
+                        className={`${styles.actionButton} ${key.auto_sync_enabled ? styles.autoSyncOn : styles.autoSyncOff}`}
+                        onClick={() => handleTogglePSAutoSync(key)}
+                        disabled={psAutoSyncLoading}
+                        title={key.auto_sync_enabled ? 'Disable auto-sync' : 'Enable auto-sync'}
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <circle cx="12" cy="12" r="10"/>
+                          <path d="M8 12l2 2 4-4"/>
+                        </svg>
+                        Auto
+                      </button>
                       <button
                         className={`${styles.actionButton} ${styles.test}`}
                         onClick={() => handleTestPSKey(key.client_id)}
@@ -1214,6 +1362,91 @@ export default function SettingsPage() {
                 disabled={autoSyncLoading || !autoSyncConfig.start_date}
               >
                 {autoSyncLoading ? (
+                  <>
+                    <span className={styles.spinner}></span>
+                    Enabling...
+                  </>
+                ) : (
+                  'Enable Auto-Sync'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* PlayStation Auto-Sync Configuration Modal */}
+      {showPSAutoSyncModal && selectedPSKey && (
+        <div className={styles.modalOverlay} onClick={() => { setShowPSAutoSyncModal(false); setPsAutoSyncError(null); }}>
+          <div className={styles.modal} onClick={e => e.stopPropagation()} style={{ maxWidth: '500px' }}>
+            <div className={styles.modalHeader}>
+              <h3>Enable PlayStation Auto-Sync</h3>
+              <button className={styles.closeButton} onClick={() => { setShowPSAutoSyncModal(false); setPsAutoSyncError(null); }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <line x1="18" y1="6" x2="6" y2="18"/>
+                  <line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+              </button>
+            </div>
+
+            <p style={{ color: '#64748b', marginBottom: '16px' }}>
+              Automatically sync PlayStation sales data from a start date to the present day on a regular schedule.
+            </p>
+
+            {psAutoSyncError && (
+              <div style={{ padding: '12px', background: '#fef2f2', color: '#dc2626', borderRadius: '6px', marginBottom: '16px', fontSize: '14px' }}>
+                {psAutoSyncError}
+              </div>
+            )}
+
+            <div className={styles.formGroup}>
+              <label>Start Date *</label>
+              <input
+                type="date"
+                value={psAutoSyncConfig.start_date}
+                onChange={e => setPsAutoSyncConfig({...psAutoSyncConfig, start_date: e.target.value})}
+              />
+              <small>Data will be synced from this date to the present day</small>
+            </div>
+
+            <div className={styles.formGroup}>
+              <label>Sync Frequency (hours) *</label>
+              <select
+                value={psAutoSyncConfig.frequency_hours}
+                onChange={e => setPsAutoSyncConfig({...psAutoSyncConfig, frequency_hours: parseInt(e.target.value)})}
+              >
+                <option value="1">Every hour</option>
+                <option value="3">Every 3 hours</option>
+                <option value="6">Every 6 hours</option>
+                <option value="12">Every 12 hours</option>
+                <option value="24">Once per day (24 hours)</option>
+                <option value="48">Every 2 days (48 hours)</option>
+                <option value="72">Every 3 days (72 hours)</option>
+                <option value="168">Once per week (168 hours)</option>
+              </select>
+              <small>How often to automatically sync new data</small>
+            </div>
+
+            <div style={{ padding: '12px', background: '#dbeafe', borderRadius: '6px', fontSize: '13px', marginTop: '12px' }}>
+              <strong>How it works:</strong>
+              <ul style={{ margin: '8px 0 0 0', paddingLeft: '20px', lineHeight: '1.6' }}>
+                <li>Exports data from all PlayStation datasets automatically</li>
+                <li>Filters records by your start date to present</li>
+                <li>Runs on your chosen schedule without manual intervention</li>
+                <li>You can trigger manual syncs anytime via &quot;Sync Now&quot;</li>
+              </ul>
+            </div>
+
+            <div className={styles.modalActions}>
+              <button className={styles.cancelButton} onClick={() => { setShowPSAutoSyncModal(false); setPsAutoSyncError(null); }}>
+                Cancel
+              </button>
+              <button
+                className={styles.saveButton}
+                onClick={handleEnablePSAutoSync}
+                disabled={psAutoSyncLoading || !psAutoSyncConfig.start_date}
+              >
+                {psAutoSyncLoading ? (
                   <>
                     <span className={styles.spinner}></span>
                     Enabling...

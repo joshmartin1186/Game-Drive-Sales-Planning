@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 import { serverSupabase as supabase } from '@/lib/supabase';
 
-// PlayStation Partners Analytics API Authentication endpoint
-const PSN_AUTH_URL = 'https://analytics.playstation.net/api/oauth/token';
+// Domo-powered analytics API (PlayStation Partners uses Domo under the hood)
+const PSN_AUTH_URL = 'https://api.domo.com/oauth/token';
 
 // GET - Fetch all PlayStation API credentials with client info
 export async function GET() {
@@ -56,47 +56,23 @@ export async function POST(request: Request) {
       );
     }
 
-    // Check if credentials exist for this client
-    const { data: existing } = await supabase
+    // Upsert credentials - insert or update if client already has a row
+    const { data: result, error } = await supabase
       .from('playstation_api_keys')
-      .select('id')
-      .eq('client_id', client_id)
+      .upsert({
+        client_id,
+        ps_client_id,
+        client_secret,
+        scope: scope || 'data',
+        is_active: true,
+        updated_at: new Date().toISOString()
+      }, {
+        onConflict: 'client_id'
+      })
+      .select()
       .single();
 
-    let result;
-    if (existing) {
-      // Update existing
-      const { data, error } = await supabase
-        .from('playstation_api_keys')
-        .update({
-          ps_client_id,
-          client_secret,
-          scope: scope || 'data',
-          updated_at: new Date().toISOString()
-        })
-        .eq('client_id', client_id)
-        .select()
-        .single();
-
-      if (error) throw error;
-      result = data;
-    } else {
-      // Create new
-      const { data, error } = await supabase
-        .from('playstation_api_keys')
-        .insert({
-          client_id,
-          ps_client_id,
-          client_secret,
-          scope: scope || 'data',
-          is_active: true
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-      result = data;
-    }
+    if (error) throw error;
 
     return NextResponse.json({
       ...result,
@@ -153,22 +129,18 @@ async function validatePlayStationCredentials(
     // Default to 'data' scope - use space-separated values for multiple scopes (e.g., "data dashboard")
     const effectiveScope = scope || 'data';
 
-    console.log('[PlayStation API] Attempting auth to:', PSN_AUTH_URL);
+    // Domo API expects grant_type and scope as URL query parameters with a GET request
+    const authUrl = `${PSN_AUTH_URL}?grant_type=client_credentials&scope=${encodeURIComponent(effectiveScope)}`;
+
+    console.log('[PlayStation API] Attempting auth to:', authUrl);
     console.log('[PlayStation API] Using scope:', effectiveScope);
     console.log('[PlayStation API] Client ID length:', clientId.length);
 
-    const requestBody = new URLSearchParams({
-      grant_type: 'client_credentials',
-      scope: effectiveScope
-    });
-
-    const response = await fetch(PSN_AUTH_URL, {
-      method: 'POST',
+    const response = await fetch(authUrl, {
+      method: 'GET',
       headers: {
-        'Authorization': `Basic ${basicAuth}`,
-        'Content-Type': 'application/x-www-form-urlencoded'
-      },
-      body: requestBody
+        'Authorization': `Basic ${basicAuth}`
+      }
     });
 
     if (!response.ok) {
@@ -228,7 +200,7 @@ async function validatePlayStationCredentials(
 // List available datasets using the access token
 async function listDatasets(accessToken: string): Promise<{ datasets?: string[]; error?: string }> {
   try {
-    const response = await fetch('https://analytics.playstation.net/api/datasets', {
+    const response = await fetch('https://api.domo.com/v1/datasets', {
       headers: {
         'Authorization': `Bearer ${accessToken}`,
         'Accept': 'application/json'
