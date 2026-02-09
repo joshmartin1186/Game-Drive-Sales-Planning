@@ -23,8 +23,7 @@ type ViewMode = 'table' | 'timeline'
 
 interface VariationSelection {
   current: boolean
-  maxCoverage: boolean
-  balanced: boolean
+  maximizeSales: boolean
   eventsOnly: boolean
 }
 
@@ -42,8 +41,7 @@ export default function TimelineExportModal({
   const [isExporting, setIsExporting] = useState(false)
   const [selectedVariations, setSelectedVariations] = useState<VariationSelection>({
     current: true,
-    maxCoverage: false,
-    balanced: false,
+    maximizeSales: false,
     eventsOnly: false
   })
   
@@ -61,8 +59,7 @@ export default function TimelineExportModal({
   }
   
   // Find variations (may or may not exist)
-  const maxCoverageVariation = calendarVariations.find(v => v.name === 'Maximum Coverage')
-  const balancedVariation = calendarVariations.find(v => v.name === 'Balanced')
+  const maximizeSalesVariation = calendarVariations.find(v => v.name === 'Maximize Sales')
   const eventsOnlyVariation = calendarVariations.find(v => v.name === 'Events Only')
   
   // Get selected datasets
@@ -72,11 +69,8 @@ export default function TimelineExportModal({
     if (selectedVariations.current) {
       datasets.push({ name: 'Current Calendar', sales })
     }
-    if (selectedVariations.maxCoverage && maxCoverageVariation) {
-      datasets.push({ name: 'Maximum Coverage', sales: maxCoverageVariation.sales as unknown as SaleWithDetails[] })
-    }
-    if (selectedVariations.balanced && balancedVariation) {
-      datasets.push({ name: 'Balanced', sales: balancedVariation.sales as unknown as SaleWithDetails[] })
+    if (selectedVariations.maximizeSales && maximizeSalesVariation) {
+      datasets.push({ name: 'Maximize Sales', sales: maximizeSalesVariation.sales as unknown as SaleWithDetails[] })
     }
     if (selectedVariations.eventsOnly && eventsOnlyVariation) {
       datasets.push({ name: 'Events Only', sales: eventsOnlyVariation.sales as unknown as SaleWithDetails[] })
@@ -444,14 +438,14 @@ export default function TimelineExportModal({
             </p>
           </div>
           
-          {/* Calendar Variation Selection - Always show all 3 */}
+          {/* Calendar Variation Selection */}
           <div className={styles.optionGroup}>
             <label className={styles.optionLabel}>Calendar Variations to Export</label>
             <div className={styles.checkboxGroup}>
               {/* Current Calendar - always available */}
               <label className={styles.checkbox}>
-                <input 
-                  type="checkbox" 
+                <input
+                  type="checkbox"
                   checked={selectedVariations.current}
                   onChange={(e) => setSelectedVariations(prev => ({ ...prev, current: e.target.checked }))}
                 />
@@ -460,49 +454,30 @@ export default function TimelineExportModal({
                   <span className={styles.checkboxMeta}>{sales.length} sales</span>
                 </span>
               </label>
-              
-              {/* Maximum Coverage */}
-              <label className={`${styles.checkbox} ${!maxCoverageVariation ? styles.checkboxDisabled : ''}`}>
-                <input 
-                  type="checkbox" 
-                  checked={selectedVariations.maxCoverage}
-                  disabled={!maxCoverageVariation}
-                  onChange={(e) => setSelectedVariations(prev => ({ ...prev, maxCoverage: e.target.checked }))}
+
+              {/* Maximize Sales */}
+              <label className={`${styles.checkbox} ${!maximizeSalesVariation ? styles.checkboxDisabled : ''}`}>
+                <input
+                  type="checkbox"
+                  checked={selectedVariations.maximizeSales}
+                  disabled={!maximizeSalesVariation}
+                  onChange={(e) => setSelectedVariations(prev => ({ ...prev, maximizeSales: e.target.checked }))}
                 />
                 <span className={styles.checkboxLabel}>
-                  <strong>Maximum Coverage</strong>
+                  <strong>Maximize Sales</strong>
                   <span className={styles.checkboxMeta}>
-                    {maxCoverageVariation 
-                      ? `${maxCoverageVariation.stats.totalSales} sales • ${maxCoverageVariation.stats.percentageOnSale}% on sale`
+                    {maximizeSalesVariation
+                      ? `${maximizeSalesVariation.stats.totalSales} sales • ${maximizeSalesVariation.stats.percentageOnSale}% on sale`
                       : 'Generate calendar first'
                     }
                   </span>
                 </span>
               </label>
-              
-              {/* Balanced */}
-              <label className={`${styles.checkbox} ${!balancedVariation ? styles.checkboxDisabled : ''}`}>
-                <input 
-                  type="checkbox" 
-                  checked={selectedVariations.balanced}
-                  disabled={!balancedVariation}
-                  onChange={(e) => setSelectedVariations(prev => ({ ...prev, balanced: e.target.checked }))}
-                />
-                <span className={styles.checkboxLabel}>
-                  <strong>Balanced</strong>
-                  <span className={styles.checkboxMeta}>
-                    {balancedVariation 
-                      ? `${balancedVariation.stats.totalSales} sales • ${balancedVariation.stats.percentageOnSale}% on sale`
-                      : 'Generate calendar first'
-                    }
-                  </span>
-                </span>
-              </label>
-              
+
               {/* Events Only */}
               <label className={`${styles.checkbox} ${!eventsOnlyVariation ? styles.checkboxDisabled : ''}`}>
-                <input 
-                  type="checkbox" 
+                <input
+                  type="checkbox"
                   checked={selectedVariations.eventsOnly}
                   disabled={!eventsOnlyVariation}
                   onChange={(e) => setSelectedVariations(prev => ({ ...prev, eventsOnly: e.target.checked }))}
@@ -510,7 +485,7 @@ export default function TimelineExportModal({
                 <span className={styles.checkboxLabel}>
                   <strong>Events Only</strong>
                   <span className={styles.checkboxMeta}>
-                    {eventsOnlyVariation 
+                    {eventsOnlyVariation
                       ? `${eventsOnlyVariation.stats.totalSales} sales • ${eventsOnlyVariation.stats.percentageOnSale}% on sale`
                       : 'Generate calendar first'
                     }
