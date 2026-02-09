@@ -270,7 +270,22 @@ export default function VersionManager({
 
   // Commit a version (with optimistic update)
   const handleCommitVersion = async (version: CalendarVersion) => {
-    const targetClientId = version.client_id || clientId
+    let targetClientId = version.client_id || clientId
+
+    // Resolve client_id from product chain if needed (for product-scoped versions)
+    if (!targetClientId && version.product_id) {
+      try {
+        const { data: product } = await supabase
+          .from('products')
+          .select('game_id, games(client_id)')
+          .eq('id', version.product_id)
+          .single()
+        if (product?.games) {
+          targetClientId = (product.games as unknown as { client_id: string }).client_id
+        }
+      } catch { /* ignore resolution failure, fall through to error below */ }
+    }
+
     if (!targetClientId) {
       setError('Cannot commit a version without a client. Please filter by client first.')
       return

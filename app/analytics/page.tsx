@@ -7,6 +7,7 @@ import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import styles from './page.module.css'
+import * as XLSX from 'xlsx'
 import PageToggle from '../components/PageToggle'
 import { useAuth } from '@/lib/auth-context'
 
@@ -343,15 +344,42 @@ export default function AnalyticsPage() {
       }
 
       try {
-        const { data, error } = await supabase
+        // Strategy 1: Direct client_id match
+        let { data, error } = await supabase
           .from('calendar_versions')
           .select('id, name, sales_snapshot, committed_at')
           .eq('client_id', selectedClient)
           .eq('is_committed', true)
-          .single()
+          .order('committed_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
 
         if (error && error.code !== 'PGRST116') {
           console.error('Error fetching committed version:', error)
+        }
+
+        // Strategy 2: Fallback — find via product_id chain (for product-scoped versions)
+        if (!data) {
+          const { data: clientProducts } = await supabase
+            .from('products')
+            .select('id, games!inner(client_id)')
+            .eq('games.client_id', selectedClient)
+
+          if (clientProducts && clientProducts.length > 0) {
+            const productIds = clientProducts.map((p: { id: string }) => p.id)
+            const { data: productVersion } = await supabase
+              .from('calendar_versions')
+              .select('id, name, sales_snapshot, committed_at')
+              .in('product_id', productIds)
+              .eq('is_committed', true)
+              .order('committed_at', { ascending: false })
+              .limit(1)
+              .maybeSingle()
+
+            if (productVersion) {
+              data = productVersion
+            }
+          }
         }
 
         setCommittedVersion(data || null)
@@ -760,6 +788,84 @@ export default function AnalyticsPage() {
 
     return periods
   }, [performanceData, committedSaleLookup]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Export period analysis to Excel
+  const handleExportPeriodAnalysis = useCallback(() => {
+    if (!periodData.length) return
+
+    const wb = XLSX.utils.book_new()
+    const clientName = clients.find(c => c.id === selectedClient)?.name || 'Unknown'
+
+    // Summary sheet
+    const summaryRows: (string | number | null)[][] = [
+      ['Period Analysis Export'],
+      [],
+      ['Client', clientName],
+      ['Date Range',
+        dateRange.start ? dateRange.start.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'All',
+        'to',
+        dateRange.end ? dateRange.end.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Present'],
+      ['Calendar Source', committedVersion ? `Committed: "${committedVersion.name}"` : 'Price Detection Only'],
+      ['Product', selectedProduct === 'all' ? 'All Products' : selectedProduct],
+      [],
+      [`Generated: ${new Date().toLocaleDateString()}`]
+    ]
+    const summaryWs = XLSX.utils.aoa_to_sheet(summaryRows)
+    summaryWs['!cols'] = [{ wch: 20 }, { wch: 30 }, { wch: 5 }, { wch: 20 }]
+    XLSX.utils.book_append_sheet(wb, summaryWs, 'Summary')
+
+    // Period details sheet
+    const headers = ['Period Name', 'Type', 'Start Date', 'End Date', 'Days',
+      'Total Revenue (USD)', 'Total Units', 'Avg Daily Revenue (USD)',
+      'Avg Daily Units', 'Discount %', 'Sale Type', 'Source']
+
+    const rows: (string | number | null)[][] = periodData.map(p => [
+      p.name,
+      p.isSale ? 'Sale' : 'Regular Price',
+      p.startDate, p.endDate, p.days,
+      Math.round(p.totalRevenue * 100) / 100,
+      Math.round(p.totalUnits),
+      Math.round(p.avgDailyRevenue * 100) / 100,
+      Math.round(p.avgDailyUnits * 100) / 100,
+      p.discountPct ?? p.plannedDiscount ?? null,
+      p.saleType || '',
+      p.source === 'both' ? 'Plan + Actual' :
+      p.source === 'committed' ? 'Plan Only' : 'Price Detected'
+    ])
+
+    // Totals
+    const salePeriods = periodData.filter(p => p.isSale)
+    const regularPeriods = periodData.filter(p => !p.isSale)
+    const sDays = salePeriods.reduce((s, p) => s + p.days, 0)
+    const rDays = regularPeriods.reduce((s, p) => s + p.days, 0)
+    const sRev = salePeriods.reduce((s, p) => s + p.totalRevenue, 0)
+    const rRev = regularPeriods.reduce((s, p) => s + p.totalRevenue, 0)
+    const sUnits = salePeriods.reduce((s, p) => s + p.totalUnits, 0)
+    const rUnits = regularPeriods.reduce((s, p) => s + p.totalUnits, 0)
+
+    rows.push(
+      [],
+      ['SALE TOTALS', 'Sale', '', '', sDays,
+        Math.round(sRev * 100) / 100, sUnits,
+        Math.round(safeDivide(sRev, sDays) * 100) / 100,
+        Math.round(safeDivide(sUnits, sDays) * 100) / 100, null, '', ''],
+      ['REGULAR TOTALS', 'Regular Price', '', '', rDays,
+        Math.round(rRev * 100) / 100, rUnits,
+        Math.round(safeDivide(rRev, rDays) * 100) / 100,
+        Math.round(safeDivide(rUnits, rDays) * 100) / 100, null, '', '']
+    )
+
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...rows])
+    ws['!cols'] = [
+      { wch: 35 }, { wch: 14 }, { wch: 12 }, { wch: 12 }, { wch: 6 },
+      { wch: 18 }, { wch: 12 }, { wch: 20 }, { wch: 16 }, { wch: 12 },
+      { wch: 12 }, { wch: 16 }
+    ]
+    XLSX.utils.book_append_sheet(wb, ws, 'Period Analysis')
+
+    const filename = `period_analysis_${clientName.toLowerCase().replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.xlsx`
+    XLSX.writeFile(wb, filename)
+  }, [periodData, clients, selectedClient, dateRange, committedVersion, selectedProduct])
 
   // Memoize product revenue calculation for pie chart
   const productRevenueData = useMemo(() => {
@@ -1649,15 +1755,25 @@ export default function AnalyticsPage() {
     return (
       <div className={styles.periodSection}>
         <div className={styles.sectionHeader}>
-          <h3 className={styles.sectionTitle}>{widget.title}</h3>
-          <p className={styles.sectionSubtitle}>
-            Compare sale periods vs regular price performance
-            {committedVersion && (
-              <span className={styles.committedVersionInfo}>
-                {' '}| Using committed calendar: &quot;{committedVersion.name}&quot;
-              </span>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <div>
+              <h3 className={styles.sectionTitle}>{widget.title}</h3>
+              <p className={styles.sectionSubtitle}>
+                Compare sale periods vs regular price performance
+                {committedVersion && (
+                  <span className={styles.committedVersionInfo}>
+                    {' '}| Using committed calendar: &quot;{committedVersion.name}&quot;
+                  </span>
+                )}
+              </p>
+            </div>
+            {periodData.length > 0 && (
+              <button className={styles.exportPeriodBtn} onClick={handleExportPeriodAnalysis}
+                title="Export period analysis to Excel">
+                📥 Export
+              </button>
             )}
-          </p>
+          </div>
         </div>
         {periodData.length > 0 ? (
           <div className={styles.periodTable}>
