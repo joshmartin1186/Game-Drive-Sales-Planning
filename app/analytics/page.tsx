@@ -656,12 +656,18 @@ export default function AnalyticsPage() {
   }, [dailyData])
 
   // Build a date-to-sale lookup from the committed version
+  // Only include Steam platform sales since analytics uses Steam performance data
   const committedSaleLookup = useMemo(() => {
     if (!committedVersion) return new Map<string, CommittedSaleSnapshot>()
 
     const lookup = new Map<string, CommittedSaleSnapshot>()
+    const steamPlatforms = new Set(['steam custom', 'steam seasonal', 'steam'])
 
     for (const sale of committedVersion.sales_snapshot) {
+      // Skip non-Steam platform sales — they don't apply to Steam performance data
+      const platformName = (sale.platform_name || '').toLowerCase()
+      if (!steamPlatforms.has(platformName)) continue
+
       const start = new Date(sale.start_date + 'T00:00:00Z')
       const end = new Date(sale.end_date + 'T00:00:00Z')
 
@@ -2417,8 +2423,16 @@ export default function AnalyticsPage() {
 
     return (
       <div className={styles.chartCard}>
-        <h3 className={styles.chartTitle}>{widget.title}</h3>
-        <div style={{ padding: '20px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 20px' }}>
+          <h3 className={styles.chartTitle}>{widget.title}</h3>
+          {periodData.length > 0 && (
+            <button className={styles.exportPeriodBtn} onClick={handleExportPeriodAnalysis}
+              title="Export period analysis to Excel">
+              📥 Export
+            </button>
+          )}
+        </div>
+        <div style={{ padding: '0 20px 20px' }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px' }}>
             {/* Sale Periods Card */}
             <div style={{ padding: '16px', backgroundColor: '#eff6ff', borderRadius: '8px', border: '1px solid #bfdbfe' }}>
