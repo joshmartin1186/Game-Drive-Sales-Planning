@@ -513,16 +513,20 @@ export default function ImportSalesModal({
   // Detect rows that are empty or just section headers/month separators
   // (e.g. "JANUARY", "PREVIOUS COOLDOWNS", blank rows between data sections)
   const isJunkRow = useCallback((row: Record<string, string>): boolean => {
+    const allValues = Object.values(row).map(v => (v || '').trim()).filter(Boolean)
+
+    // Completely empty row
+    if (allValues.length === 0) return true
+
     const productValue = mapping.product ? (row[mapping.product] || '').trim() : ''
     const platformValue = mapping.platform ? (row[mapping.platform] || '').trim() : ''
-    const startDateValue = mapping.startDate ? (row[mapping.startDate] || '').trim() : ''
-    const endDateValue = mapping.endDate ? (row[mapping.endDate] || '').trim() : ''
 
-    // All required mapped fields are empty → junk row
-    if (!productValue && !platformValue && !startDateValue && !endDateValue) return true
+    // No product AND no platform → this is a separator/header row, not data
+    // (e.g. row with just "JANUARY" or "PREVIOUS COOLDOWNS" in the date column)
+    if (!productValue && !platformValue) return true
 
-    // Row has product-like text but nothing else → likely a section header
-    if (productValue && !startDateValue && !endDateValue) return true
+    // Only 1 non-empty cell in the entire row → section header (month name, label, etc.)
+    if (allValues.length === 1) return true
 
     return false
   }, [mapping])
