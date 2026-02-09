@@ -9,6 +9,7 @@ import { usePathname } from 'next/navigation'
 import styles from './page.module.css'
 import * as XLSX from 'xlsx'
 import PageToggle from '../components/PageToggle'
+import ImportPerformanceModal from '../components/ImportPerformanceModal'
 import { useAuth } from '@/lib/auth-context'
 
 // Types
@@ -307,60 +308,45 @@ export default function AnalyticsPage() {
   const [committedVersion, setCommittedVersion] = useState<CommittedVersion | null>(null)
   const gridRef = useRef<HTMLDivElement>(null)
 
-  // Fetch clients that have ANY API keys configured (Steam or PlayStation)
+  // Fetch all clients and build platform connectivity map
   useEffect(() => {
     const fetchClients = async () => {
-      // Query both Steam and PlayStation API key tables in parallel
+      // Fetch all clients (not just those with API keys - CSV imports add platforms too)
+      const { data: allClients } = await supabase
+        .from('clients')
+        .select('id, name')
+        .order('name')
+
+      // Also build platform connectivity map from API key tables
       const [steamResult, psResult] = await Promise.all([
         supabase
           .from('steam_api_keys')
-          .select('client_id, clients (id, name)')
+          .select('client_id')
           .eq('is_active', true),
         supabase
           .from('playstation_api_keys')
-          .select('client_id, clients (id, name)')
+          .select('client_id')
           .eq('is_active', true)
       ])
 
-      // Build a map of client_id -> connected platforms
       const platformMap: Record<string, string[]> = {}
-      for (const row of (steamResult.data || []) as Record<string, unknown>[]) {
-        const client = row.clients as { id: string; name: string } | null
-        if (client) {
-          if (!platformMap[client.id]) platformMap[client.id] = []
-          if (!platformMap[client.id].includes('Steam')) platformMap[client.id].push('Steam')
-        }
+      for (const row of (steamResult.data || [])) {
+        const cid = (row as { client_id: string }).client_id
+        if (!platformMap[cid]) platformMap[cid] = []
+        if (!platformMap[cid].includes('Steam')) platformMap[cid].push('Steam')
       }
-      for (const row of (psResult.data || []) as Record<string, unknown>[]) {
-        const client = row.clients as { id: string; name: string } | null
-        if (client) {
-          if (!platformMap[client.id]) platformMap[client.id] = []
-          if (!platformMap[client.id].includes('PlayStation')) platformMap[client.id].push('PlayStation')
-        }
+      for (const row of (psResult.data || [])) {
+        const cid = (row as { client_id: string }).client_id
+        if (!platformMap[cid]) platformMap[cid] = []
+        if (!platformMap[cid].includes('PlayStation')) platformMap[cid].push('PlayStation')
       }
       setClientPlatformMap(platformMap)
 
-      const allRows = [
-        ...(steamResult.data || []),
-        ...(psResult.data || [])
-      ]
-
-      if (allRows.length > 0) {
-        const clientList = allRows
-          .map((row: Record<string, unknown>) => row.clients as { id: string; name: string } | null)
-          .filter((c): c is { id: string; name: string } => c !== null)
-          .sort((a, b) => a.name.localeCompare(b.name))
-        // Deduplicate clients that have both Steam and PlayStation keys
-        const seen = new Set<string>()
-        const unique = clientList.filter(c => {
-          if (seen.has(c.id)) return false
-          seen.add(c.id)
-          return true
-        })
-        setClients(unique)
+      if (allClients && allClients.length > 0) {
+        setClients(allClients)
         // Auto-select first client for faster initial load
-        if (unique.length > 0 && selectedClient === 'all') {
-          setSelectedClient(unique[0].id)
+        if (allClients.length > 0 && selectedClient === 'all') {
+          setSelectedClient(allClients[0].id)
         }
       }
     }
@@ -459,7 +445,7 @@ export default function AnalyticsPage() {
 
       while (hasMore) {
         let query = supabase
-          .from('analytics_data_view')
+          .from('unified_performance_view')
           .select(columns)
           .order('date', { ascending: true })
           .range(offset, offset + batchSize - 1)
@@ -2817,11 +2803,13 @@ export default function AnalyticsPage() {
 
         {showImportModal && (
           <ImportPerformanceModal
+            isOpen={showImportModal}
             onClose={() => setShowImportModal(false)}
             onSuccess={() => {
               setShowImportModal(false)
               fetchPerformanceData()
             }}
+            clients={clients}
           />
         )}
 
@@ -3258,227 +3246,4 @@ function EditWidgetModal({ widget, onClose, onSave, products, clients, regions, 
   )
 }
 
-function ImportPerformanceModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
-  const supabase = createClientComponentClient()
-  const [file, setFile] = useState<File | null>(null)
-  const [isUploading, setIsUploading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [preview, setPreview] = useState<string[][]>([])
-  const [progress, setProgress] = useState({ current: 0, total: 0 })
-
-  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = e.target.files?.[0]
-    if (!selectedFile) return
-
-    setFile(selectedFile)
-    setError(null)
-
-    try {
-      const text = await selectedFile.text()
-      const lines = text.split('\n').slice(0, 6)
-      const rows = lines.map(line => line.split(',').map(cell => cell.trim().replace(/^"|"$/g, '')))
-      setPreview(rows)
-    } catch (err) {
-      console.error(err)
-      setError('Could not read file')
-    }
-  }
-
-  const handleImport = async () => {
-    if (!file) return
-
-    setIsUploading(true)
-    setError(null)
-
-    try {
-      const text = await file.text()
-      const lines = text.split('\n').filter(line => line.trim())
-      const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, '').toLowerCase())
-      
-      const columnMap: Record<string, string> = {
-        'date': 'date',
-        'bundle name': 'bundle_name',
-        'product name': 'product_name',
-        'type': 'product_type',
-        'game': 'game',
-        'platform': 'platform',
-        'country code': 'country_code',
-        'country': 'country',
-        'region': 'region',
-        'gross units sold': 'gross_units_sold',
-        'chargebacks / returns': 'chargebacks_returns',
-        'net units sold': 'net_units_sold',
-        'base price (usd)': 'base_price_usd',
-        'sale price (usd)': 'sale_price_usd',
-        'currency': 'currency',
-        'gross steam sales (usd)': 'gross_steam_sales_usd',
-        'chargeback / returns (usd)': 'chargeback_returns_usd',
-        'vat / tax (usd)': 'vat_tax_usd',
-        'net steam sales (usd)': 'net_steam_sales_usd'
-      }
-
-      const { data: clients } = await supabase.from('clients').select('id').limit(1)
-      let clientId = clients?.[0]?.id
-
-      if (!clientId) {
-        const { data: newClient } = await supabase
-          .from('clients')
-          .insert({ name: 'Default Client', email: 'default@example.com' })
-          .select()
-          .single()
-        clientId = newClient?.id
-      }
-
-      const dataRows = lines.slice(1)
-      const batchSize = 500
-      let imported = 0
-      let skipped = 0
-
-      setProgress({ current: 0, total: dataRows.length })
-
-      for (let i = 0; i < dataRows.length; i += batchSize) {
-        const batch = dataRows.slice(i, i + batchSize)
-        const records = batch.map(line => {
-          const values = line.split(',').map(v => v.trim().replace(/^"|"$/g, ''))
-          const record: Record<string, unknown> = { client_id: clientId }
-
-          headers.forEach((header, idx) => {
-            const dbColumn = columnMap[header]
-            if (dbColumn && values[idx]) {
-              const value = values[idx]
-              if (['gross_units_sold', 'chargebacks_returns', 'net_units_sold'].includes(dbColumn)) {
-                record[dbColumn] = parseInt(value) || 0
-              } else if (dbColumn.includes('usd') || dbColumn.includes('price')) {
-                record[dbColumn] = parseFloat(value.replace('$', '').replace(',', '')) || 0
-              } else {
-                record[dbColumn] = value
-              }
-            }
-          })
-
-          return record
-        }).filter(r => r.date && r.product_name)
-
-        if (records.length > 0) {
-          const { error: insertError } = await supabase
-            .from('steam_performance_data')
-            .upsert(records, {
-              onConflict: 'client_id,date,product_name,platform,country_code'
-            })
-
-          if (insertError) {
-            console.error('Insert error:', insertError)
-            skipped += batch.length
-          } else {
-            imported += records.length
-          }
-        }
-
-        setProgress({ current: Math.min(i + batchSize, dataRows.length), total: dataRows.length })
-      }
-
-      await supabase.from('performance_import_history').insert({
-        client_id: clientId,
-        import_type: 'csv',
-        filename: file.name,
-        rows_imported: imported,
-        rows_skipped: skipped,
-        status: 'completed'
-      })
-
-      onSuccess()
-    } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : 'Import failed'
-      setError(errorMessage)
-    } finally {
-      setIsUploading(false)
-    }
-  }
-
-  return (
-    <div className={styles.modalOverlay} onClick={onClose}>
-      <div className={styles.modal} onClick={e => e.stopPropagation()}>
-        <div className={styles.modalHeader}>
-          <h2 className={styles.modalTitle}>Import Steam Performance Data</h2>
-          <button className={styles.modalClose} onClick={onClose}>
-            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-
-        <div className={styles.modalContent}>
-          <div className={styles.uploadZone}>
-            <input type="file" accept=".csv" onChange={handleFileSelect} className={styles.fileInput} id="csvInput" />
-            <label htmlFor="csvInput" className={styles.uploadLabel}>
-              {file ? (
-                <>
-                  <svg className={styles.uploadIcon} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <span className={styles.fileName}>{file.name}</span>
-                  <span className={styles.fileSize}>({(file.size / 1024 / 1024).toFixed(2)} MB)</span>
-                </>
-              ) : (
-                <>
-                  <svg className={styles.uploadIcon} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                  </svg>
-                  <span>Click to select CSV file</span>
-                  <span className={styles.uploadHint}>or drag and drop</span>
-                </>
-              )}
-            </label>
-          </div>
-
-          {preview.length > 0 && (
-            <div className={styles.previewSection}>
-              <h4 className={styles.previewTitle}>Preview</h4>
-              <div className={styles.previewTable}>
-                <table>
-                  <thead>
-                    <tr>
-                      {preview[0]?.map((header: string, i: number) => (<th key={i}>{header}</th>))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {preview.slice(1).map((row, i) => (
-                      <tr key={i}>
-                        {row.map((cell: string, j: number) => (<td key={j}>{cell}</td>))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {error && (
-            <div className={styles.errorMessage}>
-              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              {error}
-            </div>
-          )}
-
-          {isUploading && progress.total > 0 && (
-            <div className={styles.progressSection}>
-              <div className={styles.progressBar}>
-                <div className={styles.progressFill} style={{ width: `${(progress.current / progress.total) * 100}%` }} />
-              </div>
-              <span className={styles.progressText}>Processing {progress.current.toLocaleString()} of {progress.total.toLocaleString()} rows...</span>
-            </div>
-          )}
-        </div>
-
-        <div className={styles.modalFooter}>
-          <button className={styles.cancelButton} onClick={onClose} disabled={isUploading}>Cancel</button>
-          <button className={styles.importSubmitButton} onClick={handleImport} disabled={!file || isUploading}>
-            {isUploading ? 'Importing...' : 'Import Data'}
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
+// ImportPerformanceModal is now imported from '../components/ImportPerformanceModal'
