@@ -414,6 +414,23 @@ export default function AnalyticsPage() {
           }
         }
 
+        // Strategy 3: Fallback — find committed version with no scope (legacy data)
+        if (!data) {
+          const { data: unscopedVersion } = await supabase
+            .from('calendar_versions')
+            .select('id, name, sales_snapshot, committed_at')
+            .is('client_id', null)
+            .is('product_id', null)
+            .eq('is_committed', true)
+            .order('committed_at', { ascending: false })
+            .limit(1)
+            .maybeSingle()
+
+          if (unscopedVersion) {
+            data = unscopedVersion
+          }
+        }
+
         setCommittedVersion(data || null)
       } catch (err) {
         console.error('Error fetching committed version:', err)
