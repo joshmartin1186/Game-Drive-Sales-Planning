@@ -510,10 +510,32 @@ export default function ImportSalesModal({
     setMapping(prev => ({ ...prev, [field]: value }))
   }, [])
 
+  // Detect rows that are empty or just section headers/month separators
+  // (e.g. "JANUARY", "PREVIOUS COOLDOWNS", blank rows between data sections)
+  const isJunkRow = useCallback((row: Record<string, string>): boolean => {
+    const productValue = mapping.product ? (row[mapping.product] || '').trim() : ''
+    const platformValue = mapping.platform ? (row[mapping.platform] || '').trim() : ''
+    const startDateValue = mapping.startDate ? (row[mapping.startDate] || '').trim() : ''
+    const endDateValue = mapping.endDate ? (row[mapping.endDate] || '').trim() : ''
+
+    // All required mapped fields are empty → junk row
+    if (!productValue && !platformValue && !startDateValue && !endDateValue) return true
+
+    // Row has product-like text but nothing else → likely a section header
+    if (productValue && !startDateValue && !endDateValue) return true
+
+    return false
+  }, [mapping])
+
   const processRows = useCallback(() => {
     const missingProducts = new Map<string, ProductToCreate>()
 
-    const processed: ParsedRow[] = rawRows.map((row, idx) => {
+    // Filter out empty/separator rows before validation
+    const dataRows = rawRows
+      .map((row, idx) => ({ row, idx }))
+      .filter(({ row }) => !isJunkRow(row))
+
+    const processed: ParsedRow[] = dataRows.map(({ row, idx }) => {
       const errors: string[] = []
       const warnings: string[] = []
       let missingProductName: string | undefined
@@ -675,7 +697,7 @@ export default function ImportSalesModal({
       setSelectedProductsToCreate(new Set(missingProducts.keys()))
     }
     setStep('preview')
-  }, [rawRows, mapping, productLookup, platformLookup, existingSales, skipDuplicates, normalizePlatformValue, platforms, selectedClientId, filteredGames, onProductCreate])
+  }, [rawRows, mapping, productLookup, platformLookup, existingSales, skipDuplicates, normalizePlatformValue, platforms, selectedClientId, filteredGames, onProductCreate, isJunkRow])
 
   const validRows = useMemo(() => parsedRows.filter(r => r.isValid), [parsedRows])
   const invalidRows = useMemo(() => parsedRows.filter(r => !r.isValid), [parsedRows])
