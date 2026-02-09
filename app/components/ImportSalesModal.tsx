@@ -80,6 +80,9 @@ const DEFAULT_MAPPING: ColumnMapping = {
   notes: ''
 }
 
+// Date format preference — applies consistently to ALL dates in the import
+type DateFormatPreference = 'eu' | 'us' | 'iso'
+
 // Import format presets for common platforms
 type ImportPreset = 'auto' | 'microsoft' | 'steam' | 'generic'
 
@@ -142,33 +145,18 @@ const FORMAT_PRESETS: Record<Exclude<ImportPreset, 'auto'>, FormatPreset> = {
   }
 }
 
-// Common date formats to try parsing
-// Order matters: EU formats first (dd/MM) since Game Drive clients are European
-const DATE_FORMATS = [
-  'yyyy-MM-dd',      // ISO standard (unambiguous)
-  'yyyy/MM/dd',      // ISO with slashes (unambiguous)
-  'yyyy.MM.dd',      // ISO with dots (unambiguous)
-  'dd/MM/yyyy',      // EU format (prioritized for EU clients)
-  'd/M/yyyy',        // EU without leading zeros
-  'dd-MM-yyyy',      // EU with dashes
-  'dd.MM.yyyy',      // European dot format
-  'MM/dd/yyyy',      // US format (fallback)
-  'M/d/yyyy',        // US without leading zeros
-  'MM-dd-yyyy',      // US with dashes
-]
-
 interface ParsedDateResult {
   date: Date | null
   warning?: string
   detectedFormat?: string
 }
 
-function parseDate(value: string): Date | null {
-  const result = parseDateWithWarning(value)
+function parseDate(value: string, dateFormat: DateFormatPreference = 'eu'): Date | null {
+  const result = parseDateWithWarning(value, dateFormat)
   return result.date
 }
 
-function parseDateWithWarning(value: string): ParsedDateResult {
+function parseDateWithWarning(value: string, dateFormat: DateFormatPreference = 'eu'): ParsedDateResult {
   if (!value) return { date: null }
 
   const trimmed = value.trim()
@@ -183,7 +171,7 @@ function parseDateWithWarning(value: string): ParsedDateResult {
     }
   }
 
-  // For dd/MM/yyyy or MM/dd/yyyy formats, use heuristics
+  // For dd/MM/yyyy or MM/dd/yyyy formats, use the user's selected format consistently
   const slashMatch = trimmed.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/)
   if (slashMatch) {
     const [, first, second, year] = slashMatch
@@ -191,40 +179,49 @@ function parseDateWithWarning(value: string): ParsedDateResult {
     const secondNum = parseInt(second)
     const yearNum = parseInt(year)
 
-    // Heuristic: if first number > 12, it MUST be the day (EU format)
-    if (firstNum > 12) {
+    if (dateFormat === 'eu') {
+      // EU: first = day, second = month
       const date = new Date(yearNum, secondNum - 1, firstNum)
-      if (isValid(date)) {
+      if (isValid(date) && date.getMonth() === secondNum - 1 && date.getDate() === firstNum) {
         return { date, detectedFormat: 'EU (dd/MM/yyyy)' }
       }
-    }
-
-    // Heuristic: if second number > 12, it MUST be the day (US format)
-    if (secondNum > 12) {
+    } else if (dateFormat === 'us') {
+      // US: first = month, second = day
       const date = new Date(yearNum, firstNum - 1, secondNum)
-      if (isValid(date)) {
+      if (isValid(date) && date.getMonth() === firstNum - 1 && date.getDate() === secondNum) {
         return { date, detectedFormat: 'US (MM/dd/yyyy)' }
       }
     }
 
-    // Ambiguous case: both could be month or day (e.g., 01/06/2025)
-    // Default to EU format since Game Drive clients are European
-    // but flag as ambiguous for warning
-    const euDate = new Date(yearNum, secondNum - 1, firstNum)
-    if (isValid(euDate)) {
-      const isAmbiguous = firstNum <= 12 && secondNum <= 12
-      return {
-        date: euDate,
-        detectedFormat: 'EU (dd/MM/yyyy)',
-        warning: isAmbiguous
-          ? `Ambiguous date "${trimmed}" interpreted as EU format (day/month/year). Parsed as ${format(euDate, 'MMMM d, yyyy')}.`
-          : undefined
+    // If the selected format didn't work (e.g. day 31 in month with 30 days),
+    // try the other format as fallback
+    if (dateFormat === 'eu') {
+      const usDate = new Date(yearNum, firstNum - 1, secondNum)
+      if (isValid(usDate) && usDate.getMonth() === firstNum - 1 && usDate.getDate() === secondNum) {
+        return {
+          date: usDate,
+          detectedFormat: 'US (MM/dd/yyyy)',
+          warning: `Date "${trimmed}" could not be parsed as EU format, interpreted as US (MM/DD/YYYY) instead.`
+        }
+      }
+    } else if (dateFormat === 'us') {
+      const euDate = new Date(yearNum, secondNum - 1, firstNum)
+      if (isValid(euDate) && euDate.getMonth() === secondNum - 1 && euDate.getDate() === firstNum) {
+        return {
+          date: euDate,
+          detectedFormat: 'EU (dd/MM/yyyy)',
+          warning: `Date "${trimmed}" could not be parsed as US format, interpreted as EU (DD/MM/YYYY) instead.`
+        }
       }
     }
   }
 
-  // Fallback: try all formats explicitly with date-fns parse
-  for (const fmt of DATE_FORMATS) {
+  // Fallback: try date-fns parse with format-appropriate order
+  const formatsToTry = dateFormat === 'us'
+    ? ['MM/dd/yyyy', 'M/d/yyyy', 'MM-dd-yyyy', 'dd/MM/yyyy', 'd/M/yyyy', 'dd-MM-yyyy', 'dd.MM.yyyy']
+    : ['dd/MM/yyyy', 'd/M/yyyy', 'dd-MM-yyyy', 'dd.MM.yyyy', 'MM/dd/yyyy', 'M/d/yyyy', 'MM-dd-yyyy']
+
+  for (const fmt of formatsToTry) {
     try {
       const parsed = parse(trimmed, fmt, new Date())
       if (isValid(parsed)) {
@@ -311,6 +308,7 @@ export default function ImportSalesModal({
   const [importPreset, setImportPreset] = useState<ImportPreset>('auto')
   const [skipDuplicates, setSkipDuplicates] = useState(true) // Append mode: skip duplicates by default
   const [detectedPreset, setDetectedPreset] = useState<ImportPreset | null>(null)
+  const [dateFormat, setDateFormat] = useState<DateFormatPreference>('eu') // EU default for European clients
 
   // Client scoping and product creation
   const [selectedClientId, setSelectedClientId] = useState<string>('')
@@ -637,12 +635,12 @@ export default function ImportSalesModal({
         errors.push('Platform is required')
       }
       
-      // Parse dates with ambiguity detection
+      // Parse dates using the user-selected format
       let startDate: string | undefined
       let endDate: string | undefined
 
       if (startDateValue) {
-        const result = parseDateWithWarning(startDateValue)
+        const result = parseDateWithWarning(startDateValue, dateFormat)
         if (result.date) {
           startDate = format(result.date, 'yyyy-MM-dd')
           if (result.warning) {
@@ -656,7 +654,7 @@ export default function ImportSalesModal({
       }
 
       if (endDateValue) {
-        const result = parseDateWithWarning(endDateValue)
+        const result = parseDateWithWarning(endDateValue, dateFormat)
         if (result.date) {
           endDate = format(result.date, 'yyyy-MM-dd')
           if (result.warning) {
@@ -745,7 +743,7 @@ export default function ImportSalesModal({
       setSelectedPlatformsToCreate(new Set(missingPlatforms.keys()))
     }
     setStep('preview')
-  }, [rawRows, mapping, productLookup, platformLookup, existingSales, skipDuplicates, normalizePlatformValue, platforms, selectedClientId, filteredGames, onProductCreate, onPlatformCreate, isJunkRow])
+  }, [rawRows, mapping, productLookup, platformLookup, existingSales, skipDuplicates, normalizePlatformValue, platforms, selectedClientId, filteredGames, onProductCreate, onPlatformCreate, isJunkRow, dateFormat])
 
   const validRows = useMemo(() => parsedRows.filter(r => r.isValid), [parsedRows])
   const invalidRows = useMemo(() => parsedRows.filter(r => !r.isValid), [parsedRows])
@@ -1178,6 +1176,18 @@ export default function ImportSalesModal({
                     {headers.map(h => (
                       <option key={h} value={h}>{h}</option>
                     ))}
+                  </select>
+                </div>
+
+                <div className={styles.mappingRow}>
+                  <label>Date Format <span className={styles.required}>*</span></label>
+                  <select
+                    value={dateFormat}
+                    onChange={e => setDateFormat(e.target.value as DateFormatPreference)}
+                  >
+                    <option value="eu">DD/MM/YYYY (European)</option>
+                    <option value="us">MM/DD/YYYY (US)</option>
+                    <option value="iso">YYYY-MM-DD (ISO)</option>
                   </select>
                 </div>
 
