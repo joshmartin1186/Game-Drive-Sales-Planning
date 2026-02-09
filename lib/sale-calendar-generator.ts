@@ -41,6 +41,7 @@ export interface GenerateCalendarParams {
   // Custom timeframe options (mutually exclusive, monthCount takes precedence)
   monthCount?: number // Number of months from launch date (default: 12)
   endDate?: string // ISO date string - custom end date for the period
+  preferredStartDay?: number // 0=Sun, 1=Mon, 2=Tue, 3=Wed, 4=Thu(default), 5=Fri, 6=Sat
 }
 
 // Convert existing sale to GeneratedSale format for conflict checking
@@ -88,17 +89,17 @@ function hasConflict(
 ): boolean {
   // Only check against sales on the SAME platform
   const samePlatformSales = existingSales.filter(s => s.platform_id === platformId)
-  
+
   for (const existingSale of samePlatformSales) {
     const saleStart = parseISO(existingSale.start_date)
     const saleEnd = parseISO(existingSale.end_date)
     const saleCooldownDays = existingSale.cooldown_days || 0
-    
+
     // Check 1: Direct overlap - new sale overlaps with existing sale period
     if (startDate <= saleEnd && endDate >= saleStart) {
       return true
     }
-    
+
     // Check 2: New sale starts during existing sale's cooldown
     // 10 AM rule: Last day of cooldown IS valid for new sale to start
     // So we use < not <= for the cooldown check
@@ -109,7 +110,7 @@ function hasConflict(
         return true
       }
     }
-    
+
     // Check 3: Existing sale starts during new sale's cooldown
     // Same 10 AM rule applies
     if (newSaleCooldownDays > 0) {
@@ -120,8 +121,17 @@ function hasConflict(
       }
     }
   }
-  
+
   return false
+}
+
+// Snap a date forward to the next occurrence of the preferred day-of-week
+// If the date is already on the preferred day, return it unchanged
+function snapToPreferredDay(date: Date, preferredDay: number): Date {
+  const currentDay = date.getDay() // 0=Sun ... 6=Sat
+  if (currentDay === preferredDay) return date
+  const daysToAdd = (preferredDay - currentDay + 7) % 7
+  return addDays(date, daysToAdd)
 }
 
 // Find the next available date that won't cause any conflicts
@@ -131,35 +141,49 @@ function findNextAvailableDate(
   newSaleCooldownDays: number,
   periodEnd: Date,
   saleDuration: number,
-  platformId: string
+  platformId: string,
+  preferredStartDay?: number
 ): Date | null {
   let candidate = addDays(afterDate, 1)
   let iterations = 0
   const maxIterations = 500
-  
+
   // Only consider sales on the same platform
   const samePlatformSales = existingSales.filter(s => s.platform_id === platformId)
-  
+
   while (candidate <= periodEnd && iterations < maxIterations) {
     iterations++
-    
+
     const potentialEnd = addDays(candidate, saleDuration - 1)
     const actualEnd = potentialEnd > periodEnd ? periodEnd : potentialEnd
-    
+
     const conflict = hasConflict(candidate, actualEnd, newSaleCooldownDays, existingSales, platformId)
-    
+
     if (!conflict) {
+      // Snap to preferred day-of-week if specified
+      if (preferredStartDay !== undefined) {
+        const snapped = snapToPreferredDay(candidate, preferredStartDay)
+        if (snapped > periodEnd) return null
+        const snappedEnd = addDays(snapped, saleDuration - 1)
+        const snappedActualEnd = snappedEnd > periodEnd ? periodEnd : snappedEnd
+        if (!hasConflict(snapped, snappedActualEnd, newSaleCooldownDays, existingSales, platformId)) {
+          return snapped
+        }
+        // If snapped position conflicts, continue searching from day after snapped
+        candidate = addDays(snapped, 1)
+        continue
+      }
       return candidate
     }
-    
+
     // Jump past blocking sales' cooldowns
     let nextPossible = addDays(candidate, 1)
-    
+
     for (const sale of samePlatformSales) {
       const saleEnd = parseISO(sale.end_date)
       const saleCooldownDays = sale.cooldown_days || 0
       const saleCooldownEnd = addDays(saleEnd, saleCooldownDays)
-      
+
       if (candidate <= saleCooldownEnd) {
         // Jump to the cooldown end day (which IS valid to start a new sale)
         const jumpTo = saleCooldownEnd
@@ -168,10 +192,10 @@ function findNextAvailableDate(
         }
       }
     }
-    
+
     candidate = nextPossible
   }
-  
+
   return null
 }
 
@@ -183,35 +207,36 @@ function generatePlatformSales(
   periodStart: Date,
   periodEnd: Date,
   defaultDiscount: number,
-  variation: 'aggressive' | 'balanced' | 'conservative',
-  existingSales: GeneratedSale[] // Include existing sales for conflict checking
+  variation: 'aggressive' | 'conservative',
+  existingSales: GeneratedSale[],
+  preferredStartDay?: number
 ): GeneratedSale[] {
   const newSales: GeneratedSale[] = []
   // Use platform max_sale_days as a default suggestion, but don't enforce it as a hard limit
   // This allows the auto-generator to create longer sales if needed
   const suggestedMaxDays = platform.max_sale_days || 14
   const platformCooldownDays = platform.cooldown_days || 0
-  
+
   // Combine existing sales with new sales for conflict checking
   const allSales = [...existingSales]
-  
+
   // Get events for this platform
   const events = getEventsForPlatform(platform.id, platformEvents, periodStart, periodEnd)
-  
+
   // First, add all seasonal/special events
   for (const event of events) {
     const eventStart = parseISO(event.start_date)
     const eventEnd = parseISO(event.end_date)
-    
+
     const saleStart = eventStart < periodStart ? periodStart : eventStart
     const saleEnd = eventEnd > periodEnd ? periodEnd : eventEnd
 
     // For event sales, use the full event duration - don't truncate based on max_sale_days
     // The max_sale_days is now a recommendation, not a hard limit
     const actualEnd = saleEnd
-    
+
     const eventCooldownDays = event.requires_cooldown === false ? 0 : platformCooldownDays
-    
+
     // Check against ALL sales (existing + newly generated)
     if (!hasConflict(saleStart, actualEnd, eventCooldownDays, allSales, platform.id)) {
       const newSale: GeneratedSale = {
@@ -233,22 +258,28 @@ function generatePlatformSales(
       allSales.push(newSale)
     }
   }
-  
+
   // For conservative: if no new event sales added, add at least one custom sale
   if (variation === 'conservative') {
     if (newSales.length === 0) {
       // Use a sensible default of 7 days for the launch sale, respecting platform suggestion
       const saleDuration = Math.min(suggestedMaxDays, 7)
-      const saleEnd = addDays(periodStart, saleDuration - 1)
-      
-      if (!hasConflict(periodStart, saleEnd, platformCooldownDays, allSales, platform.id)) {
+      // Snap launch sale to preferred day if specified
+      let launchStart = periodStart
+      if (preferredStartDay !== undefined) {
+        launchStart = snapToPreferredDay(periodStart, preferredStartDay)
+        if (launchStart > periodEnd) return newSales
+      }
+      const saleEnd = addDays(launchStart, saleDuration - 1)
+
+      if (!hasConflict(launchStart, saleEnd, platformCooldownDays, allSales, platform.id)) {
         newSales.push({
           id: `gen-${productId}-${platform.id}-custom-0`,
           product_id: productId,
           platform_id: platform.id,
           platform_name: platform.name,
           platform_color: platform.color_hex,
-          start_date: format(periodStart, 'yyyy-MM-dd'),
+          start_date: format(launchStart, 'yyyy-MM-dd'),
           end_date: format(saleEnd, 'yyyy-MM-dd'),
           discount_percentage: defaultDiscount,
           sale_name: `${platform.name} Launch Sale`,
@@ -260,15 +291,14 @@ function generatePlatformSales(
     }
     return newSales
   }
-  
-  // For balanced and aggressive, fill gaps with custom sales
+
+  // For aggressive, fill gaps with custom sales back-to-back after cooldowns
   let customSaleCount = 0
-  const maxCustomSales = variation === 'aggressive' ? 50 : 12
-  // Use platform suggestion as a guide: aggressive uses full suggested duration, balanced uses min(suggestion, 7)
-  const saleDuration = variation === 'aggressive' ? suggestedMaxDays : Math.min(suggestedMaxDays, 7)
-  
+  const maxCustomSales = 50
+  const saleDuration = suggestedMaxDays
+
   let searchStart = addDays(periodStart, -1)
-  
+
   while (customSaleCount < maxCustomSales) {
     const availableDate = findNextAvailableDate(
       searchStart,
@@ -276,14 +306,15 @@ function generatePlatformSales(
       platformCooldownDays,
       periodEnd,
       saleDuration,
-      platform.id
+      platform.id,
+      preferredStartDay
     )
-    
+
     if (!availableDate || availableDate > periodEnd) break
-    
+
     const potentialEnd = addDays(availableDate, saleDuration - 1)
     const actualEnd = potentialEnd > periodEnd ? periodEnd : potentialEnd
-    
+
     if (!hasConflict(availableDate, actualEnd, platformCooldownDays, allSales, platform.id)) {
       const customSale: GeneratedSale = {
         id: `gen-${productId}-${platform.id}-custom-${customSaleCount}`,
@@ -294,25 +325,25 @@ function generatePlatformSales(
         start_date: format(availableDate, 'yyyy-MM-dd'),
         end_date: format(actualEnd, 'yyyy-MM-dd'),
         discount_percentage: defaultDiscount,
-        sale_name: customSaleCount === 0 && newSales.length === 0 
-          ? `${platform.name} Launch Sale` 
+        sale_name: customSaleCount === 0 && newSales.length === 0
+          ? `${platform.name} Launch Sale`
           : `Custom Sale ${customSaleCount + 1}`,
         sale_type: 'custom',
         is_event: false,
         cooldown_days: platformCooldownDays
       }
-      
+
       newSales.push(customSale)
       allSales.push(customSale)
       customSaleCount++
-      
+
       // Start searching from the cooldown end of this sale
       searchStart = addDays(actualEnd, platformCooldownDays - 1)
     } else {
       searchStart = addDays(availableDate, 1)
     }
   }
-  
+
   return newSales
 }
 
@@ -322,19 +353,19 @@ function calculateStats(sales: GeneratedSale[], periodStart: Date, periodEnd: Da
   let totalDaysOnSale = 0
   let eventSales = 0
   let customSales = 0
-  
+
   for (const sale of sales) {
     const start = parseISO(sale.start_date)
     const end = parseISO(sale.end_date)
     totalDaysOnSale += differenceInDays(end, start) + 1
-    
+
     if (sale.is_event) {
       eventSales++
     } else {
       customSales++
     }
   }
-  
+
   return {
     totalSales: sales.length,
     totalDaysOnSale,
@@ -344,7 +375,7 @@ function calculateStats(sales: GeneratedSale[], periodStart: Date, periodEnd: Da
   }
 }
 
-// Main function to generate all three variations
+// Main function to generate both variations (Maximize Sales + Events Only)
 export function generateSaleCalendar(params: GenerateCalendarParams): CalendarVariation[] {
   const {
     productId,
@@ -355,7 +386,8 @@ export function generateSaleCalendar(params: GenerateCalendarParams): CalendarVa
     existingSales = [],
     selectedPlatformIds,
     monthCount,
-    endDate
+    endDate,
+    preferredStartDay
   } = params
 
   const periodStart = parseISO(launchDate)
@@ -367,29 +399,24 @@ export function generateSaleCalendar(params: GenerateCalendarParams): CalendarVa
     const months = monthCount || 12
     periodEnd = addDays(addMonths(periodStart, months), -1)
   }
-  
+
   // Convert existing sales for this product to GeneratedSale format
   const existingForProduct = existingSales
     .filter(s => s.product_id === productId)
     .map(existingSaleToGenerated)
-  
+
   // Filter platforms if selectedPlatformIds is provided
-  const allPlatforms = selectedPlatformIds 
+  const allPlatforms = selectedPlatformIds
     ? platforms.filter(p => selectedPlatformIds.includes(p.id))
     : platforms
-  
+
   const variations: CalendarVariation[] = []
-  
-  const variationConfigs: { key: 'aggressive' | 'balanced' | 'conservative'; name: string; description: string }[] = [
+
+  const variationConfigs: { key: 'aggressive' | 'conservative'; name: string; description: string }[] = [
     {
       key: 'aggressive',
-      name: 'Maximum Coverage',
+      name: 'Maximize Sales',
       description: 'Maximize days on sale with full-length sales chained back-to-back after cooldowns'
-    },
-    {
-      key: 'balanced',
-      name: 'Balanced',
-      description: 'All seasonal events plus monthly custom sales for steady visibility'
     },
     {
       key: 'conservative',
@@ -397,10 +424,10 @@ export function generateSaleCalendar(params: GenerateCalendarParams): CalendarVa
       description: 'Participate only in platform seasonal events (plus one launch sale per platform without events)'
     }
   ]
-  
+
   for (const config of variationConfigs) {
     const newSales: GeneratedSale[] = []
-    
+
     for (const platform of allPlatforms) {
       const platformSales = generatePlatformSales(
         productId,
@@ -410,16 +437,17 @@ export function generateSaleCalendar(params: GenerateCalendarParams): CalendarVa
         periodEnd,
         defaultDiscount,
         config.key,
-        [...existingForProduct, ...newSales] // Pass existing + already generated for other platforms
+        [...existingForProduct, ...newSales],
+        preferredStartDay
       )
       newSales.push(...platformSales)
     }
-    
+
     // Sort all new sales by date
-    newSales.sort((a, b) => 
+    newSales.sort((a, b) =>
       parseISO(a.start_date).getTime() - parseISO(b.start_date).getTime()
     )
-    
+
     variations.push({
       name: config.name,
       description: config.description,
@@ -427,7 +455,7 @@ export function generateSaleCalendar(params: GenerateCalendarParams): CalendarVa
       stats: calculateStats(newSales, periodStart, periodEnd)
     })
   }
-  
+
   return variations
 }
 
