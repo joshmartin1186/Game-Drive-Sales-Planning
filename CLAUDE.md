@@ -1,0 +1,123 @@
+# CLAUDE.md — Claude Code Onboarding
+
+> **Read this file first.** It tells you what the project is, what's built, what's next, and where everything lives.
+
+## What Is This Project?
+
+GameDrive Sales Planning Tool — a Next.js 14 + Supabase app for a Dutch PR & marketing agency (Game Drive) that manages game sales across Steam, PlayStation, Xbox, Nintendo, and Epic.
+
+**Two major systems:**
+1. **Sales Planning Tool** (MVP complete) — Gantt timeline for scheduling game sales with cooldown validation, multi-client support, Steam analytics, Excel export
+2. **PR Coverage Tracker** (building now) — Automated discovery and tracking of press/media coverage for game clients. Issues #62–#95 in GitHub.
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|------------|
+| Framework | Next.js 14.0.4 (App Router) |
+| Database | Supabase (PostgreSQL) — project `znueqcmlqfdhetnierno` |
+| Hosting | Vercel — project `prj_aKbiJdM5fbOPa8YeCc5aCEQWqzcK` |
+| Styling | CSS Modules (NO Tailwind — it fails silently on Vercel) |
+| Auth | Supabase Auth with RLS |
+| Language | TypeScript |
+
+## Critical Rules
+
+1. **CSS Modules ONLY** — Tailwind had silent compilation failures on Vercel. Use `.module.css` files.
+2. **Fixed heights for timeline** — Use `height` not `min-height` for row positioning.
+3. **Supabase returns strings** — Numeric fields come back as `"19.99"` not `19.99`. Use `toNumber()` helper.
+4. **GitHub pushes** — For complex TypeScript files, use `push_files` not `create_or_update_file` to prevent HTML entity corruption.
+5. **Optimistic UI** — Update React state immediately, rollback on server error.
+
+## What To Build Next: PR Coverage Tracker
+
+**Start with GitHub Issues #62–#95.** They are organized into 8 epics with priority labels.
+
+### Build Order (Phase 1 — Must Have)
+
+1. **Issue #62** — Database schema migration (4 new tables: `coverage_items`, `outlets`, `coverage_keywords`, `coverage_campaigns`)
+2. **Issue #67** — RSS Feed Aggregation Engine
+3. **Issue #68** — Tavily Web Search Integration
+4. **Issue #74** — Hypestat Traffic Auto-Enrichment
+5. **Issue #79** — Internal Coverage Feed View
+6. **Issue #80** — Summary Dashboard
+7. **Issues #86, #87, #88** — Client Report Builder (Summary, Sales, PR sections)
+8. **Issue #91** — Steam Web API Capability Assessment
+
+See `docs/PR_COVERAGE_ARCHITECTURE.md` for full technical spec.
+
+### New Routes to Create
+
+```
+app/coverage/                    # Coverage feed & dashboard
+app/coverage/sources/            # Source Management Hub (4-tab admin)
+app/coverage/outlets/            # Outlet registry
+app/coverage/keywords/           # Keyword management
+app/coverage/reports/            # Client report builder
+app/coverage/[clientSlug]/       # Public shareable coverage feed
+app/api/coverage/scrape/         # Scraper API routes
+app/api/coverage/enrich/         # Enrichment API routes
+app/settings/                    # Add API key management for Tavily, Apify, YouTube, etc.
+```
+
+### New Dependencies Needed
+
+```bash
+npm install rss-parser           # RSS feed parsing
+# Tavily, YouTube, Twitch, Reddit — use their REST APIs via fetch
+# Apify — REST API via fetch
+# Claude API — for AI relevance scoring (already have @anthropic-ai/sdk or use fetch)
+```
+
+## File Structure (Current)
+
+```
+├── CLAUDE.md                    # THIS FILE — read first
+├── CLAUDE_CONTEXT.md            # Detailed MCP tools reference, Supabase/Vercel IDs
+├── app/
+│   ├── page.tsx                 # Main Gantt timeline (home page)
+│   ├── analytics/               # Steam analytics dashboard
+│   ├── clients/                 # Client management
+│   ├── platforms/               # Platform settings
+│   ├── settings/                # API key management
+│   ├── export/                  # Excel export
+│   ├── permissions/             # User management & RBAC
+│   ├── components/              # Shared components
+│   └── api/                     # API routes
+├── lib/
+│   ├── supabase.ts              # Supabase client
+│   ├── types.ts                 # TypeScript types
+│   ├── validation.ts            # Cooldown validation
+│   └── dateUtils.ts             # Date helpers
+├── docs/
+│   ├── PR_COVERAGE_ARCHITECTURE.md  # Full PR coverage technical spec
+│   ├── PROJECT_PROGRESS.md      # Session-by-session progress log
+│   └── DEVELOPMENT_WORKFLOW.md  # Dev patterns
+└── supabase/migrations/         # Applied SQL migrations
+```
+
+## Environment Variables
+
+See `.env.example` for all required keys. PR coverage adds:
+- `TAVILY_API_KEY` — Web search for coverage discovery
+- `ANTHROPIC_API_KEY` — AI relevance scoring
+- `YOUTUBE_API_KEY` — YouTube Data API v3
+- `TWITCH_CLIENT_ID` / `TWITCH_CLIENT_SECRET` — Twitch Helix API
+- `REDDIT_CLIENT_ID` / `REDDIT_CLIENT_SECRET` / `REDDIT_REFRESH_TOKEN` — Reddit API
+- `APIFY_API_KEY` — Twitter/TikTok/Instagram scrapers (optional)
+
+## Commands
+
+```bash
+npm run dev -- -p 3003    # Dev server on port 3003
+npm run build             # Production build
+npm run lint              # ESLint
+```
+
+## Key Reference
+
+- **Production:** https://gamedrivesalesplanning.vercel.app/
+- **GitHub Issues:** https://github.com/joshmartin1186/Game-Drive-Sales-Planning/issues
+- **Supabase:** https://supabase.com/dashboard/project/znueqcmlqfdhetnierno
+- **Full MCP tools reference:** See `CLAUDE_CONTEXT.md`
+- **PR Coverage spec:** See `docs/PR_COVERAGE_ARCHITECTURE.md`
