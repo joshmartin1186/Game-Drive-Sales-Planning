@@ -73,8 +73,21 @@ function formatNumber(val: number): string {
   return new Intl.NumberFormat('en-US').format(val)
 }
 
-const TABS = ['Summary', 'Sales Report', 'PR Coverage'] as const
+const TABS = ['Summary', 'Sales Report', 'PR Coverage', 'Data Tables'] as const
 type Tab = typeof TABS[number]
+
+interface DataTableRow {
+  [key: string]: unknown
+  gross_revenue: number; net_revenue: number; gross_units: number; net_units: number
+  chargebacks: number; vat: number; avg_price: number; refund_rate: number; row_count: number
+}
+interface DataTableResponse {
+  rows: DataTableRow[]
+  totals: Record<string, number>
+  pagination: { page: number; page_size: number; total_rows: number; total_pages: number }
+  filters: { products: string[]; platforms: string[]; countries: string[] }
+  raw_row_count: number
+}
 
 export default function ReportsPage() {
   const supabase = createClientComponentClient()
@@ -90,6 +103,19 @@ export default function ReportsPage() {
   const [reportData, setReportData] = useState<ReportData | null>(null)
   const [annotations, setAnnotations] = useState<Record<string, string>>({})
   const [savingAnnotation, setSavingAnnotation] = useState<string | null>(null)
+
+  // Data Tables state
+  const [dtData, setDtData] = useState<DataTableResponse | null>(null)
+  const [dtLoading, setDtLoading] = useState(false)
+  const [dtDrill, setDtDrill] = useState<'game' | 'product' | 'platform' | 'country' | 'daily'>('product')
+  const [dtFilterProduct, setDtFilterProduct] = useState('')
+  const [dtFilterPlatform, setDtFilterPlatform] = useState('')
+  const [dtFilterCountry, setDtFilterCountry] = useState('')
+  const [dtSearch, setDtSearch] = useState('')
+  const [dtSortBy, setDtSortBy] = useState('net_revenue')
+  const [dtSortDir, setDtSortDir] = useState<'asc' | 'desc'>('desc')
+  const [dtPage, setDtPage] = useState(1)
+  const [dtPageSize] = useState(50)
 
   // Load clients
   useEffect(() => {
@@ -156,6 +182,71 @@ export default function ReportsPage() {
     } finally {
       setSavingAnnotation(null)
     }
+  }
+
+  const fetchDataTable = useCallback(async (overridePage?: number) => {
+    if (!selectedClient) return
+    setDtLoading(true)
+    try {
+      const range = datePreset === 'custom' ? { from: dateFrom, to: dateTo } : getDateRange(datePreset)
+      const params = new URLSearchParams({ client_id: selectedClient, drill: dtDrill, page: String(overridePage || dtPage), page_size: String(dtPageSize), sort_by: dtSortBy, sort_dir: dtSortDir })
+      if (selectedGame) params.set('game_id', selectedGame)
+      if (range.from) params.set('date_from', range.from)
+      if (range.to) params.set('date_to', range.to)
+      if (dtFilterProduct) params.set('product', dtFilterProduct)
+      if (dtFilterPlatform) params.set('platform', dtFilterPlatform)
+      if (dtFilterCountry) params.set('country', dtFilterCountry)
+      if (dtSearch) params.set('search', dtSearch)
+
+      const res = await fetch(`/api/reports/data-table?${params}`)
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      setDtData(data)
+    } catch (err) {
+      console.error('Failed to fetch data table:', err)
+    } finally {
+      setDtLoading(false)
+    }
+  }, [selectedClient, selectedGame, datePreset, dateFrom, dateTo, dtDrill, dtPage, dtPageSize, dtSortBy, dtSortDir, dtFilterProduct, dtFilterPlatform, dtFilterCountry, dtSearch])
+
+  // Auto-fetch data table when tab switches or filters change
+  useEffect(() => {
+    if (activeTab === 'Data Tables' && selectedClient) {
+      fetchDataTable()
+    }
+  }, [activeTab, fetchDataTable, selectedClient])
+
+  const handleDtSort = (col: string) => {
+    if (dtSortBy === col) {
+      setDtSortDir(prev => prev === 'asc' ? 'desc' : 'asc')
+    } else {
+      setDtSortBy(col)
+      setDtSortDir('desc')
+    }
+    setDtPage(1)
+  }
+
+  const exportCSV = () => {
+    if (!dtData || dtData.rows.length === 0) return
+    const drillCols = getDrillColumns(dtDrill)
+    const headers = [...drillCols.map(c => c.label), 'Gross Revenue', 'Net Revenue', 'Gross Units', 'Net Units', 'Chargebacks', 'VAT', 'Avg Price', 'Refund Rate %']
+    const csvRows = [headers.join(',')]
+    for (const row of dtData.rows) {
+      const vals = [
+        ...drillCols.map(c => `"${String(row[c.key] || '').replace(/"/g, '""')}"`),
+        row.gross_revenue.toFixed(2), row.net_revenue.toFixed(2),
+        row.gross_units, row.net_units, row.chargebacks, row.vat.toFixed(2),
+        row.avg_price.toFixed(2), row.refund_rate.toFixed(2),
+      ]
+      csvRows.push(vals.join(','))
+    }
+    const blob = new Blob([csvRows.join('\n')], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `data-table-${dtDrill}-${new Date().toISOString().split('T')[0]}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
   }
 
   const exportPDF = () => {
@@ -253,6 +344,17 @@ ${cov ? `
 </body></html>`)
     w.document.close()
     setTimeout(() => w.print(), 500)
+  }
+
+  function getDrillColumns(drill: string): { key: string; label: string }[] {
+    switch (drill) {
+      case 'game': return [{ key: 'product_name', label: 'Product' }]
+      case 'product': return [{ key: 'product_name', label: 'Product' }, { key: 'platform', label: 'Platform' }]
+      case 'platform': return [{ key: 'platform', label: 'Platform' }]
+      case 'country': return [{ key: 'country_code', label: 'Code' }, { key: 'country', label: 'Country' }]
+      case 'daily': return [{ key: 'date', label: 'Date' }]
+      default: return [{ key: 'product_name', label: 'Product' }]
+    }
   }
 
   // Styles
@@ -672,6 +774,196 @@ ${cov ? `
                     {savingAnnotation === 'pr_coverage' ? 'Saving...' : 'Save'}
                   </button>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* DATA TABLES TAB */}
+          {activeTab === 'Data Tables' && (
+            <div>
+              <div style={cardStyle}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                  <h2 style={{ fontSize: '18px', fontWeight: 600, color: '#1e293b' }}>Analytical Data Tables</h2>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button style={{ ...btnOutline, fontSize: '13px', padding: '6px 14px' }} onClick={exportCSV} disabled={!dtData || dtData.rows.length === 0}>
+                      Export CSV
+                    </button>
+                  </div>
+                </div>
+
+                {/* Drill level + filters */}
+                <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: '16px' }}>
+                  <div>
+                    <label style={labelStyle}>Drill Down</label>
+                    <select style={{ ...selectStyle, minWidth: '140px' }} value={dtDrill} onChange={e => { setDtDrill(e.target.value as typeof dtDrill); setDtPage(1) }}>
+                      <option value="product">By Product + Platform</option>
+                      <option value="game">By Product</option>
+                      <option value="platform">By Platform</option>
+                      <option value="country">By Country</option>
+                      <option value="daily">By Day</option>
+                    </select>
+                  </div>
+                  {dtData && dtData.filters.products.length > 1 && (
+                    <div>
+                      <label style={labelStyle}>Product</label>
+                      <select style={{ ...selectStyle, minWidth: '160px' }} value={dtFilterProduct} onChange={e => { setDtFilterProduct(e.target.value); setDtPage(1) }}>
+                        <option value="">All Products</option>
+                        {dtData.filters.products.map(p => <option key={p} value={p}>{p}</option>)}
+                      </select>
+                    </div>
+                  )}
+                  {dtData && dtData.filters.platforms.length > 1 && (
+                    <div>
+                      <label style={labelStyle}>Platform</label>
+                      <select style={{ ...selectStyle, minWidth: '140px' }} value={dtFilterPlatform} onChange={e => { setDtFilterPlatform(e.target.value); setDtPage(1) }}>
+                        <option value="">All Platforms</option>
+                        {dtData.filters.platforms.map(p => <option key={p} value={p}>{p}</option>)}
+                      </select>
+                    </div>
+                  )}
+                  {dtData && dtData.filters.countries.length > 1 && dtDrill !== 'country' && (
+                    <div>
+                      <label style={labelStyle}>Country</label>
+                      <select style={{ ...selectStyle, minWidth: '120px' }} value={dtFilterCountry} onChange={e => { setDtFilterCountry(e.target.value); setDtPage(1) }}>
+                        <option value="">All Countries</option>
+                        {dtData.filters.countries.map(c => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                    </div>
+                  )}
+                  <div>
+                    <label style={labelStyle}>Search</label>
+                    <input
+                      type="text" placeholder="Search..." style={{ ...inputStyle, minWidth: '160px' }}
+                      value={dtSearch} onChange={e => { setDtSearch(e.target.value); setDtPage(1) }}
+                    />
+                  </div>
+                </div>
+
+                {/* Loading */}
+                {dtLoading && (
+                  <div style={{ textAlign: 'center', padding: '32px', color: '#64748b' }}>Loading data...</div>
+                )}
+
+                {/* Data table */}
+                {dtData && !dtLoading && (
+                  <>
+                    {/* Summary row */}
+                    <div style={{ display: 'flex', gap: '16px', marginBottom: '16px', flexWrap: 'wrap' }}>
+                      <div style={{ background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: '8px', padding: '10px 16px', fontSize: '13px' }}>
+                        <span style={{ color: '#64748b' }}>Total Rows: </span>
+                        <strong>{formatNumber(dtData.pagination.total_rows)}</strong>
+                      </div>
+                      <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '8px', padding: '10px 16px', fontSize: '13px' }}>
+                        <span style={{ color: '#64748b' }}>Net Revenue: </span>
+                        <strong>{formatCurrency(dtData.totals.net_revenue)}</strong>
+                      </div>
+                      <div style={{ background: '#fefce8', border: '1px solid #fde68a', borderRadius: '8px', padding: '10px 16px', fontSize: '13px' }}>
+                        <span style={{ color: '#64748b' }}>Net Units: </span>
+                        <strong>{formatNumber(dtData.totals.net_units)}</strong>
+                      </div>
+                      <div style={{ background: '#fdf2f8', border: '1px solid #fbcfe8', borderRadius: '8px', padding: '10px 16px', fontSize: '13px' }}>
+                        <span style={{ color: '#64748b' }}>Raw Data Points: </span>
+                        <strong>{formatNumber(dtData.raw_row_count)}</strong>
+                      </div>
+                    </div>
+
+                    {dtData.rows.length === 0 ? (
+                      <div style={{ textAlign: 'center', padding: '48px', color: '#64748b' }}>No data matches your filters.</div>
+                    ) : (
+                      <div style={{ overflowX: 'auto' }}>
+                        <table style={tableStyle}>
+                          <thead>
+                            <tr>
+                              {getDrillColumns(dtDrill).map(col => (
+                                <th key={col.key} style={{ ...thStyle, cursor: 'pointer', userSelect: 'none' }} onClick={() => handleDtSort(col.key)}>
+                                  {col.label} {dtSortBy === col.key ? (dtSortDir === 'asc' ? ' ↑' : ' ↓') : ''}
+                                </th>
+                              ))}
+                              {[
+                                { key: 'gross_revenue', label: 'Gross Rev' },
+                                { key: 'net_revenue', label: 'Net Rev' },
+                                { key: 'gross_units', label: 'Gross Units' },
+                                { key: 'net_units', label: 'Net Units' },
+                                { key: 'chargebacks', label: 'Chargebacks' },
+                                { key: 'vat', label: 'VAT' },
+                                { key: 'avg_price', label: 'Avg Price' },
+                                { key: 'refund_rate', label: 'Refund %' },
+                              ].map(col => (
+                                <th key={col.key} style={{ ...thStyle, cursor: 'pointer', userSelect: 'none', textAlign: 'right' as const }} onClick={() => handleDtSort(col.key)}>
+                                  {col.label} {dtSortBy === col.key ? (dtSortDir === 'asc' ? ' ↑' : ' ↓') : ''}
+                                </th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {dtData.rows.map((row, idx) => (
+                              <tr key={idx} style={{ background: idx % 2 === 0 ? '#fff' : '#fafafa' }}>
+                                {getDrillColumns(dtDrill).map(col => (
+                                  <td key={col.key} style={{ ...tdStyle, fontWeight: 500 }}>
+                                    {String(row[col.key] || '-')}
+                                  </td>
+                                ))}
+                                <td style={{ ...tdStyle, textAlign: 'right' }}>{formatCurrency(row.gross_revenue)}</td>
+                                <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 600 }}>{formatCurrency(row.net_revenue)}</td>
+                                <td style={{ ...tdStyle, textAlign: 'right' }}>{formatNumber(row.gross_units)}</td>
+                                <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 600 }}>{formatNumber(row.net_units)}</td>
+                                <td style={{ ...tdStyle, textAlign: 'right', color: row.chargebacks > 0 ? '#dc2626' : '#334155' }}>{formatNumber(row.chargebacks)}</td>
+                                <td style={{ ...tdStyle, textAlign: 'right' }}>{formatCurrency(row.vat)}</td>
+                                <td style={{ ...tdStyle, textAlign: 'right' }}>{formatCurrency(row.avg_price)}</td>
+                                <td style={{ ...tdStyle, textAlign: 'right', color: row.refund_rate > 5 ? '#dc2626' : '#334155' }}>{row.refund_rate.toFixed(1)}%</td>
+                              </tr>
+                            ))}
+                            {/* Totals row */}
+                            <tr style={{ background: '#f1f5f9', fontWeight: 700 }}>
+                              {getDrillColumns(dtDrill).map((col, i) => (
+                                <td key={col.key} style={{ ...tdStyle, fontWeight: 700 }}>{i === 0 ? 'TOTALS' : ''}</td>
+                              ))}
+                              <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 700 }}>{formatCurrency(dtData.totals.gross_revenue)}</td>
+                              <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 700 }}>{formatCurrency(dtData.totals.net_revenue)}</td>
+                              <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 700 }}>{formatNumber(dtData.totals.gross_units)}</td>
+                              <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 700 }}>{formatNumber(dtData.totals.net_units)}</td>
+                              <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 700 }}>{formatNumber(dtData.totals.chargebacks)}</td>
+                              <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 700 }}>{formatCurrency(dtData.totals.vat)}</td>
+                              <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 700 }}>{formatCurrency(dtData.totals.avg_price || 0)}</td>
+                              <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 700 }}></td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+
+                    {/* Pagination */}
+                    {dtData.pagination.total_pages > 1 && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '16px' }}>
+                        <span style={{ fontSize: '13px', color: '#64748b' }}>
+                          Showing {((dtData.pagination.page - 1) * dtData.pagination.page_size) + 1}–{Math.min(dtData.pagination.page * dtData.pagination.page_size, dtData.pagination.total_rows)} of {formatNumber(dtData.pagination.total_rows)}
+                        </span>
+                        <div style={{ display: 'flex', gap: '4px' }}>
+                          <button
+                            style={{ ...btnOutline, fontSize: '12px', padding: '4px 12px', opacity: dtData.pagination.page <= 1 ? 0.5 : 1 }}
+                            disabled={dtData.pagination.page <= 1}
+                            onClick={() => { setDtPage(dtData!.pagination.page - 1); fetchDataTable(dtData!.pagination.page - 1) }}
+                          >Prev</button>
+                          <span style={{ padding: '4px 12px', fontSize: '13px', color: '#475569' }}>
+                            Page {dtData.pagination.page} of {dtData.pagination.total_pages}
+                          </span>
+                          <button
+                            style={{ ...btnOutline, fontSize: '12px', padding: '4px 12px', opacity: dtData.pagination.page >= dtData.pagination.total_pages ? 0.5 : 1 }}
+                            disabled={dtData.pagination.page >= dtData.pagination.total_pages}
+                            onClick={() => { setDtPage(dtData!.pagination.page + 1); fetchDataTable(dtData!.pagination.page + 1) }}
+                          >Next</button>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {/* No client selected */}
+                {!selectedClient && (
+                  <div style={{ textAlign: 'center', padding: '48px', color: '#64748b' }}>
+                    Select a client and click Generate Report to load data tables.
+                  </div>
+                )}
               </div>
             </div>
           )}
