@@ -8,7 +8,7 @@ GameDrive Sales Planning Tool — a Next.js 14 + Supabase app for a Dutch PR & m
 
 **Two major systems:**
 1. **Sales Planning Tool** (MVP complete) — Gantt timeline for scheduling game sales with cooldown validation, multi-client support, Steam analytics, Excel export
-2. **PR Coverage Tracker** (building now) — Automated discovery and tracking of press/media coverage for game clients. Issues #62–#95 in GitHub.
+2. **PR Coverage Tracker** (building now) — Automated discovery and tracking of press/media coverage for game clients. Issues #62–#97 in GitHub.
 
 ## Tech Stack
 
@@ -31,7 +31,17 @@ GameDrive Sales Planning Tool — a Next.js 14 + Supabase app for a Dutch PR & m
 
 ## What To Build Next: PR Coverage Tracker
 
-**Start with GitHub Issues #62–#95.** They are organized into 8 epics with priority labels.
+**Start with GitHub Issues #62–#97.** They are organized into epics with priority labels.
+
+### Architecture Decision: Simplified API Stack
+
+**Only 3 required API keys** (plus 1 optional):
+- `TAVILY_API_KEY` — Web search for coverage discovery (~$20-40/mo)
+- `GOOGLE_AI_API_KEY` — AI relevance scoring via Gemini Flash (free)
+- `APIFY_API_KEY` — YouTube, Twitch, Reddit, Twitter/X, TikTok, Instagram monitoring ($30-65/mo)
+- `DISCORD_WEBHOOK_URL` — Coverage alert notifications (free, optional)
+
+**Important:** We do NOT use separate YouTube/Twitch/Reddit API keys. All platform monitoring goes through Apify for simplicity. See Issues #96 and #97 for details on this consolidation.
 
 ### Build Order (Phase 1 — Must Have)
 
@@ -39,10 +49,11 @@ GameDrive Sales Planning Tool — a Next.js 14 + Supabase app for a Dutch PR & m
 2. **Issue #67** — RSS Feed Aggregation Engine
 3. **Issue #68** — Tavily Web Search Integration
 4. **Issue #74** — Hypestat Traffic Auto-Enrichment
-5. **Issue #79** — Internal Coverage Feed View
-6. **Issue #80** — Summary Dashboard
-7. **Issues #86, #87, #88** — Client Report Builder (Summary, Sales, PR sections)
-8. **Issue #91** — Steam Web API Capability Assessment
+5. **Issue #96** — AI scoring uses Gemini (NOT Claude/Anthropic)
+6. **Issue #97** — YouTube/Twitch/Reddit all via Apify (NOT individual free APIs)
+7. **Issue #79** — Internal Coverage Feed View
+8. **Issue #80** — Summary Dashboard
+9. **Issues #86, #87, #88** — Client Report Builder (Summary, Sales, PR sections)
 
 See `docs/PR_COVERAGE_ARCHITECTURE.md` for full technical spec.
 
@@ -50,23 +61,23 @@ See `docs/PR_COVERAGE_ARCHITECTURE.md` for full technical spec.
 
 ```
 app/coverage/                    # Coverage feed & dashboard
-app/coverage/sources/            # Source Management Hub (4-tab admin)
+app/coverage/sources/            # Source Management Hub (3-tab admin: RSS, Tavily, Apify)
 app/coverage/outlets/            # Outlet registry
 app/coverage/keywords/           # Keyword management
 app/coverage/reports/            # Client report builder
 app/coverage/[clientSlug]/       # Public shareable coverage feed
 app/api/coverage/scrape/         # Scraper API routes
 app/api/coverage/enrich/         # Enrichment API routes
-app/settings/                    # Add API key management for Tavily, Apify, YouTube, etc.
+app/settings/                    # API key management (Tavily, Gemini, Apify, Discord)
 ```
 
 ### New Dependencies Needed
 
 ```bash
 npm install rss-parser           # RSS feed parsing
-# Tavily, YouTube, Twitch, Reddit — use their REST APIs via fetch
-# Apify — REST API via fetch
-# Claude API — for AI relevance scoring (already have @anthropic-ai/sdk or use fetch)
+npm install @google/generative-ai # Gemini AI for relevance scoring
+# Tavily — REST API via fetch
+# Apify — REST API via fetch (covers YouTube, Twitch, Reddit, Twitter, TikTok, Instagram)
 ```
 
 ## File Structure (Current)
@@ -98,13 +109,11 @@ npm install rss-parser           # RSS feed parsing
 
 ## Environment Variables
 
-See `.env.example` for all required keys. PR coverage adds:
+See `.env.example` for all required keys. PR coverage needs:
 - `TAVILY_API_KEY` — Web search for coverage discovery
-- `ANTHROPIC_API_KEY` — AI relevance scoring
-- `YOUTUBE_API_KEY` — YouTube Data API v3
-- `TWITCH_CLIENT_ID` / `TWITCH_CLIENT_SECRET` — Twitch Helix API
-- `REDDIT_CLIENT_ID` / `REDDIT_CLIENT_SECRET` / `REDDIT_REFRESH_TOKEN` — Reddit API
-- `APIFY_API_KEY` — Twitter/TikTok/Instagram scrapers (optional)
+- `GOOGLE_AI_API_KEY` — AI relevance scoring (Gemini Flash)
+- `APIFY_API_KEY` — YouTube, Twitch, Reddit, Twitter/X, TikTok, Instagram (all-in-one)
+- `DISCORD_WEBHOOK_URL` — Coverage alert notifications (optional)
 
 ## Commands
 
