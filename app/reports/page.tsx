@@ -24,8 +24,27 @@ interface CoverageData {
   top_outlets: OutletSummary[]; items: CoverageItem[]
 }
 
+interface SocialPlatformStats {
+  platform: string; count: number; total_followers: number; total_views: number
+  total_likes: number; total_comments: number; total_shares: number
+  best_post: { title: string; url: string; engagement: number } | null
+  worst_post: { title: string; url: string; engagement: number } | null
+}
+
+interface SocialPost {
+  id: string; title: string; url: string; source_type: string; publish_date: string
+  outlet_name: string; followers: number; views: number; likes: number
+  comments: number; shares: number; engagement: number
+}
+
+interface SocialData {
+  total_posts: number; total_reach: number; total_engagement: number
+  engagement_rate: number; platform_breakdown: SocialPlatformStats[]
+  sentiment_breakdown: NameValue[]; top_posts: SocialPost[]; worst_posts: SocialPost[]
+}
+
 interface ReportData {
-  sales?: SalesData; coverage?: CoverageData
+  sales?: SalesData; coverage?: CoverageData; social?: SocialData
   annotations: Annotation[]; client: { id: string; name: string } | null
   game?: { id: string; name: string } | null
 }
@@ -73,7 +92,7 @@ function formatNumber(val: number): string {
   return new Intl.NumberFormat('en-US').format(val)
 }
 
-const TABS = ['Summary', 'Sales Report', 'PR Coverage', 'Data Tables'] as const
+const TABS = ['Summary', 'Sales Report', 'PR Coverage', 'Social Media', 'Data Tables'] as const
 type Tab = typeof TABS[number]
 
 interface DataTableRow {
@@ -103,6 +122,9 @@ export default function ReportsPage() {
   const [reportData, setReportData] = useState<ReportData | null>(null)
   const [annotations, setAnnotations] = useState<Record<string, string>>({})
   const [savingAnnotation, setSavingAnnotation] = useState<string | null>(null)
+
+  // Manual social stats (stored in annotations custom_fields)
+  const [manualSocialStats, setManualSocialStats] = useState<Record<string, Record<string, string>>>({})
 
   // Data Tables state
   const [dtData, setDtData] = useState<DataTableResponse | null>(null)
@@ -151,6 +173,9 @@ export default function ReportsPage() {
       const annMap: Record<string, string> = {}
       for (const ann of (data.annotations || [])) {
         annMap[ann.report_section] = ann.annotation_text || ''
+        if (ann.report_section === 'social_manual' && ann.custom_fields) {
+          setManualSocialStats(ann.custom_fields as Record<string, Record<string, string>>)
+        }
       }
       setAnnotations(annMap)
     } catch (err) {
@@ -179,6 +204,31 @@ export default function ReportsPage() {
       })
     } catch (err) {
       console.error('Failed to save annotation:', err)
+    } finally {
+      setSavingAnnotation(null)
+    }
+  }
+
+  const saveManualSocialStats = async () => {
+    if (!selectedClient) return
+    setSavingAnnotation('social_manual')
+    try {
+      const range = datePreset === 'custom' ? { from: dateFrom, to: dateTo } : getDateRange(datePreset)
+      const periodKey = getPeriodKey(datePreset, range.from, range.to)
+      await fetch('/api/reports', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          client_id: selectedClient,
+          game_id: selectedGame || null,
+          report_section: 'social_manual',
+          period_key: periodKey,
+          annotation_text: '',
+          custom_fields: manualSocialStats,
+        }),
+      })
+    } catch (err) {
+      console.error('Failed to save manual social stats:', err)
     } finally {
       setSavingAnnotation(null)
     }
@@ -261,6 +311,7 @@ export default function ReportsPage() {
 
     const sales = reportData.sales
     const cov = reportData.coverage
+    const social = reportData.social
 
     w.document.write(`<!DOCTYPE html><html><head><title>${clientName} Report - ${periodLabel}</title>
 <style>
@@ -338,6 +389,24 @@ ${cov ? `
     ${cov.items.slice(0, 50).map(i => `<tr><td>${i.publish_date || ''}</td><td>${(i.outlet as unknown as Record<string, string>)?.name || ''}</td><td>${i.title || ''}</td><td>${i.territory || ''}</td><td>${i.coverage_type || ''}</td></tr>`).join('')}
   </tbody></table>` : ''}
   ${annotations.pr_coverage ? `<div class="annotation">${annotations.pr_coverage}</div>` : ''}
+</div>` : ''}
+
+${social && social.total_posts > 0 ? `
+<div class="section">
+  <h2>Social Media</h2>
+  <div class="stats-grid">
+    <div class="stat-card"><div class="value">${formatNumber(social.total_posts)}</div><div class="label">Total Posts</div></div>
+    <div class="stat-card"><div class="value">${formatNumber(social.total_reach)}</div><div class="label">Combined Followers</div></div>
+    <div class="stat-card"><div class="value">${formatNumber(social.total_engagement)}</div><div class="label">Total Engagement</div></div>
+    <div class="stat-card"><div class="value">${social.engagement_rate.toFixed(2)}%</div><div class="label">Engagement Rate</div></div>
+  </div>
+  ${social.platform_breakdown.length > 0 ? `<h3>By Platform</h3><table><thead><tr><th>Platform</th><th>Posts</th><th style="text-align:right">Followers</th><th style="text-align:right">Views</th><th style="text-align:right">Likes</th><th style="text-align:right">Comments</th><th style="text-align:right">Shares</th></tr></thead><tbody>
+    ${social.platform_breakdown.map(p => `<tr><td style="text-transform:capitalize">${p.platform}</td><td>${p.count}</td><td style="text-align:right">${formatNumber(p.total_followers)}</td><td style="text-align:right">${formatNumber(p.total_views)}</td><td style="text-align:right">${formatNumber(p.total_likes)}</td><td style="text-align:right">${formatNumber(p.total_comments)}</td><td style="text-align:right">${formatNumber(p.total_shares)}</td></tr>`).join('')}
+  </tbody></table>` : ''}
+  ${social.top_posts.length > 0 ? `<h3>Top Performing Posts</h3><table><thead><tr><th>Platform</th><th>Creator</th><th>Post</th><th style="text-align:right">Engagement</th></tr></thead><tbody>
+    ${social.top_posts.slice(0, 10).map(p => `<tr><td style="text-transform:capitalize">${p.source_type}</td><td>${p.outlet_name || '-'}</td><td>${p.title.length > 60 ? p.title.substring(0, 60) + '...' : p.title}</td><td style="text-align:right">${formatNumber(p.engagement)}</td></tr>`).join('')}
+  </tbody></table>` : ''}
+  ${annotations.social ? `<div class="annotation">${annotations.social}</div>` : ''}
 </div>` : ''}
 
 <div class="footer">Generated by GameDrive | ${new Date().toLocaleString()}</div>
@@ -526,6 +595,29 @@ ${cov ? `
                       <div key={t.name} style={breakItem}>
                         <span style={{ color: '#475569' }}>{t.name}</span>
                         <span style={{ fontWeight: 600, color: '#1e293b' }}>{t.value}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {reportData?.social && reportData.social.total_posts > 0 && (
+                  <div style={breakCard}>
+                    <div style={breakTitle}>Social Media</div>
+                    <div style={breakItem}>
+                      <span style={{ color: '#475569' }}>Posts</span>
+                      <span style={{ fontWeight: 600, color: '#1e293b' }}>{formatNumber(reportData.social.total_posts)}</span>
+                    </div>
+                    <div style={breakItem}>
+                      <span style={{ color: '#475569' }}>Total Engagement</span>
+                      <span style={{ fontWeight: 600, color: '#1e293b' }}>{formatNumber(reportData.social.total_engagement)}</span>
+                    </div>
+                    <div style={breakItem}>
+                      <span style={{ color: '#475569' }}>Engagement Rate</span>
+                      <span style={{ fontWeight: 600, color: '#1e293b' }}>{reportData.social.engagement_rate.toFixed(2)}%</span>
+                    </div>
+                    {reportData.social.platform_breakdown.slice(0, 3).map(p => (
+                      <div key={p.platform} style={breakItem}>
+                        <span style={{ color: '#475569', textTransform: 'capitalize' }}>{p.platform}</span>
+                        <span style={{ fontWeight: 600, color: '#1e293b' }}>{p.count} posts</span>
                       </div>
                     ))}
                   </div>
@@ -778,6 +870,207 @@ ${cov ? `
             </div>
           )}
 
+          {/* SOCIAL MEDIA TAB */}
+          {activeTab === 'Social Media' && (
+            <div>
+              {reportData?.social && reportData.social.total_posts > 0 ? (
+                <>
+                  {/* Summary stats */}
+                  <div style={cardStyle}>
+                    <h2 style={{ fontSize: '18px', fontWeight: 600, color: '#1e293b', marginBottom: '16px' }}>Social Media Overview</h2>
+                    <div style={statGrid}>
+                      <div style={statCard}>
+                        <div style={statValue}>{formatNumber(reportData.social.total_posts)}</div>
+                        <div style={statLabel}>Total Posts</div>
+                      </div>
+                      <div style={statCard}>
+                        <div style={statValue}>{formatNumber(reportData.social.total_reach)}</div>
+                        <div style={statLabel}>Combined Followers</div>
+                      </div>
+                      <div style={statCard}>
+                        <div style={statValue}>{formatNumber(reportData.social.total_engagement)}</div>
+                        <div style={statLabel}>Total Engagement</div>
+                      </div>
+                      <div style={statCard}>
+                        <div style={statValue}>{reportData.social.engagement_rate.toFixed(2)}%</div>
+                        <div style={statLabel}>Engagement Rate</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Platform breakdown */}
+                  <div style={cardStyle}>
+                    <h3 style={{ fontSize: '16px', fontWeight: 600, color: '#334155', marginBottom: '12px' }}>By Platform</h3>
+                    <div style={{ overflowX: 'auto' }}>
+                      <table style={tableStyle}>
+                        <thead>
+                          <tr>
+                            <th style={thStyle}>Platform</th>
+                            <th style={thStyle}>Posts</th>
+                            <th style={{ ...thStyle, textAlign: 'right' }}>Followers</th>
+                            <th style={{ ...thStyle, textAlign: 'right' }}>Views</th>
+                            <th style={{ ...thStyle, textAlign: 'right' }}>Likes</th>
+                            <th style={{ ...thStyle, textAlign: 'right' }}>Comments</th>
+                            <th style={{ ...thStyle, textAlign: 'right' }}>Shares</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {reportData.social.platform_breakdown.map(ps => (
+                            <tr key={ps.platform}>
+                              <td style={{ ...tdStyle, fontWeight: 500, textTransform: 'capitalize' }}>{ps.platform}</td>
+                              <td style={tdStyle}>{ps.count}</td>
+                              <td style={{ ...tdStyle, textAlign: 'right' }}>{formatNumber(ps.total_followers)}</td>
+                              <td style={{ ...tdStyle, textAlign: 'right' }}>{formatNumber(ps.total_views)}</td>
+                              <td style={{ ...tdStyle, textAlign: 'right' }}>{formatNumber(ps.total_likes)}</td>
+                              <td style={{ ...tdStyle, textAlign: 'right' }}>{formatNumber(ps.total_comments)}</td>
+                              <td style={{ ...tdStyle, textAlign: 'right' }}>{formatNumber(ps.total_shares)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  {/* Sentiment + Top/Worst posts */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', marginBottom: '24px' }}>
+                    {/* Sentiment breakdown */}
+                    {reportData.social.sentiment_breakdown.length > 0 && (
+                      <div style={breakCard}>
+                        <div style={breakTitle}>Sentiment</div>
+                        {reportData.social.sentiment_breakdown.map(s => (
+                          <div key={s.name} style={breakItem}>
+                            <span style={{ color: '#475569', textTransform: 'capitalize' }}>{s.name}</span>
+                            <span style={{ fontWeight: 600, color: s.name === 'positive' ? '#16a34a' : s.name === 'negative' ? '#dc2626' : '#1e293b' }}>{s.value}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Best performing posts */}
+                    <div style={breakCard}>
+                      <div style={breakTitle}>Best Performing Posts</div>
+                      {reportData.social.top_posts.slice(0, 5).map(post => (
+                        <div key={post.id} style={{ ...breakItem, flexDirection: 'column', gap: '2px' }}>
+                          <a href={post.url} target="_blank" rel="noopener noreferrer" style={{ color: '#3b82f6', textDecoration: 'none', fontSize: '13px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%', display: 'block' }}>
+                            {post.title.length > 60 ? post.title.substring(0, 60) + '...' : post.title}
+                          </a>
+                          <span style={{ fontSize: '11px', color: '#64748b' }}>
+                            {post.source_type} | {formatNumber(post.engagement)} engagement | {formatNumber(post.views)} views
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Top posts table */}
+                  <div style={cardStyle}>
+                    <h3 style={{ fontSize: '16px', fontWeight: 600, color: '#334155', marginBottom: '12px' }}>Top Social Posts</h3>
+                    <div style={{ overflowX: 'auto' }}>
+                      <table style={tableStyle}>
+                        <thead>
+                          <tr>
+                            <th style={thStyle}>Platform</th>
+                            <th style={thStyle}>Creator</th>
+                            <th style={thStyle}>Post</th>
+                            <th style={{ ...thStyle, textAlign: 'right' }}>Followers</th>
+                            <th style={{ ...thStyle, textAlign: 'right' }}>Views</th>
+                            <th style={{ ...thStyle, textAlign: 'right' }}>Likes</th>
+                            <th style={{ ...thStyle, textAlign: 'right' }}>Engagement</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {reportData.social.top_posts.map(post => (
+                            <tr key={post.id}>
+                              <td style={{ ...tdStyle, textTransform: 'capitalize' }}>{post.source_type}</td>
+                              <td style={tdStyle}>{post.outlet_name || '-'}</td>
+                              <td style={{ ...tdStyle, maxWidth: '250px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                <a href={post.url} target="_blank" rel="noopener noreferrer" style={{ color: '#3b82f6', textDecoration: 'none' }}>
+                                  {post.title.length > 50 ? post.title.substring(0, 50) + '...' : post.title}
+                                </a>
+                              </td>
+                              <td style={{ ...tdStyle, textAlign: 'right' }}>{formatNumber(post.followers)}</td>
+                              <td style={{ ...tdStyle, textAlign: 'right' }}>{formatNumber(post.views)}</td>
+                              <td style={{ ...tdStyle, textAlign: 'right' }}>{formatNumber(post.likes)}</td>
+                              <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 600 }}>{formatNumber(post.engagement)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div style={{ ...cardStyle, textAlign: 'center', color: '#64748b', padding: '32px' }}>
+                  No social media coverage found for this period. You can add manual stats below.
+                </div>
+              )}
+
+              {/* Manual stat entry */}
+              <div style={cardStyle}>
+                <h3 style={{ fontSize: '16px', fontWeight: 600, color: '#334155', marginBottom: '12px' }}>Manual Social Stats</h3>
+                <p style={{ fontSize: '13px', color: '#64748b', marginBottom: '16px' }}>
+                  Enter platform-specific metrics not automatically collected. These are saved per reporting period.
+                </p>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px' }}>
+                  {['Instagram', 'TikTok', 'Twitter/X', 'YouTube', 'Facebook', 'LinkedIn'].map(platform => {
+                    const key = platform.toLowerCase().replace(/[\s/]/g, '_')
+                    const stats = manualSocialStats[key] || {}
+                    const updateStat = (field: string, value: string) => {
+                      setManualSocialStats(prev => ({
+                        ...prev,
+                        [key]: { ...(prev[key] || {}), [field]: value },
+                      }))
+                    }
+                    return (
+                      <div key={platform} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '16px' }}>
+                        <div style={{ fontSize: '14px', fontWeight: 600, color: '#334155', marginBottom: '8px' }}>{platform}</div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                          <div>
+                            <label style={{ ...labelStyle, fontSize: '11px' }}>Followers</label>
+                            <input style={{ ...inputStyle, width: '100%', fontSize: '13px' }} placeholder="0" value={stats.followers || ''} onChange={e => updateStat('followers', e.target.value)} />
+                          </div>
+                          <div>
+                            <label style={{ ...labelStyle, fontSize: '11px' }}>Impressions</label>
+                            <input style={{ ...inputStyle, width: '100%', fontSize: '13px' }} placeholder="0" value={stats.impressions || ''} onChange={e => updateStat('impressions', e.target.value)} />
+                          </div>
+                          <div>
+                            <label style={{ ...labelStyle, fontSize: '11px' }}>Engagement</label>
+                            <input style={{ ...inputStyle, width: '100%', fontSize: '13px' }} placeholder="0" value={stats.engagement || ''} onChange={e => updateStat('engagement', e.target.value)} />
+                          </div>
+                          <div>
+                            <label style={{ ...labelStyle, fontSize: '11px' }}>Notes</label>
+                            <input style={{ ...inputStyle, width: '100%', fontSize: '13px' }} placeholder="..." value={stats.notes || ''} onChange={e => updateStat('notes', e.target.value)} />
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+                <div style={{ marginTop: '12px', display: 'flex', justifyContent: 'flex-end' }}>
+                  <button style={{ ...btnPrimary, fontSize: '13px', padding: '6px 16px' }} onClick={saveManualSocialStats} disabled={savingAnnotation === 'social_manual'}>
+                    {savingAnnotation === 'social_manual' ? 'Saving...' : 'Save Manual Stats'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Social analysis annotation */}
+              <div style={cardStyle}>
+                <h3 style={{ fontSize: '16px', fontWeight: 600, color: '#334155', marginBottom: '12px' }}>Social Media Analysis</h3>
+                <textarea
+                  style={textareaStyle}
+                  placeholder="Add your social media analysis commentary here..."
+                  value={annotations.social || ''}
+                  onChange={e => setAnnotations(prev => ({ ...prev, social: e.target.value }))}
+                />
+                <div style={{ marginTop: '8px', display: 'flex', justifyContent: 'flex-end' }}>
+                  <button style={{ ...btnPrimary, fontSize: '13px', padding: '6px 16px' }} onClick={() => saveAnnotation('social')} disabled={savingAnnotation === 'social'}>
+                    {savingAnnotation === 'social' ? 'Saving...' : 'Save'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* DATA TABLES TAB */}
           {activeTab === 'Data Tables' && (
             <div>
@@ -977,6 +1270,11 @@ ${cov ? `
           {activeTab === 'PR Coverage' && !cov && (
             <div style={{ ...cardStyle, textAlign: 'center', color: '#64748b', padding: '48px' }}>
               No coverage data found for the selected filters.
+            </div>
+          )}
+          {activeTab === 'Social Media' && !reportData?.social && (
+            <div style={{ ...cardStyle, textAlign: 'center', color: '#64748b', padding: '48px' }}>
+              No social media data found. Social monitoring data will appear here when scrapers are active.
             </div>
           )}
         </>

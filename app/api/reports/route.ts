@@ -192,6 +192,116 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // --- Social media data (from coverage_items with social source_types) ---
+    if (!section || section === 'summary' || section === 'social') {
+      const socialTypes = ['twitter', 'tiktok', 'instagram', 'youtube', 'twitch', 'reddit']
+
+      let socialQuery = supabase
+        .from('coverage_items')
+        .select('id, title, url, publish_date, source_type, coverage_type, monthly_unique_visitors, sentiment, source_metadata, outlet:outlets(name, domain, tier)')
+        .eq('client_id', clientId)
+        .in('source_type', socialTypes)
+        .in('approval_status', ['auto_approved', 'manually_approved', 'pending_review'])
+        .order('discovered_at', { ascending: false })
+
+      if (gameId) socialQuery = socialQuery.eq('game_id', gameId)
+      if (dateFrom) socialQuery = socialQuery.gte('publish_date', dateFrom)
+      if (dateTo) socialQuery = socialQuery.lte('publish_date', dateTo)
+
+      const { data: socialData, error: socialError } = await socialQuery.limit(5000)
+      if (socialError) throw socialError
+
+      const socialItems = socialData || []
+
+      // Aggregate by platform
+      const platformStats: Record<string, {
+        count: number; total_followers: number; total_views: number
+        total_likes: number; total_comments: number; total_shares: number
+        best_post: { title: string; url: string; engagement: number } | null
+        worst_post: { title: string; url: string; engagement: number } | null
+      }> = {}
+
+      let totalEngagement = 0
+      let totalReach = 0
+      const sentimentCounts: Record<string, number> = {}
+
+      for (const item of socialItems) {
+        const i = item as Record<string, unknown>
+        const sourceType = String(i.source_type || 'unknown')
+        const meta = (i.source_metadata || {}) as Record<string, unknown>
+
+        if (!platformStats[sourceType]) {
+          platformStats[sourceType] = {
+            count: 0, total_followers: 0, total_views: 0,
+            total_likes: 0, total_comments: 0, total_shares: 0,
+            best_post: null, worst_post: null,
+          }
+        }
+
+        const ps = platformStats[sourceType]
+        ps.count++
+        const followers = Number(meta.followers || i.monthly_unique_visitors || 0)
+        const views = Number(meta.views || meta.impressions || 0)
+        const likes = Number(meta.likes || meta.digg_count || 0)
+        const comments = Number(meta.comments || meta.replies || 0)
+        const shares = Number(meta.shares || meta.retweets || 0)
+
+        ps.total_followers += followers
+        ps.total_views += views
+        ps.total_likes += likes
+        ps.total_comments += comments
+        ps.total_shares += shares
+
+        const engagement = likes + comments + shares
+        totalEngagement += engagement
+        totalReach += followers
+
+        // Track best/worst by engagement
+        if (!ps.best_post || engagement > ps.best_post.engagement) {
+          ps.best_post = { title: String(i.title || ''), url: String(i.url || ''), engagement }
+        }
+        if (!ps.worst_post || (engagement < ps.worst_post.engagement && engagement >= 0)) {
+          ps.worst_post = { title: String(i.title || ''), url: String(i.url || ''), engagement }
+        }
+
+        const sentiment = String(i.sentiment || 'unknown')
+        sentimentCounts[sentiment] = (sentimentCounts[sentiment] || 0) + 1
+      }
+
+      // Top performing posts across all platforms
+      const allPosts = socialItems.map(item => {
+        const i = item as Record<string, unknown>
+        const meta = (i.source_metadata || {}) as Record<string, unknown>
+        const likes = Number(meta.likes || 0)
+        const comments = Number(meta.comments || meta.replies || 0)
+        const shares = Number(meta.shares || meta.retweets || 0)
+        return {
+          id: String(i.id), title: String(i.title || ''), url: String(i.url || ''),
+          source_type: String(i.source_type), publish_date: String(i.publish_date || ''),
+          outlet_name: ((i.outlet as Record<string, unknown> | null)?.name as string) || '',
+          followers: Number(meta.followers || i.monthly_unique_visitors || 0),
+          views: Number(meta.views || meta.impressions || 0),
+          likes, comments, shares,
+          engagement: likes + comments + shares,
+        }
+      }).sort((a, b) => b.engagement - a.engagement)
+
+      result.social = {
+        total_posts: socialItems.length,
+        total_reach: totalReach,
+        total_engagement: totalEngagement,
+        engagement_rate: totalReach > 0 ? ((totalEngagement / totalReach) * 100) : 0,
+        platform_breakdown: Object.entries(platformStats)
+          .sort((a, b) => b[1].count - a[1].count)
+          .map(([platform, stats]) => ({ platform, ...stats })),
+        sentiment_breakdown: Object.entries(sentimentCounts)
+          .sort((a, b) => b[1] - a[1])
+          .map(([name, value]) => ({ name, value })),
+        top_posts: allPosts.slice(0, 10),
+        worst_posts: allPosts.slice(-5).reverse(),
+      }
+    }
+
     // --- Annotations ---
     let annQuery = supabase
       .from('report_annotations')
