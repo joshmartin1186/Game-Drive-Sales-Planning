@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import PptxGenJS from 'pptxgenjs'
 import Link from 'next/link'
 
 interface NameValue { name: string; value: number }
@@ -122,6 +123,11 @@ export default function ReportsPage() {
   const [reportData, setReportData] = useState<ReportData | null>(null)
   const [annotations, setAnnotations] = useState<Record<string, string>>({})
   const [savingAnnotation, setSavingAnnotation] = useState<string | null>(null)
+
+  // Export modal state
+  const [showExportModal, setShowExportModal] = useState(false)
+  const [exportSections, setExportSections] = useState({ summary: true, sales: true, pr_coverage: true, social: true })
+  const [exporting, setExporting] = useState(false)
 
   // Manual social stats (stored in annotations custom_fields)
   const [manualSocialStats, setManualSocialStats] = useState<Record<string, Record<string, string>>>({})
@@ -299,19 +305,24 @@ export default function ReportsPage() {
     URL.revokeObjectURL(url)
   }
 
-  const exportPDF = () => {
-    if (!reportData) return
-    const clientName = reportData.client?.name || 'Client'
-    const gameName = reportData.game?.name || ''
+  const getExportMeta = () => {
+    const clientName = reportData?.client?.name || 'Client'
+    const gameName = reportData?.game?.name || ''
     const range = datePreset === 'custom' ? { from: dateFrom, to: dateTo } : getDateRange(datePreset)
     const periodLabel = datePreset === 'custom' ? `${range.from} to ${range.to}` : DATE_PRESETS.find(p => p.value === datePreset)?.label || datePreset
+    return { clientName, gameName, range, periodLabel }
+  }
+
+  const exportPDF = (sections = exportSections) => {
+    if (!reportData) return
+    const { clientName, gameName, periodLabel } = getExportMeta()
 
     const w = window.open('', '_blank')
     if (!w) return
 
-    const sales = reportData.sales
-    const cov = reportData.coverage
-    const social = reportData.social
+    const sales = sections.sales ? reportData.sales : undefined
+    const cov = sections.pr_coverage ? reportData.coverage : undefined
+    const social = sections.social ? reportData.social : undefined
 
     w.document.write(`<!DOCTYPE html><html><head><title>${clientName} Report - ${periodLabel}</title>
 <style>
@@ -347,7 +358,7 @@ export default function ReportsPage() {
   <div class="subtitle">Performance Report | ${periodLabel} | Generated ${new Date().toLocaleDateString()}</div>
 </div>
 
-${annotations.summary ? `<div class="section"><h2>Executive Summary</h2><div class="annotation">${annotations.summary}</div></div>` : ''}
+${sections.summary && annotations.summary ? `<div class="section"><h2>Executive Summary</h2><div class="annotation">${annotations.summary}</div></div>` : ''}
 
 ${sales ? `
 <div class="section">
@@ -413,6 +424,209 @@ ${social && social.total_posts > 0 ? `
 </body></html>`)
     w.document.close()
     setTimeout(() => w.print(), 500)
+  }
+
+  const exportPPTX = async (sections = exportSections) => {
+    if (!reportData) return
+    setExporting(true)
+    try {
+      const { clientName, gameName, periodLabel } = getExportMeta()
+      const pptx = new PptxGenJS()
+      pptx.layout = 'LAYOUT_16x9'
+      pptx.author = 'GameDrive'
+      pptx.subject = `${clientName} Performance Report`
+
+      const DARK = '1A1A2E'
+      const BLUE = '3B82F6'
+      const GRAY = '64748B'
+      const WHITE = 'FFFFFF'
+
+      // --- Title slide ---
+      const titleSlide = pptx.addSlide()
+      titleSlide.background = { color: DARK }
+      titleSlide.addText(`${clientName}${gameName ? ' — ' + gameName : ''}`, { x: 0.8, y: 2.0, w: 8.4, h: 1.2, fontSize: 32, bold: true, color: WHITE, fontFace: 'Arial' })
+      titleSlide.addText('Performance Report', { x: 0.8, y: 3.0, w: 8.4, h: 0.6, fontSize: 20, color: BLUE, fontFace: 'Arial' })
+      titleSlide.addText(periodLabel, { x: 0.8, y: 3.6, w: 8.4, h: 0.5, fontSize: 14, color: GRAY, fontFace: 'Arial' })
+      titleSlide.addText(`Generated ${new Date().toLocaleDateString()}`, { x: 0.8, y: 4.5, w: 8.4, h: 0.4, fontSize: 11, color: GRAY, fontFace: 'Arial' })
+      titleSlide.addText('Powered by GameDrive', { x: 0.8, y: 6.5, w: 8.4, h: 0.3, fontSize: 10, color: GRAY, fontFace: 'Arial' })
+
+      // Helper: stat row for slides
+      const addStatRow = (slide: PptxGenJS.Slide, stats: { label: string; value: string }[], yPos: number) => {
+        const colW = 8.4 / stats.length
+        stats.forEach((stat, i) => {
+          slide.addText(stat.value, { x: 0.8 + i * colW, y: yPos, w: colW, h: 0.6, fontSize: 24, bold: true, color: DARK, align: 'center', fontFace: 'Arial' })
+          slide.addText(stat.label, { x: 0.8 + i * colW, y: yPos + 0.55, w: colW, h: 0.3, fontSize: 10, color: GRAY, align: 'center', fontFace: 'Arial' })
+        })
+      }
+
+      // --- Summary slide ---
+      if (sections.summary) {
+        const slide = pptx.addSlide()
+        slide.addText('Executive Summary', { x: 0.8, y: 0.3, w: 8.4, h: 0.6, fontSize: 22, bold: true, color: DARK, fontFace: 'Arial' })
+
+        const summaryStats: { label: string; value: string }[] = []
+        if (reportData.sales) {
+          summaryStats.push({ label: 'Net Revenue', value: formatCurrency(reportData.sales.total_net_revenue) })
+          summaryStats.push({ label: 'Units Sold', value: formatNumber(reportData.sales.total_net_units) })
+        }
+        if (reportData.coverage) {
+          summaryStats.push({ label: 'Coverage Pieces', value: formatNumber(reportData.coverage.total_pieces) })
+          summaryStats.push({ label: 'Audience Reach', value: formatNumber(reportData.coverage.total_audience_reach) })
+        }
+        if (summaryStats.length > 0) addStatRow(slide, summaryStats.slice(0, 4), 1.2)
+
+        if (annotations.summary) {
+          slide.addText(annotations.summary.substring(0, 800), { x: 0.8, y: 2.6, w: 8.4, h: 3.5, fontSize: 12, color: '334155', fontFace: 'Arial', valign: 'top', paraSpaceAfter: 6 })
+        }
+      }
+
+      // --- Sales slide ---
+      if (sections.sales && reportData.sales) {
+        const s = reportData.sales
+        const slide = pptx.addSlide()
+        slide.addText('Sales Performance', { x: 0.8, y: 0.3, w: 8.4, h: 0.6, fontSize: 22, bold: true, color: DARK, fontFace: 'Arial' })
+
+        addStatRow(slide, [
+          { label: 'Net Revenue', value: formatCurrency(s.total_net_revenue) },
+          { label: 'Gross Units', value: formatNumber(s.total_gross_units) },
+          { label: 'Net Units', value: formatNumber(s.total_net_units) },
+          { label: 'Avg Price', value: formatCurrency(s.avg_price) },
+        ], 1.2)
+
+        // Platform breakdown table
+        if (s.platform_revenue.length > 0) {
+          slide.addText('Revenue by Platform', { x: 0.8, y: 2.6, w: 4, h: 0.4, fontSize: 14, bold: true, color: DARK, fontFace: 'Arial' })
+          const platRows: PptxGenJS.TableRow[] = [
+            [{ text: 'Platform', options: { bold: true, fontSize: 10, color: WHITE, fill: { color: '475569' } } }, { text: 'Revenue', options: { bold: true, fontSize: 10, color: WHITE, fill: { color: '475569' }, align: 'right' } }],
+          ]
+          for (const p of s.platform_revenue.slice(0, 8)) {
+            platRows.push([{ text: p.name, options: { fontSize: 10 } }, { text: formatCurrency(p.value), options: { fontSize: 10, align: 'right' } }])
+          }
+          slide.addTable(platRows, { x: 0.8, y: 3.0, w: 4, colW: [2.5, 1.5], border: { type: 'solid', pt: 0.5, color: 'E2E8F0' }, rowH: 0.3 })
+
+          // Country breakdown
+          if (s.country_revenue.length > 0) {
+            slide.addText('Top Countries', { x: 5.2, y: 2.6, w: 4, h: 0.4, fontSize: 14, bold: true, color: DARK, fontFace: 'Arial' })
+            const countryRows: PptxGenJS.TableRow[] = [
+              [{ text: 'Country', options: { bold: true, fontSize: 10, color: WHITE, fill: { color: '475569' } } }, { text: 'Revenue', options: { bold: true, fontSize: 10, color: WHITE, fill: { color: '475569' }, align: 'right' } }],
+            ]
+            for (const c of s.country_revenue.slice(0, 8)) {
+              countryRows.push([{ text: c.name, options: { fontSize: 10 } }, { text: formatCurrency(c.value), options: { fontSize: 10, align: 'right' } }])
+            }
+            slide.addTable(countryRows, { x: 5.2, y: 3.0, w: 4, colW: [2.5, 1.5], border: { type: 'solid', pt: 0.5, color: 'E2E8F0' }, rowH: 0.3 })
+          }
+        }
+
+        if (annotations.sales) {
+          const noteSlide = pptx.addSlide()
+          noteSlide.addText('Sales Analysis', { x: 0.8, y: 0.3, w: 8.4, h: 0.6, fontSize: 22, bold: true, color: DARK, fontFace: 'Arial' })
+          noteSlide.addText(annotations.sales.substring(0, 1200), { x: 0.8, y: 1.2, w: 8.4, h: 5.0, fontSize: 12, color: '334155', fontFace: 'Arial', valign: 'top', paraSpaceAfter: 6 })
+        }
+      }
+
+      // --- PR Coverage slide ---
+      if (sections.pr_coverage && reportData.coverage) {
+        const c = reportData.coverage
+        const slide = pptx.addSlide()
+        slide.addText('PR Coverage', { x: 0.8, y: 0.3, w: 8.4, h: 0.6, fontSize: 22, bold: true, color: DARK, fontFace: 'Arial' })
+
+        addStatRow(slide, [
+          { label: 'Total Pieces', value: formatNumber(c.total_pieces) },
+          { label: 'Audience Reach', value: formatNumber(c.total_audience_reach) },
+          { label: 'Est. Views', value: formatNumber(c.estimated_views) },
+          { label: 'Avg Review Score', value: c.avg_review_score != null ? String(c.avg_review_score) : 'N/A' },
+        ], 1.2)
+
+        // Top outlets table
+        if (c.top_outlets.length > 0) {
+          slide.addText('Top Outlets', { x: 0.8, y: 2.6, w: 8.4, h: 0.4, fontSize: 14, bold: true, color: DARK, fontFace: 'Arial' })
+          const outletRows: PptxGenJS.TableRow[] = [
+            [
+              { text: 'Outlet', options: { bold: true, fontSize: 10, color: WHITE, fill: { color: '475569' } } },
+              { text: 'Tier', options: { bold: true, fontSize: 10, color: WHITE, fill: { color: '475569' }, align: 'center' } },
+              { text: 'Pieces', options: { bold: true, fontSize: 10, color: WHITE, fill: { color: '475569' }, align: 'center' } },
+              { text: 'Monthly Visitors', options: { bold: true, fontSize: 10, color: WHITE, fill: { color: '475569' }, align: 'right' } },
+            ],
+          ]
+          for (const o of c.top_outlets.slice(0, 10)) {
+            outletRows.push([
+              { text: o.name, options: { fontSize: 10 } },
+              { text: o.tier, options: { fontSize: 10, align: 'center' } },
+              { text: String(o.count), options: { fontSize: 10, align: 'center' } },
+              { text: formatNumber(o.visitors), options: { fontSize: 10, align: 'right' } },
+            ])
+          }
+          slide.addTable(outletRows, { x: 0.8, y: 3.0, w: 8.4, colW: [3.5, 1, 1, 2.9], border: { type: 'solid', pt: 0.5, color: 'E2E8F0' }, rowH: 0.3 })
+        }
+
+        if (annotations.pr_coverage) {
+          const noteSlide = pptx.addSlide()
+          noteSlide.addText('PR Coverage Analysis', { x: 0.8, y: 0.3, w: 8.4, h: 0.6, fontSize: 22, bold: true, color: DARK, fontFace: 'Arial' })
+          noteSlide.addText(annotations.pr_coverage.substring(0, 1200), { x: 0.8, y: 1.2, w: 8.4, h: 5.0, fontSize: 12, color: '334155', fontFace: 'Arial', valign: 'top', paraSpaceAfter: 6 })
+        }
+      }
+
+      // --- Social Media slide ---
+      if (sections.social && reportData.social && reportData.social.total_posts > 0) {
+        const soc = reportData.social
+        const slide = pptx.addSlide()
+        slide.addText('Social Media', { x: 0.8, y: 0.3, w: 8.4, h: 0.6, fontSize: 22, bold: true, color: DARK, fontFace: 'Arial' })
+
+        addStatRow(slide, [
+          { label: 'Total Posts', value: formatNumber(soc.total_posts) },
+          { label: 'Combined Followers', value: formatNumber(soc.total_reach) },
+          { label: 'Total Engagement', value: formatNumber(soc.total_engagement) },
+          { label: 'Engagement Rate', value: soc.engagement_rate.toFixed(2) + '%' },
+        ], 1.2)
+
+        // Platform table
+        if (soc.platform_breakdown.length > 0) {
+          slide.addText('By Platform', { x: 0.8, y: 2.6, w: 8.4, h: 0.4, fontSize: 14, bold: true, color: DARK, fontFace: 'Arial' })
+          const platRows: PptxGenJS.TableRow[] = [
+            [
+              { text: 'Platform', options: { bold: true, fontSize: 9, color: WHITE, fill: { color: '475569' } } },
+              { text: 'Posts', options: { bold: true, fontSize: 9, color: WHITE, fill: { color: '475569' }, align: 'center' } },
+              { text: 'Followers', options: { bold: true, fontSize: 9, color: WHITE, fill: { color: '475569' }, align: 'right' } },
+              { text: 'Views', options: { bold: true, fontSize: 9, color: WHITE, fill: { color: '475569' }, align: 'right' } },
+              { text: 'Likes', options: { bold: true, fontSize: 9, color: WHITE, fill: { color: '475569' }, align: 'right' } },
+              { text: 'Comments', options: { bold: true, fontSize: 9, color: WHITE, fill: { color: '475569' }, align: 'right' } },
+              { text: 'Shares', options: { bold: true, fontSize: 9, color: WHITE, fill: { color: '475569' }, align: 'right' } },
+            ],
+          ]
+          for (const p of soc.platform_breakdown) {
+            platRows.push([
+              { text: p.platform.charAt(0).toUpperCase() + p.platform.slice(1), options: { fontSize: 9 } },
+              { text: String(p.count), options: { fontSize: 9, align: 'center' } },
+              { text: formatNumber(p.total_followers), options: { fontSize: 9, align: 'right' } },
+              { text: formatNumber(p.total_views), options: { fontSize: 9, align: 'right' } },
+              { text: formatNumber(p.total_likes), options: { fontSize: 9, align: 'right' } },
+              { text: formatNumber(p.total_comments), options: { fontSize: 9, align: 'right' } },
+              { text: formatNumber(p.total_shares), options: { fontSize: 9, align: 'right' } },
+            ])
+          }
+          slide.addTable(platRows, { x: 0.8, y: 3.0, w: 8.4, colW: [1.5, 0.8, 1.3, 1.2, 1.0, 1.2, 1.0], border: { type: 'solid', pt: 0.5, color: 'E2E8F0' }, rowH: 0.28 })
+        }
+
+        if (annotations.social) {
+          const noteSlide = pptx.addSlide()
+          noteSlide.addText('Social Media Analysis', { x: 0.8, y: 0.3, w: 8.4, h: 0.6, fontSize: 22, bold: true, color: DARK, fontFace: 'Arial' })
+          noteSlide.addText(annotations.social.substring(0, 1200), { x: 0.8, y: 1.2, w: 8.4, h: 5.0, fontSize: 12, color: '334155', fontFace: 'Arial', valign: 'top', paraSpaceAfter: 6 })
+        }
+      }
+
+      // --- Thank you / closing slide ---
+      const endSlide = pptx.addSlide()
+      endSlide.background = { color: DARK }
+      endSlide.addText('Thank You', { x: 0.8, y: 2.5, w: 8.4, h: 1.0, fontSize: 36, bold: true, color: WHITE, align: 'center', fontFace: 'Arial' })
+      endSlide.addText('Powered by GameDrive', { x: 0.8, y: 3.8, w: 8.4, h: 0.5, fontSize: 14, color: GRAY, align: 'center', fontFace: 'Arial' })
+
+      const fileName = `${clientName.replace(/\s+/g, '_')}_Report_${new Date().toISOString().split('T')[0]}.pptx`
+      await pptx.writeFile({ fileName })
+    } catch (err) {
+      console.error('PPTX export error:', err)
+    } finally {
+      setExporting(false)
+    }
   }
 
   function getDrillColumns(drill: string): { key: string; label: string }[] {
@@ -508,7 +722,7 @@ ${social && social.total_posts > 0 ? `
               {loading ? 'Loading...' : 'Generate Report'}
             </button>
             {reportData && (
-              <button style={btnOutline} onClick={exportPDF}>Export PDF</button>
+              <button style={btnOutline} onClick={() => setShowExportModal(true)}>Export Report</button>
             )}
           </div>
         </div>
@@ -1286,6 +1500,60 @@ ${social && social.total_posts > 0 ? `
           <div style={{ fontSize: '48px', marginBottom: '16px' }}>&#128202;</div>
           <div style={{ fontSize: '18px', fontWeight: 600, color: '#334155', marginBottom: '8px' }}>Generate a Client Report</div>
           <div>Select a client and period above, then click Generate Report to build a comprehensive performance report.</div>
+        </div>
+      )}
+
+      {/* Export Modal */}
+      {showExportModal && reportData && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowExportModal(false)}>
+          <div style={{ background: '#fff', borderRadius: '12px', padding: '32px', width: '480px', maxWidth: '90vw', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }} onClick={e => e.stopPropagation()}>
+            <h2 style={{ fontSize: '20px', fontWeight: 700, color: '#1e293b', marginBottom: '4px' }}>Export Report</h2>
+            <p style={{ fontSize: '13px', color: '#64748b', marginBottom: '24px' }}>
+              {reportData.client?.name} | {datePreset === 'custom' ? `${dateFrom} to ${dateTo}` : DATE_PRESETS.find(p => p.value === datePreset)?.label}
+            </p>
+
+            <div style={{ marginBottom: '24px' }}>
+              <div style={{ fontSize: '14px', fontWeight: 600, color: '#334155', marginBottom: '12px' }}>Include Sections</div>
+              {[
+                { key: 'summary' as const, label: 'Executive Summary', available: true },
+                { key: 'sales' as const, label: 'Sales Performance', available: !!reportData.sales },
+                { key: 'pr_coverage' as const, label: 'PR Coverage', available: !!reportData.coverage },
+                { key: 'social' as const, label: 'Social Media', available: !!(reportData.social && reportData.social.total_posts > 0) },
+              ].map(sec => (
+                <label key={sec.key} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 0', cursor: sec.available ? 'pointer' : 'not-allowed', opacity: sec.available ? 1 : 0.4 }}>
+                  <input
+                    type="checkbox"
+                    checked={exportSections[sec.key] && sec.available}
+                    onChange={e => setExportSections(prev => ({ ...prev, [sec.key]: e.target.checked }))}
+                    disabled={!sec.available}
+                    style={{ width: '16px', height: '16px' }}
+                  />
+                  <span style={{ fontSize: '14px', color: '#334155' }}>{sec.label}</span>
+                  {!sec.available && <span style={{ fontSize: '11px', color: '#94a3b8' }}>(no data)</span>}
+                </label>
+              ))}
+            </div>
+
+            <div style={{ marginBottom: '16px', fontSize: '14px', fontWeight: 600, color: '#334155' }}>Export Format</div>
+            <div style={{ display: 'flex', gap: '12px', marginBottom: '24px' }}>
+              <button
+                style={{ ...btnPrimary, flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', opacity: exporting ? 0.6 : 1 }}
+                disabled={exporting}
+                onClick={() => { exportPDF(exportSections); setShowExportModal(false) }}
+              >
+                PDF (Print)
+              </button>
+              <button
+                style={{ ...btnPrimary, flex: 1, background: '#7c3aed', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', opacity: exporting ? 0.6 : 1 }}
+                disabled={exporting}
+                onClick={async () => { await exportPPTX(exportSections); setShowExportModal(false) }}
+              >
+                {exporting ? 'Generating...' : 'PowerPoint'}
+              </button>
+            </div>
+
+            <button style={{ ...btnOutline, width: '100%' }} onClick={() => setShowExportModal(false)}>Cancel</button>
+          </div>
         </div>
       )}
     </div>
