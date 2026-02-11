@@ -40,7 +40,7 @@ CREATE TABLE coverage_items (
   monthly_unique_visitors BIGINT,    -- From Hypestat
   estimated_views BIGINT,            -- For video content
   sentiment_score NUMERIC,           -- -1 to 1
-  relevance_score INTEGER,           -- 0-100 from Claude API
+  relevance_score INTEGER,           -- 0-100 from Google Gemini AI
   
   -- Source tracking
   source_type TEXT NOT NULL,         -- rss, tavily, youtube, twitch, reddit, twitter, tiktok, instagram, manual
@@ -125,51 +125,56 @@ CREATE TABLE coverage_campaigns (
 
 ## Scraper Architecture
 
-**Principle: Free-first, paid fallback.**
+**Principle: Simplified 3-key architecture. All platform scrapers route through Apify REST API.**
 
-### Tier 1: Free (always-on)
-| Source | Library/API | Cost | Rate Limit |
-|--------|-------------|------|------------|
-| RSS Feeds | `rss-parser` npm | $0 | Unlimited |
-| YouTube | YouTube Data API v3 | $0 | 10K quota/day |
-| Twitch | Twitch Helix API | $0 | OAuth, generous |
-| Reddit | Reddit API | $0 | 100 req/min |
+### Required Services
+| Service | Purpose | Cost |
+|---------|---------|------|
+| RSS Feeds | `rss-parser` npm — free, always-on | $0 |
+| Tavily API | Web search for coverage discovery | ~$20-40/mo |
+| Google Gemini AI | AI relevance scoring, classification, sentiment | $0 (free at our volumes) |
+| Apify | YouTube, Twitch, Reddit, Twitter/X, TikTok, Instagram scrapers | ~$30-65/mo |
 
-### Tier 2: Low-cost search ($20-40/mo)
-| Source | Service | Cost |
-|--------|---------|------|
-| Web search | Tavily API | ~$20-40/mo |
-| Traffic data | Hypestat (HTTP scrape) | $0 |
+### Optional Services
+| Service | Purpose | Cost |
+|---------|---------|------|
+| Discord Webhook | Coverage alert notifications | $0 |
+| Hypestat | Outlet traffic enrichment (free HTTP scrape + Tavily fallback) | $0 |
 
-### Tier 3: Optional paid ($30-65/mo)
-| Source | Service | Cost |
-|--------|---------|------|
-| Twitter/X | Apify | $30-40/mo |
-| TikTok | Apify | $3-10/mo |
-| Instagram | Apify | $5-15/mo |
+**Total estimated: $50-105/month** vs competitor at €500-2000/month.
 
-**Total estimated: $20-130/month** vs competitor at €500-2000/month.
+### Apify Actor Mapping
+| Platform | Apify Actor | Cron Route |
+|----------|-------------|------------|
+| YouTube | `streamers/youtube-scraper` | `/api/cron/youtube-scan` |
+| Twitch | `epctex/twitch-scraper` | `/api/cron/twitch-scan` |
+| Reddit | `trudax/reddit-scraper-lite` | `/api/cron/reddit-scan` |
+| Twitter/X | TBD (Issue #73) | — |
+| TikTok | TBD (Issue #72) | — |
+| Instagram | TBD (Issue #72) | — |
+
+All Apify actors use the same API key from `service_api_keys` table (`service_name = 'apify'`).
 
 ## Source Management Hub (Issue #66)
 
-4-tab admin interface at `/coverage/sources/`:
+3-tab admin interface at `/coverage/sources/`:
 
 **Tab 1: RSS Feeds** — Add/remove/bulk import feeds, toggle active/inactive, set poll frequency per feed
 
-**Tab 2: Web Monitoring (Tavily)** — Domain tracking list, keyword search queries, tries free HTTP fetch first with Tavily as fallback
+**Tab 2: Web Discovery (Tavily)** — Domain tracking list, keyword search queries, tries free HTTP fetch first with Tavily as fallback
 
-**Tab 3: Free APIs** — YouTube channels/search queries, Twitch game categories, Reddit subreddits to monitor
-
-**Tab 4: Apify Integrations** — Twitter accounts/hashtags, TikTok hashtags, Instagram accounts. Shows credit balance and usage warnings.
+**Tab 3: Apify Scrapers** — YouTube channels, Twitch game categories, Reddit subreddits, Twitter accounts/hashtags, TikTok hashtags, Instagram accounts. All platform scrapers route through Apify REST API. Shows credit balance and usage warnings.
 
 ## AI Relevance Filtering (Issue #75)
 
-Every discovered item gets scored by Claude API (0-100):
+Every discovered item gets scored by Google Gemini Flash (`@google/generative-ai` SDK, model `gemini-2.5-flash-lite`):
 - **80-100:** Auto-approved, appears in feed immediately
 - **50-79:** Pending review, admin must approve/reject
 - **0-49:** Auto-rejected (logged but hidden)
 
-Prompt sends: article title, URL, outlet name, snippet, client's game names. Returns: relevance score, coverage type classification, brief reason.
+A single Gemini call handles relevance scoring, coverage type classification, and sentiment analysis (Issues #75, #77, #78 combined). Prompt sends: article title, URL, outlet name, snippet, client's game names. Returns JSON with `score` (0-100), `reasoning`, `suggested_type`, `sentiment`.
+
+API key: `GOOGLE_AI_API_KEY` from Google AI Studio (free at PR coverage volumes).
 
 ## Approval Workflow
 
@@ -206,13 +211,11 @@ News, Review, Preview, Interview, Trailer, Trailer Repost, Stream, Video, Guide,
 
 ## API Key Management (Issue #65)
 
-Settings page section for user-provided API keys, encrypted at rest in Supabase:
-- Tavily API key
-- Apify API key
-- YouTube Data API key
-- Twitch Client ID + Secret
-- Reddit Client ID + Secret + Refresh Token
-- Anthropic API key (for relevance scoring)
+Settings page at `/coverage/settings/` for user-provided API keys, stored in `service_api_keys` table:
+- **Tavily** — Web search for coverage discovery (~$20-40/mo)
+- **Apify** — YouTube, Twitch, Reddit, Twitter/X, TikTok, Instagram scrapers (~$30-65/mo)
+- **Google AI (Gemini)** — AI relevance scoring, classification, sentiment (free)
+- **Discord Webhook** — Coverage alert notifications (optional, free)
 
 Each key shows: connection status indicator, test connection button, usage/quota display.
 
@@ -233,6 +236,7 @@ Webhook integration (~4-8hr build). Sends alerts for:
 
 - **RSS polling:** Vercel cron job (already have cron infra from Steam sync). Poll every 30-60 min.
 - **Tavily searches:** Triggered by cron, 2-3x daily per client. Uses domain list + keyword combos.
-- **Hypestat enrichment:** HTTP fetch to hypestat.com/info/domain. Parse response for monthly visitors. Cache in `outlets` table.
+- **Apify scrapers:** All platform cron routes use Apify `run-sync-get-dataset-items` REST API. Single Apify API key covers all platforms.
+- **Hypestat enrichment:** HTTP fetch to hypestat.com/info/domain → Tavily Extract fallback → Tavily Search fallback. Parse response for monthly visitors. Cache in `outlets` table. Future enhancement: Apify SEMRush actor for richer data (domain authority, traffic breakdown) — Apify key is always available since it's a required service.
+- **AI scoring:** Google Gemini Flash via `@google/generative-ai` SDK. Single API call per article for relevance + type + sentiment.
 - **Deduplication:** URL normalization (strip tracking params, www prefix, trailing slashes) + fuzzy title matching for syndicated content.
-- **Rate limiting:** Queue system for API calls. Respect YouTube 10K/day quota, Reddit 100/min.
