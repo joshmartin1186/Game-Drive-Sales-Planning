@@ -37,21 +37,19 @@ interface GameOption { id: string; name: string; client_id: string }
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
-const TAB_KEYS = ['rss', 'web', 'free_apis', 'apify'] as const
+const TAB_KEYS = ['rss', 'web', 'apify'] as const
 type TabKey = typeof TAB_KEYS[number]
 
 const TAB_LABELS: Record<TabKey, string> = {
   rss: 'RSS Feeds',
   web: 'Web Monitoring',
-  free_apis: 'Free APIs',
   apify: 'Apify Integrations'
 }
 
 const TAB_SOURCE_TYPES: Record<TabKey, SourceType[]> = {
   rss: ['rss'],
   web: ['tavily'],
-  free_apis: ['youtube', 'twitch', 'reddit'],
-  apify: ['twitter', 'tiktok', 'instagram', 'sullygnome', 'semrush']
+  apify: ['youtube', 'twitch', 'reddit', 'twitter', 'tiktok', 'instagram', 'sullygnome', 'semrush']
 }
 
 const SOURCE_LABELS: Record<SourceType, string> = {
@@ -807,65 +805,10 @@ export default function SourcesPage() {
     )
   }
 
-  const renderFreeApisTab = () => {
-    const ytSources = sources.filter(s => s.source_type === 'youtube')
-    const twSources = sources.filter(s => s.source_type === 'twitch')
-    const rdSources = sources.filter(s => s.source_type === 'reddit')
-
-    const renderSection = (type: SourceType, label: string, description: string, items: CoverageSource[]) => (
-      <div style={{ marginBottom: '24px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-          <div>
-            <h3 style={{ fontSize: '16px', fontWeight: 600, color: '#1e293b', margin: 0 }}>
-              {SOURCE_ICONS[type]} {label}
-            </h3>
-            <p style={{ fontSize: '12px', color: '#94a3b8', margin: '2px 0 0 0' }}>{description}</p>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            {apiKeyStatus[type] && (
-              <span style={{
-                padding: '4px 10px', borderRadius: '6px', fontSize: '11px',
-                backgroundColor: apiKeyStatus[type].configured ? '#dcfce7' : '#fef9c3',
-                color: apiKeyStatus[type].configured ? '#166534' : '#854d0e'
-              }}>
-                {apiKeyStatus[type].configured ? 'API Key Set' : 'No API Key'}
-              </span>
-            )}
-            {canEdit && (
-              <button
-                onClick={() => openAddForm(type)}
-                style={{ padding: '6px 12px', backgroundColor: '#2563eb', color: 'white', border: 'none', borderRadius: '6px', fontSize: '12px', cursor: 'pointer', fontWeight: 500 }}
-              >
-                + Add
-              </button>
-            )}
-          </div>
-        </div>
-        {items.length === 0 ? (
-          <div style={{ padding: '20px', textAlign: 'center', color: '#94a3b8', backgroundColor: 'white', borderRadius: '10px', fontSize: '13px' }}>
-            No {label.toLowerCase()} sources configured
-          </div>
-        ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(400px, 1fr))', gap: '10px' }}>
-            {items.map(renderSourceCard)}
-          </div>
-        )}
-      </div>
-    )
-
-    return (
-      <div>
-        <div style={{ marginBottom: '16px', fontSize: '14px', color: '#64748b' }}>
-          All free APIs — YouTube (10K units/day), Twitch (free with OAuth), Reddit (100 req/min)
-        </div>
-        {renderSection('youtube', 'YouTube', 'YouTube Data API v3 — free tier (10,000 units/day)', ytSources)}
-        {renderSection('twitch', 'Twitch', 'Twitch Helix API — free with OAuth', twSources)}
-        {renderSection('reddit', 'Reddit', 'Reddit API — free (100 req/min with OAuth)', rdSources)}
-      </div>
-    )
-  }
-
   const renderApifyTab = () => {
+    const ytSources = sources.filter(s => s.source_type === 'youtube')
+    const tcSources = sources.filter(s => s.source_type === 'twitch')
+    const rdSources = sources.filter(s => s.source_type === 'reddit')
     const twSources = sources.filter(s => s.source_type === 'twitter')
     const tkSources = sources.filter(s => s.source_type === 'tiktok')
     const igSources = sources.filter(s => s.source_type === 'instagram')
@@ -936,6 +879,9 @@ export default function SourcesPage() {
           </div>
         </div>
 
+        {renderSection('youtube', 'YouTube', 'Video search by keywords via Apify YouTube scraper', ytSources)}
+        {renderSection('twitch', 'Twitch', 'Game stream/VOD monitoring via Apify Twitch scraper', tcSources)}
+        {renderSection('reddit', 'Reddit', 'Subreddit keyword search via Apify Reddit scraper', rdSources)}
         {renderSection('twitter', 'Twitter/X', 'Keyword/hashtag monitoring via Apify actors', twSources)}
         {renderSection('tiktok', 'TikTok', 'Hashtag & keyword monitoring — min 1,000 followers default', tkSources)}
         {renderSection('instagram', 'Instagram', 'Hashtag & keyword monitoring — min 1,000 followers default', igSources)}
@@ -1067,7 +1013,6 @@ export default function SourcesPage() {
           {/* Tab content */}
           {activeTab === 'rss' && renderRSSTab()}
           {activeTab === 'web' && renderWebTab()}
-          {activeTab === 'free_apis' && renderFreeApisTab()}
           {activeTab === 'apify' && renderApifyTab()}
         </div>
       </div>

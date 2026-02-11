@@ -5,7 +5,10 @@ function getSupabase() {
   return getServerSupabase()
 }
 
-// GET /api/cron/youtube-scan — Scan YouTube for game coverage videos
+// Apify YouTube scraper actor
+const APIFY_YOUTUBE_ACTOR = 'streamers/youtube-scraper'
+
+// GET /api/cron/youtube-scan — Scan YouTube for game coverage videos via Apify
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get('authorization')
   const cronSecret = process.env.CRON_SECRET
@@ -16,20 +19,19 @@ export async function GET(request: NextRequest) {
   const supabase = getSupabase()
 
   try {
-    // Get YouTube API key
+    // Get Apify API key
     const { data: keyData } = await supabase
       .from('service_api_keys')
-      .select('api_key, quota_used, quota_limit')
-      .eq('service_name', 'youtube')
+      .select('api_key')
+      .eq('service_name', 'apify')
       .eq('is_active', true)
       .single()
 
     if (!keyData?.api_key) {
-      return NextResponse.json({ message: 'YouTube API key not configured, skipping' })
+      return NextResponse.json({ message: 'Apify API key not configured, skipping' })
     }
 
-    const apiKey = keyData.api_key
-    let quotaUsed = Number(keyData.quota_used || 0)
+    const apifyKey = keyData.api_key
 
     // Get active keyword sets for all clients/games
     const { data: keywords } = await supabase
@@ -55,67 +57,40 @@ export async function GET(request: NextRequest) {
     let totalNew = 0
 
     for (const [, term] of Array.from(searchTerms.entries())) {
-      // Check quota (search = 100 units)
-      if (quotaUsed + 100 > 9500) {
-        break // Leave buffer from 10,000 daily quota
-      }
-
       try {
-        // Search YouTube
-        const searchUrl = new URL('https://www.googleapis.com/youtube/v3/search')
-        searchUrl.searchParams.set('part', 'snippet')
-        searchUrl.searchParams.set('q', term.query)
-        searchUrl.searchParams.set('type', 'video')
-        searchUrl.searchParams.set('order', 'date')
-        searchUrl.searchParams.set('maxResults', '10')
-        searchUrl.searchParams.set('publishedAfter', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString())
-        searchUrl.searchParams.set('key', apiKey)
+        // Run Apify YouTube scraper actor synchronously
+        const actorRes = await fetch(
+          `https://api.apify.com/v2/acts/${APIFY_YOUTUBE_ACTOR}/run-sync-get-dataset-items?token=${apifyKey}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              searchKeywords: [term.query],
+              maxResults: 10,
+              sortBy: 'date',
+              uploadDate: 'week',
+            }),
+          }
+        )
 
-        const searchRes = await fetch(searchUrl.toString())
-        quotaUsed += 100
+        if (!actorRes.ok) {
+          console.error(`Apify YouTube actor error for "${term.query}": ${actorRes.status}`)
+          continue
+        }
 
-        if (!searchRes.ok) continue
-        const searchData = await searchRes.json()
-        const videos = searchData.items || []
+        const videos = await actorRes.json()
+        if (!Array.isArray(videos)) continue
 
         totalFound += videos.length
 
-        // Get channel details for subscriber counts (1 unit per video)
-        const channelIds = new Set<string>()
         for (const video of videos) {
-          if (video.snippet?.channelId) channelIds.add(video.snippet.channelId)
-        }
+          const url = video.url || (video.id ? `https://www.youtube.com/watch?v=${video.id}` : null)
+          if (!url) continue
 
-        const channelMap: Record<string, { subscribers: number; name: string }> = {}
-        if (channelIds.size > 0) {
-          const channelsUrl = new URL('https://www.googleapis.com/youtube/v3/channels')
-          channelsUrl.searchParams.set('part', 'statistics,snippet')
-          channelsUrl.searchParams.set('id', Array.from(channelIds).join(','))
-          channelsUrl.searchParams.set('key', apiKey)
-
-          const channelsRes = await fetch(channelsUrl.toString())
-          quotaUsed += 1
-
-          if (channelsRes.ok) {
-            const channelsData = await channelsRes.json()
-            for (const ch of (channelsData.items || [])) {
-              channelMap[ch.id] = {
-                subscribers: Number(ch.statistics?.subscriberCount || 0),
-                name: ch.snippet?.title || '',
-              }
-            }
-          }
-        }
-
-        // Insert coverage items
-        for (const video of videos) {
-          const videoId = video.id?.videoId
-          if (!videoId) continue
-
-          const url = `https://www.youtube.com/watch?v=${videoId}`
-          const channelId = video.snippet?.channelId
-          const channel = channelMap[channelId] || {}
-          const publishDate = video.snippet?.publishedAt?.split('T')[0] || null
+          const channelName = video.channelName || video.channelTitle || 'Unknown Channel'
+          const channelUrl = video.channelUrl || ''
+          const subscribers = Number(video.subscriberCount || video.channelSubscribers || 0)
+          const publishDate = video.date ? new Date(video.date).toISOString().split('T')[0] : null
 
           // Check for existing item by URL
           const { data: existing } = await supabase
@@ -128,13 +103,13 @@ export async function GET(request: NextRequest) {
           if (existing && existing.length > 0) continue
 
           // Find or create outlet for the channel
-          const channelName = channel.name || video.snippet?.channelTitle || 'Unknown Channel'
+          const channelDomain = channelUrl ? channelUrl.replace('https://', '').replace('http://', '') : `youtube.com/c/${channelName}`
           let outletId: string | null = null
 
           const { data: existingOutlet } = await supabase
             .from('outlets')
             .select('id')
-            .eq('domain', `youtube.com/channel/${channelId}`)
+            .ilike('domain', `%${channelDomain}%`)
             .limit(1)
 
           if (existingOutlet && existingOutlet.length > 0) {
@@ -144,9 +119,9 @@ export async function GET(request: NextRequest) {
               .from('outlets')
               .insert({
                 name: channelName,
-                domain: `youtube.com/channel/${channelId}`,
-                monthly_unique_visitors: channel.subscribers || 0,
-                tier: channel.subscribers >= 1000000 ? 'A' : channel.subscribers >= 100000 ? 'B' : channel.subscribers >= 10000 ? 'C' : 'D',
+                domain: channelDomain,
+                monthly_unique_visitors: subscribers,
+                tier: subscribers >= 1000000 ? 'A' : subscribers >= 100000 ? 'B' : subscribers >= 10000 ? 'C' : 'D',
                 is_active: true,
               })
               .select('id')
@@ -158,14 +133,17 @@ export async function GET(request: NextRequest) {
             client_id: term.clientId,
             game_id: term.gameId,
             outlet_id: outletId,
-            title: video.snippet?.title || 'Untitled Video',
+            title: video.title || 'Untitled Video',
             url,
             publish_date: publishDate,
             coverage_type: 'video',
-            monthly_unique_visitors: channel.subscribers || 0,
-            territory: video.snippet?.defaultAudioLanguage || null,
+            monthly_unique_visitors: subscribers,
+            territory: video.defaultLanguage || null,
             source_type: 'youtube',
-            source_metadata: { video_id: videoId, channel_id: channelId, channel_name: channelName, subscribers: channel.subscribers },
+            source_metadata: {
+              video_id: video.id, channel_name: channelName, channel_url: channelUrl,
+              subscribers, views: video.viewCount || video.views, likes: video.likes,
+            },
             approval_status: 'pending_review',
             discovered_at: new Date().toISOString(),
           })
@@ -173,21 +151,14 @@ export async function GET(request: NextRequest) {
           totalNew++
         }
       } catch (err) {
-        console.error(`YouTube search error for "${term.query}":`, err)
+        console.error(`YouTube Apify scan error for "${term.query}":`, err)
       }
     }
-
-    // Update quota tracking
-    await supabase
-      .from('service_api_keys')
-      .update({ quota_used: quotaUsed, updated_at: new Date().toISOString() })
-      .eq('service_name', 'youtube')
 
     return NextResponse.json({
       message: `YouTube scan complete: ${totalFound} found, ${totalNew} new`,
       found: totalFound,
       new_items: totalNew,
-      quota_used: quotaUsed,
     })
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Unknown error'

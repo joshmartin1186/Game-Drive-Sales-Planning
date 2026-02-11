@@ -5,17 +5,10 @@ function getSupabase() {
   return getServerSupabase()
 }
 
-async function getTwitchToken(clientId: string, clientSecret: string): Promise<string | null> {
-  const res = await fetch(
-    `https://id.twitch.tv/oauth2/token?client_id=${clientId}&client_secret=${clientSecret}&grant_type=client_credentials`,
-    { method: 'POST' }
-  )
-  if (!res.ok) return null
-  const data = await res.json()
-  return data.access_token || null
-}
+// Apify Twitch scraper actor
+const APIFY_TWITCH_ACTOR = 'epctex/twitch-scraper'
 
-// GET /api/cron/twitch-scan — Scan Twitch for game streams and VODs
+// GET /api/cron/twitch-scan — Scan Twitch for game streams and VODs via Apify
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get('authorization')
   const cronSecret = process.env.CRON_SECRET
@@ -26,27 +19,19 @@ export async function GET(request: NextRequest) {
   const supabase = getSupabase()
 
   try {
-    // Get Twitch credentials
+    // Get Apify API key
     const { data: keyData } = await supabase
       .from('service_api_keys')
-      .select('client_id_value, client_secret')
-      .eq('service_name', 'twitch')
+      .select('api_key')
+      .eq('service_name', 'apify')
       .eq('is_active', true)
       .single()
 
-    if (!keyData?.client_id_value || !keyData?.client_secret) {
-      return NextResponse.json({ message: 'Twitch credentials not configured, skipping' })
+    if (!keyData?.api_key) {
+      return NextResponse.json({ message: 'Apify API key not configured, skipping' })
     }
 
-    const token = await getTwitchToken(keyData.client_id_value, keyData.client_secret)
-    if (!token) {
-      return NextResponse.json({ error: 'Failed to get Twitch OAuth token' }, { status: 500 })
-    }
-
-    const headers = {
-      'Client-ID': keyData.client_id_value,
-      Authorization: `Bearer ${token}`,
-    }
+    const apifyKey = keyData.api_key
 
     // Get games to search for
     const { data: games } = await supabase
@@ -62,31 +47,32 @@ export async function GET(request: NextRequest) {
 
     for (const game of games) {
       try {
-        // Look up Twitch game ID
-        const gameSearchRes = await fetch(
-          `https://api.twitch.tv/helix/games?name=${encodeURIComponent(game.name)}`,
-          { headers }
+        // Run Apify Twitch scraper actor synchronously
+        const actorRes = await fetch(
+          `https://api.apify.com/v2/acts/${APIFY_TWITCH_ACTOR}/run-sync-get-dataset-items?token=${apifyKey}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              searchTerms: [game.name],
+              maxItems: 20,
+              type: 'videos',
+            }),
+          }
         )
-        if (!gameSearchRes.ok) continue
-        const gameSearchData = await gameSearchRes.json()
-        const twitchGame = (gameSearchData.data || [])[0]
-        if (!twitchGame) continue
 
-        const twitchGameId = twitchGame.id
+        if (!actorRes.ok) {
+          console.error(`Apify Twitch actor error for "${game.name}": ${actorRes.status}`)
+          continue
+        }
 
-        // Get recent VODs for this game
-        const vodsRes = await fetch(
-          `https://api.twitch.tv/helix/videos?game_id=${twitchGameId}&sort=time&first=20&type=archive`,
-          { headers }
-        )
-        if (!vodsRes.ok) continue
-        const vodsData = await vodsRes.json()
-        const vods = vodsData.data || []
+        const vods = await actorRes.json()
+        if (!Array.isArray(vods)) continue
 
         totalFound += vods.length
 
         for (const vod of vods) {
-          const url = vod.url
+          const url = vod.url || vod.videoUrl || null
           if (!url) continue
 
           // Check for existing
@@ -99,31 +85,16 @@ export async function GET(request: NextRequest) {
 
           if (existing && existing.length > 0) continue
 
-          // Get channel follower count
-          let followers = 0
-          try {
-            const userRes = await fetch(
-              `https://api.twitch.tv/helix/users?id=${vod.user_id}`,
-              { headers }
-            )
-            if (userRes.ok) {
-              const userData = await userRes.json()
-              const user = (userData.data || [])[0]
-              // Follower count requires separate endpoint
-              const followRes = await fetch(
-                `https://api.twitch.tv/helix/channels/followers?broadcaster_id=${vod.user_id}&first=1`,
-                { headers }
-              )
-              if (followRes.ok) {
-                const followData = await followRes.json()
-                followers = followData.total || 0
-              }
-            }
-          } catch { /* ignore follower fetch errors */ }
+          const streamerName = vod.userName || vod.channelName || vod.user_name || 'Unknown'
+          const streamerLogin = vod.userLogin || vod.user_login || streamerName.toLowerCase()
+          const followers = Number(vod.followers || vod.followerCount || 0)
+          const viewCount = Number(vod.viewCount || vod.views || 0)
+          const publishDate = vod.createdAt || vod.created_at
+            ? new Date(vod.createdAt || vod.created_at).toISOString().split('T')[0]
+            : null
 
           // Find or create outlet for streamer
-          const streamerName = vod.user_name || vod.user_login || 'Unknown'
-          const streamerDomain = `twitch.tv/${vod.user_login || vod.user_id}`
+          const streamerDomain = `twitch.tv/${streamerLogin}`
           let outletId: string | null = null
 
           const { data: existingOutlet } = await supabase
@@ -149,8 +120,6 @@ export async function GET(request: NextRequest) {
             if (newOutlet) outletId = newOutlet.id
           }
 
-          const publishDate = vod.created_at?.split('T')[0] || null
-
           await supabase.from('coverage_items').insert({
             client_id: game.client_id,
             game_id: game.id,
@@ -163,8 +132,8 @@ export async function GET(request: NextRequest) {
             territory: vod.language || null,
             source_type: 'twitch',
             source_metadata: {
-              video_id: vod.id, user_id: vod.user_id, user_name: streamerName,
-              view_count: vod.view_count, duration: vod.duration, followers,
+              video_id: vod.id, user_name: streamerName,
+              view_count: viewCount, duration: vod.duration, followers,
             },
             approval_status: 'pending_review',
             discovered_at: new Date().toISOString(),
@@ -173,7 +142,7 @@ export async function GET(request: NextRequest) {
           totalNew++
         }
       } catch (err) {
-        console.error(`Twitch scan error for "${game.name}":`, err)
+        console.error(`Twitch Apify scan error for "${game.name}":`, err)
       }
     }
 

@@ -38,26 +38,8 @@ const SERVICE_FIELDS: Record<string, { fields: string[]; labels: Record<string, 
   apify: {
     fields: ['api_key'],
     labels: { api_key: 'API Token' },
-    description: 'Scraper platform for Twitter, TikTok, Instagram. Paid service.',
+    description: 'Scraper platform for YouTube, Twitch, Reddit, Twitter, TikTok, Instagram. Paid service.',
     docsUrl: 'https://apify.com'
-  },
-  youtube: {
-    fields: ['api_key'],
-    labels: { api_key: 'API Key' },
-    description: 'YouTube Data API v3. Free tier: 10,000 units/day.',
-    docsUrl: 'https://console.cloud.google.com/apis/credentials'
-  },
-  twitch: {
-    fields: ['client_id_value', 'client_secret'],
-    labels: { client_id_value: 'Client ID', client_secret: 'Client Secret' },
-    description: 'Twitch API for stream coverage. Free OAuth app.',
-    docsUrl: 'https://dev.twitch.tv/console/apps'
-  },
-  reddit: {
-    fields: ['client_id_value', 'client_secret', 'refresh_token'],
-    labels: { client_id_value: 'Client ID', client_secret: 'Client Secret', refresh_token: 'Refresh Token' },
-    description: 'Reddit API for community monitoring. Free, 100 req/min.',
-    docsUrl: 'https://www.reddit.com/prefs/apps'
   },
   gemini: {
     fields: ['api_key'],
@@ -70,9 +52,6 @@ const SERVICE_FIELDS: Record<string, { fields: string[]; labels: Record<string, 
 const SERVICE_ICONS: Record<string, string> = {
   tavily: '🔍',
   apify: '🤖',
-  youtube: '📺',
-  twitch: '🟣',
-  reddit: '🟠',
   gemini: '✨'
 }
 

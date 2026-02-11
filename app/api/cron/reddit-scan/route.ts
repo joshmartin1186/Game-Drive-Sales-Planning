@@ -5,33 +5,15 @@ function getSupabase() {
   return getServerSupabase()
 }
 
+// Apify Reddit scraper actor
+const APIFY_REDDIT_ACTOR = 'trudax/reddit-scraper-lite'
+
 const DEFAULT_SUBREDDITS = [
   'gaming', 'pcgaming', 'Steam', 'NintendoSwitch', 'PS5',
   'XboxSeriesX', 'indiegaming', 'Games',
 ]
 
-async function getRedditToken(clientId: string, clientSecret: string, refreshToken: string | null): Promise<string | null> {
-  const auth = Buffer.from(`${clientId}:${clientSecret}`).toString('base64')
-  const body = refreshToken
-    ? `grant_type=refresh_token&refresh_token=${refreshToken}`
-    : 'grant_type=client_credentials'
-
-  const res = await fetch('https://www.reddit.com/api/v1/access_token', {
-    method: 'POST',
-    headers: {
-      Authorization: `Basic ${auth}`,
-      'Content-Type': 'application/x-www-form-urlencoded',
-      'User-Agent': 'GameDrive/1.0',
-    },
-    body,
-  })
-
-  if (!res.ok) return null
-  const data = await res.json()
-  return data.access_token || null
-}
-
-// GET /api/cron/reddit-scan — Scan Reddit for game mentions
+// GET /api/cron/reddit-scan — Scan Reddit for game mentions via Apify
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get('authorization')
   const cronSecret = process.env.CRON_SECRET
@@ -42,27 +24,19 @@ export async function GET(request: NextRequest) {
   const supabase = getSupabase()
 
   try {
-    // Get Reddit credentials
+    // Get Apify API key
     const { data: keyData } = await supabase
       .from('service_api_keys')
-      .select('client_id_value, client_secret, refresh_token')
-      .eq('service_name', 'reddit')
+      .select('api_key')
+      .eq('service_name', 'apify')
       .eq('is_active', true)
       .single()
 
-    if (!keyData?.client_id_value || !keyData?.client_secret) {
-      return NextResponse.json({ message: 'Reddit credentials not configured, skipping' })
+    if (!keyData?.api_key) {
+      return NextResponse.json({ message: 'Apify API key not configured, skipping' })
     }
 
-    const token = await getRedditToken(keyData.client_id_value, keyData.client_secret, keyData.refresh_token)
-    if (!token) {
-      return NextResponse.json({ error: 'Failed to get Reddit OAuth token' }, { status: 500 })
-    }
-
-    const headers = {
-      Authorization: `Bearer ${token}`,
-      'User-Agent': 'GameDrive/1.0',
-    }
+    const apifyKey = keyData.api_key
 
     // Get keywords
     const { data: keywords } = await supabase
@@ -90,90 +64,107 @@ export async function GET(request: NextRequest) {
     let totalNew = 0
 
     for (const term of searchTerms) {
-      // Search across default gaming subreddits
-      for (const subreddit of DEFAULT_SUBREDDITS) {
-        try {
-          const searchUrl = `https://oauth.reddit.com/r/${subreddit}/search?q=${encodeURIComponent(term.query)}&sort=new&restrict_sr=on&limit=10&t=week`
-          const res = await fetch(searchUrl, { headers })
+      try {
+        // Build search URLs for each subreddit
+        const searchUrls = DEFAULT_SUBREDDITS.map(
+          sub => `https://www.reddit.com/r/${sub}/search.json?q=${encodeURIComponent(term.query)}&sort=new&restrict_sr=on&t=week&limit=10`
+        )
 
-          if (!res.ok) continue
-          const data = await res.json()
-          const posts = data?.data?.children || []
+        // Run Apify Reddit scraper actor synchronously
+        const actorRes = await fetch(
+          `https://api.apify.com/v2/acts/${APIFY_REDDIT_ACTOR}/run-sync-get-dataset-items?token=${apifyKey}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              startUrls: searchUrls.map(url => ({ url })),
+              maxItems: 80,
+              sort: 'new',
+            }),
+          }
+        )
 
-          totalFound += posts.length
+        if (!actorRes.ok) {
+          console.error(`Apify Reddit actor error for "${term.query}": ${actorRes.status}`)
+          continue
+        }
 
-          for (const post of posts) {
-            const p = post.data
-            if (!p) continue
+        const posts = await actorRes.json()
+        if (!Array.isArray(posts)) continue
 
-            const url = `https://www.reddit.com${p.permalink}`
+        totalFound += posts.length
 
-            // Check for existing
-            const { data: existing } = await supabase
-              .from('coverage_items')
-              .select('id')
-              .eq('url', url)
-              .eq('client_id', term.clientId)
-              .limit(1)
+        for (const post of posts) {
+          const permalink = post.permalink || post.url || null
+          if (!permalink) continue
 
-            if (existing && existing.length > 0) continue
+          const url = permalink.startsWith('http') ? permalink : `https://www.reddit.com${permalink}`
 
-            const publishDate = p.created_utc
-              ? new Date(p.created_utc * 1000).toISOString().split('T')[0]
-              : null
+          // Check for existing
+          const { data: existing } = await supabase
+            .from('coverage_items')
+            .select('id')
+            .eq('url', url)
+            .eq('client_id', term.clientId)
+            .limit(1)
 
-            // Find or create outlet for subreddit
-            const subredditDomain = `reddit.com/r/${subreddit}`
-            let outletId: string | null = null
+          if (existing && existing.length > 0) continue
 
-            const { data: existingOutlet } = await supabase
+          const publishDate = post.createdAt || post.created_utc
+            ? new Date(post.createdAt || (post.created_utc ? post.created_utc * 1000 : Date.now())).toISOString().split('T')[0]
+            : null
+
+          const subreddit = post.subreddit || post.communityName || 'unknown'
+          const subredditDomain = `reddit.com/r/${subreddit}`
+
+          // Find or create outlet for subreddit
+          let outletId: string | null = null
+
+          const { data: existingOutlet } = await supabase
+            .from('outlets')
+            .select('id')
+            .eq('domain', subredditDomain)
+            .limit(1)
+
+          if (existingOutlet && existingOutlet.length > 0) {
+            outletId = existingOutlet[0].id
+          } else {
+            const { data: newOutlet } = await supabase
               .from('outlets')
+              .insert({
+                name: `r/${subreddit}`,
+                domain: subredditDomain,
+                tier: 'C',
+                is_active: true,
+              })
               .select('id')
-              .eq('domain', subredditDomain)
-              .limit(1)
-
-            if (existingOutlet && existingOutlet.length > 0) {
-              outletId = existingOutlet[0].id
-            } else {
-              const { data: newOutlet } = await supabase
-                .from('outlets')
-                .insert({
-                  name: `r/${subreddit}`,
-                  domain: subredditDomain,
-                  tier: 'C',
-                  is_active: true,
-                })
-                .select('id')
-                .single()
-              if (newOutlet) outletId = newOutlet.id
-            }
-
-            await supabase.from('coverage_items').insert({
-              client_id: term.clientId,
-              game_id: term.gameId,
-              outlet_id: outletId,
-              title: p.title || 'Untitled Post',
-              url,
-              publish_date: publishDate,
-              coverage_type: 'mention',
-              territory: null,
-              source_type: 'reddit',
-              source_metadata: {
-                subreddit, author: p.author, score: p.score,
-                num_comments: p.num_comments, upvote_ratio: p.upvote_ratio,
-              },
-              approval_status: 'pending_review',
-              discovered_at: new Date().toISOString(),
-            })
-
-            totalNew++
+              .single()
+            if (newOutlet) outletId = newOutlet.id
           }
 
-          // Respect rate limit (1 request per second)
-          await new Promise(resolve => setTimeout(resolve, 1100))
-        } catch (err) {
-          console.error(`Reddit scan error for r/${subreddit} "${term.query}":`, err)
+          await supabase.from('coverage_items').insert({
+            client_id: term.clientId,
+            game_id: term.gameId,
+            outlet_id: outletId,
+            title: post.title || 'Untitled Post',
+            url,
+            publish_date: publishDate,
+            coverage_type: 'mention',
+            territory: null,
+            source_type: 'reddit',
+            source_metadata: {
+              subreddit, author: post.author || post.username,
+              score: post.score || post.upVotes, num_comments: post.numberOfComments || post.numComments,
+              upvote_ratio: post.upvoteRatio,
+            },
+            approval_status: 'pending_review',
+            discovered_at: new Date().toISOString(),
+          })
+
+          totalNew++
         }
+      } catch (err) {
+        console.error(`Reddit Apify scan error for "${term.query}":`, err)
       }
     }
 
