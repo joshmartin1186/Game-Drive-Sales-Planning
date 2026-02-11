@@ -23,6 +23,7 @@ import DuplicateSaleModal from './components/DuplicateSaleModal'
 import BulkEditSalesModal from './components/BulkEditSalesModal'
 import StatCard from './components/StatCard'
 import PageToggle from './components/PageToggle'
+import { Sidebar } from './components/Sidebar'
 import { GeneratedSale, CalendarVariation, generatedSaleToCreateFormat } from '@/lib/sale-calendar-generator'
 import { useUndo } from '@/lib/undo-context'
 import { useAuth } from '@/lib/auth-context'
@@ -651,11 +652,14 @@ export default function GameDriveDashboard() {
     if (!filterProductId && !filterClientId && activeVersionId) { setActiveVersionId(null); setActiveVersionSnapshot(null) }
   }, [filterClientId, filterGameId, filterProductId, games, products, activeVersionId])
 
-  if (authLoading || loading) { return (<div className={styles.container}><div className={styles.loading}><div className={styles.spinner}></div><p>Loading sales data...</p></div></div>) }
+  if (authLoading || loading) { return (<div style={{ display: 'flex', minHeight: '100vh' }}><Sidebar /><div style={{ flex: 1, overflow: 'auto' }}><div className={styles.container}><div className={styles.loading}><div className={styles.spinner}></div><p>Loading sales data...</p></div></div></div></div>) }
 
-  if (!canView) { return (<div className={styles.container}><div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '50vh', gap: '1rem' }}><h2 style={{ fontSize: '1.5rem', fontWeight: 600, color: '#1f2937' }}>Access Denied</h2><p style={{ color: '#6b7280' }}>You don&apos;t have permission to view the Sales Timeline.</p></div></div>) }
+  if (!canView) { return (<div style={{ display: 'flex', minHeight: '100vh' }}><Sidebar /><div style={{ flex: 1, overflow: 'auto' }}><div className={styles.container}><div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '50vh', gap: '1rem' }}><h2 style={{ fontSize: '1.5rem', fontWeight: 600, color: '#1f2937' }}>Access Denied</h2><p style={{ color: '#6b7280' }}>You don&apos;t have permission to view the Sales Timeline.</p></div></div></div></div>) }
 
   return (
+    <div style={{ display: 'flex', minHeight: '100vh' }}>
+      <Sidebar />
+      <div style={{ flex: 1, overflow: 'auto' }}>
     <div className={styles.container}>
       <header className={styles.header}><h1>GameDrive Sales Planning</h1><p>Interactive sales timeline with drag-and-drop scheduling</p></header>
 
@@ -734,6 +738,8 @@ export default function GameDriveDashboard() {
       {clearSalesState && (<ClearSalesModal isOpen={true} onClose={() => setClearSalesState(null)} productId={clearSalesState.productId} productName={clearSalesState.productName} platforms={platforms} sales={sales} onConfirm={handleConfirmClearSales} />)}
       {editLaunchDateState && (<EditLaunchDateModal isOpen={true} onClose={() => setEditLaunchDateState(null)} productId={editLaunchDateState.productId} productName={editLaunchDateState.productName} currentLaunchDate={editLaunchDateState.currentLaunchDate} currentLaunchSaleDuration={editLaunchDateState.currentLaunchSaleDuration || 7} onSave={handleSaveLaunchDate} salesCount={sales.filter(s => s.product_id === editLaunchDateState.productId).length} platforms={platforms} platformEvents={platformEvents} />)}
       <TimelineExportModal isOpen={showExportModal} onClose={() => setShowExportModal(false)} sales={filteredSales} products={filteredProducts} platforms={platforms} timelineStart={timelineStart} monthCount={monthCount} calendarVariations={lastGeneratedVariations} />
+    </div>
+      </div>
     </div>
   )
 }
