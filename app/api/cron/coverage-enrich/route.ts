@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSupabase } from '@/lib/supabase'
 import { GoogleGenAI } from '@google/genai'
+import { sendDiscordNotification } from '@/lib/discord'
 
 function getSupabase() {
   return getServerSupabase()
@@ -45,8 +46,9 @@ export async function GET(request: NextRequest) {
       .from('coverage_items')
       .select(`
         id, title, url, territory, coverage_type, quotes, sentiment,
-        relevance_score, client_id, game_id, approval_status,
-        outlet:outlets(id, name, domain)
+        relevance_score, review_score, monthly_unique_visitors,
+        client_id, game_id, approval_status,
+        outlet:outlets(id, name, domain, tier, monthly_unique_visitors)
       `)
       .is('relevance_score', null)
       .order('discovered_at', { ascending: false })
@@ -162,6 +164,29 @@ Respond with ONLY valid JSON:
         }
 
         await supabase.from('coverage_items').update(updates).eq('id', item.id)
+
+        // Send Discord notification for newly auto-approved items
+        if (approvalStatus === 'auto_approved') {
+          try {
+            await sendDiscordNotification({
+              id: item.id,
+              title: item.title || '',
+              url: item.url || '',
+              territory: item.territory || '',
+              coverage_type: (updates.coverage_type as string) || item.coverage_type || 'article',
+              review_score: item.review_score as number | null,
+              monthly_unique_visitors: Number(outlet?.monthly_unique_visitors || 0),
+              outlet_name: outletName,
+              outlet_tier: String(outlet?.tier || 'untiered'),
+              game_name: gameName,
+              client_id: item.client_id,
+              game_id: item.game_id,
+            })
+          } catch (discordErr) {
+            console.error(`Discord notification error for item ${item.id}:`, discordErr)
+          }
+        }
+
         enriched++
       } catch (err) {
         console.error(`Enrichment error for item ${item.id}:`, err)
