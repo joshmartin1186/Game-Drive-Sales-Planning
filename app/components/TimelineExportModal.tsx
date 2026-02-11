@@ -106,7 +106,14 @@ export default function TimelineExportModal({
       alert('Please select at least one calendar variation to export')
       return
     }
-    
+
+    // Guard: warn if all selected variations have 0 sales
+    const totalSalesCount = datasets.reduce((sum, d) => sum + d.sales.length, 0)
+    if (totalSalesCount === 0) {
+      alert('The selected calendar variation(s) have 0 sales. Add some sales first, or select a different variation.')
+      return
+    }
+
     setIsExporting(true)
     
     try {
@@ -403,7 +410,9 @@ export default function TimelineExportModal({
   }
   
   const selectedCount = Object.values(selectedVariations).filter(Boolean).length
-  
+  const selectedDatasets = getSelectedDatasets()
+  const totalSelectedSales = selectedDatasets.reduce((sum, d) => sum + d.sales.length, 0)
+
   return (
     <div className={styles.overlay} onClick={onClose}>
       <div className={styles.modal} onClick={e => e.stopPropagation()}>
@@ -510,6 +519,13 @@ export default function TimelineExportModal({
               <span>{monthCount} months ({format(periodStart, 'MMM yyyy')} - {format(addMonths(periodEnd, -1), 'MMM yyyy')})</span>
             </div>
           </div>
+
+          {/* Empty sales warning */}
+          {selectedCount > 0 && totalSelectedSales === 0 && (
+            <div style={{ padding: '10px 14px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '6px', color: '#dc2626', fontSize: '13px', marginTop: '12px' }}>
+              The selected variation(s) contain <strong>0 sales</strong>. The export will only contain title slides. Add sales to your calendar first.
+            </div>
+          )}
         </div>
         
         <div className={styles.footer}>
