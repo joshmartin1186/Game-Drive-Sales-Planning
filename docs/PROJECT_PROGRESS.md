@@ -41,15 +41,15 @@
 
 ---
 
-## Current Status: January 17, 2025
+## Current Status: February 11, 2026
 
-### 🎉 Latest Session Summary - BACKGROUND SYNC SYSTEM
+### 🎉 Latest Session Summary - GITHUB ISSUES + NAVIGATION OVERHAUL
+**Focus:** Closed GitHub issues #16, #17, #1 + Standardized navigation across all pages
+**Result:** Added historical discount tracking, AI revenue prediction (Gemini), empty export guard. Fixed missing sidebar navigation on main page (PR Coverage was inaccessible). Replaced inconsistent AnalyticsSidebar + PageToggle with unified global Sidebar on every page.
+
+### Previous Session: January 17, 2025
 **Focus:** Background Job Processing for Steam Data Sync
-**Result:** Implemented fully functional background sync system using Vercel Cron + Supabase queue - users can trigger syncs and close their browser while data imports continue automatically
-
-### Previous Session: January 16, 2025
-**Focus:** Steam API Integration
-**Result:** Successfully imported real client data (tobspr) via Steam Financial API with working dashboard displaying live metrics
+**Result:** Implemented fully functional background sync system using Vercel Cron + Supabase queue
 
 ### Completion Summary
 | Phase | Status | Completion |
@@ -77,6 +77,59 @@
 | **Excel Export** | ✅ **Complete** | **100%** |
 | **Steam API Integration** | ✅ **Complete** | **100%** |
 | **Background Sync System** | ✅ **Complete** | **100%** |
+| **Historical Discount Tracking (#16)** | ✅ **Complete** | **100%** |
+| **AI Revenue Prediction (#17)** | ✅ **Complete** | **100%** |
+| **Empty Export Guard (#1)** | ✅ **Complete** | **100%** |
+| **Unified Navigation** | ✅ **Complete** | **100%** |
+| **Email Digest (#84)** | ✅ **Complete** | **100%** |
+| **Social Media Reports (#89)** | ✅ **Complete** | **100%** |
+| **Unified PDF/PPTX Export (#94)** | ✅ **Complete** | **100%** |
+| **Custom Domain + 404 (#95)** | ✅ **Complete** | **100%** |
+| **Auth & RBAC** | ✅ **Complete** | **100%** |
+
+---
+
+## February 11, 2026 - GitHub Issues + Navigation Overhaul
+
+### ✅ GitHub Issues Closed (3 Issues)
+
+**Issue #16 — Historical Discount Tracking** (`ac7ce1c2`)
+- Track discount percentage changes over time for each platform
+- Highest-ever discount warnings when setting new sales
+- Platform-specific discount bounds validation
+- Database migration for discount history tracking
+
+**Issue #17 — AI Revenue Prediction** (`d0a91545`)
+- Gemini-powered revenue prediction using Google AI (`@google/genai`)
+- Statistical analysis fallback with trend lines
+- Revenue forecasting displayed in analytics dashboard
+- API key stored in `service_api_keys` table
+
+**Issue #1 — Empty PowerPoint Export Guard** (`0ac4c8ce`)
+- Prevents crash when exporting PPTX with 0 sales selected
+- Shows user-friendly warning message instead of error
+- Guards both PDF and PPTX export paths
+
+### ✅ Navigation Standardization (COMPLETE)
+
+**Problem:** PR Coverage module was built but inaccessible — the main page (`app/page.tsx`) had no `<Sidebar>` component. The Analytics page had a local `AnalyticsSidebar` duplicate with fewer nav items (missing PR Coverage, Reports, Dashboard). A redundant `<PageToggle>` tab toggle (Planning/Analytics) added confusion.
+
+**Fix — Commit `8eee8c1c`:** Added global `<Sidebar />` to main sales timeline page.
+
+**Fix — Commit `f75fd85b`:** Standardized navigation across ALL pages:
+- Replaced `AnalyticsSidebar` (65-line local duplicate) with global `<Sidebar />` in `app/analytics/page.tsx`
+- Added `<Sidebar />` to `app/dashboard/page.tsx`, `app/reports/page.tsx`, `app/planning/page.tsx`
+- Removed `<PageToggle />` from home and analytics pages
+- Deleted `app/components/PageToggle.tsx` and `PageToggle.module.css`
+- **Result:** Every page now has the same global sidebar with all nav items, including PR Coverage
+
+**Files Modified:**
+- `app/page.tsx` — Added Sidebar, removed PageToggle
+- `app/analytics/page.tsx` — Replaced AnalyticsSidebar + PageToggle with Sidebar
+- `app/dashboard/page.tsx` — Added Sidebar
+- `app/reports/page.tsx` — Added Sidebar
+- `app/planning/page.tsx` — Added Sidebar (all 3 return paths)
+- Deleted: `app/components/PageToggle.tsx`, `app/components/PageToggle.module.css`
 
 ---
 
@@ -240,10 +293,10 @@ Identified and fixed critical issues for real data import:
 - Download functionality
 
 ### ✅ Navigation System
-- Sidebar with all page links
-- PageToggle component for Sales Timeline ↔ Analytics switching
+- Global Sidebar with all page links (auth-aware, feature-gated)
 - Active state highlighting
 - Platform legend in sidebar
+- *(PageToggle removed Feb 2026 — navigation fully centralized in Sidebar)*
 
 ---
 
@@ -253,10 +306,16 @@ Identified and fixed critical issues for real data import:
 |------|-----|---------|--------|
 | Sales Timeline | `/` | Interactive Gantt chart | ✅ Complete |
 | Analytics | `/analytics` | Steam performance dashboard | ✅ Complete |
+| Dashboard | `/dashboard` | Summary dashboard | ✅ Complete |
+| Planning | `/planning` | Sales planning view | ✅ Complete |
 | Client Management | `/clients` | Manage clients | ✅ Complete |
 | Platform Settings | `/platforms` | Configure platform rules | ✅ Complete |
+| Reports | `/reports` | Client report builder | ✅ Complete |
 | Excel Export | `/export` | Export sales data | ✅ Complete |
-| API Settings | `/settings` | Steam API key management | ✅ Complete |
+| PR Coverage | `/coverage` | Coverage feed & dashboard | ✅ Complete |
+| API Settings | `/settings` | API key management | ✅ Complete |
+| Permissions | `/permissions` | User management & RBAC | ✅ Complete |
+| Admin | `/admin` | Admin panel | ✅ Complete |
 
 ---
 
@@ -325,7 +384,8 @@ Identified and fixed critical issues for real data import:
 | GapAnalysis | Sales coverage gap analysis |
 | ProductManager | Client/Game/Product CRUD |
 | PlatformSettings | Platform rules & events |
-| PageToggle | Switch between Timeline/Analytics |
+| Sidebar | Global navigation sidebar (auth-aware, feature-gated) |
+| Navbar | Top bar for settings/admin pages |
 
 ### Modals
 | Component | Purpose |
@@ -364,9 +424,9 @@ Identified and fixed critical issues for real data import:
 
 ## Deferred Features (Post-MVP)
 
-1. **Authentication** - User login/data isolation
-2. **Historical Discount Tracking** - Track discount changes over time
-3. **Analytical Prediction** - AI-based forecasting
+1. ~~**Authentication**~~ - ✅ Done (Supabase Auth + RLS + RBAC)
+2. ~~**Historical Discount Tracking**~~ - ✅ Done (Issue #16)
+3. ~~**Analytical Prediction**~~ - ✅ Done (Issue #17, Gemini + statistical)
 4. **Bulk Editing** - Edit multiple sales at once
 5. **Import Historical Sales** - CSV/Excel import of past sales
 6. **Planning ↔ Analytics Integration** - Link sales to performance
@@ -383,4 +443,4 @@ Identified and fixed critical issues for real data import:
 
 ---
 
-*Last Updated: January 16, 2025 - Steam API Integration COMPLETE, Dashboard Builder COMPLETE, real client data (tobspr) successfully imported and displayed*
+*Last Updated: February 11, 2026 - GitHub Issues #16, #17, #1 closed. Navigation standardized across all pages. PR Coverage module now accessible via global Sidebar.*
