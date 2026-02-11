@@ -1,6 +1,6 @@
 'use client'
 
-// Cache invalidation: 2026-01-12T19:15:00Z - Added PageToggle navigation
+// Cache invalidation: 2026-02-11T12:00:00Z - Replaced PageToggle with global Sidebar
 
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { parseISO, format, addDays } from 'date-fns'
@@ -22,7 +22,6 @@ import VersionManager from './components/VersionManager'
 import DuplicateSaleModal from './components/DuplicateSaleModal'
 import BulkEditSalesModal from './components/BulkEditSalesModal'
 import StatCard from './components/StatCard'
-import PageToggle from './components/PageToggle'
 import { Sidebar } from './components/Sidebar'
 import { GeneratedSale, CalendarVariation, generatedSaleToCreateFormat } from '@/lib/sale-calendar-generator'
 import { useUndo } from '@/lib/undo-context'
@@ -662,8 +661,6 @@ export default function GameDriveDashboard() {
       <div style={{ flex: 1, overflow: 'auto' }}>
     <div className={styles.container}>
       <header className={styles.header}><h1>GameDrive Sales Planning</h1><p>Interactive sales timeline with drag-and-drop scheduling</p></header>
-
-      <PageToggle />
 
       {error && (<div className={styles.errorBanner}><span>Warning: {error}</span><button onClick={() => setError(null)}>×</button></div>)}
 

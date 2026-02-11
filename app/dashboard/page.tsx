@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import Link from 'next/link'
+import { Sidebar } from '../components/Sidebar'
 
 interface NameValue { name: string; value: number }
 interface CoverageHighlight { id: string; title: string; url: string; publish_date: string; coverage_type: string; monthly_unique_visitors: number; review_score: number | null; outlet: { name: string; tier: string } | null }
@@ -106,6 +107,9 @@ export default function DashboardPage() {
   const c = data?.coverage
 
   return (
+    <div style={{ display: 'flex', minHeight: '100vh' }}>
+      <Sidebar />
+      <div style={{ flex: 1, overflow: 'auto' }}>
     <div style={pageStyle}>
       <div style={headerStyle}>
         <div>
@@ -302,6 +306,8 @@ export default function DashboardPage() {
           )}
         </>
       )}
+    </div>
+      </div>
     </div>
   )
 }

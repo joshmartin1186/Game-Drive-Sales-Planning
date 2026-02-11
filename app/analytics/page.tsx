@@ -1,14 +1,12 @@
 'use client'
 
-// Cache invalidation: 2026-01-16T12:00:00Z - Editable dashboard with drag-drop widgets
+// Cache invalidation: 2026-02-11T12:00:00Z - Replaced AnalyticsSidebar with global Sidebar
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
-import Link from 'next/link'
-import { usePathname } from 'next/navigation'
 import styles from './page.module.css'
 import * as XLSX from 'xlsx'
-import PageToggle from '../components/PageToggle'
+import { Sidebar } from '../components/Sidebar'
 import ImportPerformanceModal from '../components/ImportPerformanceModal'
 import { useAuth } from '@/lib/auth-context'
 
@@ -188,72 +186,6 @@ function calculateDiscountPct(basePrice: number | string | null | undefined, sal
   const sale = toNumber(salePrice)
   if (base <= 0 || sale <= 0 || sale >= base) return null
   return Math.round((1 - sale / base) * 100)
-}
-
-// Sidebar component
-function AnalyticsSidebar() {
-  const pathname = usePathname()
-  
-  const navItems = [
-    { name: 'Sales Timeline', href: '/', icon: 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z' },
-    { name: 'Analytics', href: '/analytics', icon: 'M16 8v8m-4-5v5m-4-2v2m-2 4h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z' },
-    { name: 'Client Management', href: '/clients', icon: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z' },
-    { name: 'Platform Settings', href: '/platforms', icon: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z' },
-    { name: 'Excel Export', href: '/export', icon: 'M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' },
-    { name: 'API Settings', href: '/settings', icon: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z' },
-  ]
-  
-  const platforms = [
-    { name: 'Steam', color: '#1b2838', cooldown: '30d' },
-    { name: 'PlayStation', color: '#0070d1', cooldown: '42d' },
-    { name: 'Xbox', color: '#107c10', cooldown: '28d' },
-    { name: 'Nintendo', color: '#e60012', cooldown: '56d' },
-    { name: 'Epic', color: '#000000', cooldown: '14d' },
-  ]
-
-  return (
-    <aside className={styles.sidebar}>
-      <div className={styles.sidebarHeader}>
-        <div className={styles.sidebarLogo}>
-          <div className={styles.logoIcon}>GD</div>
-          <div className={styles.logoText}>Game<span>Drive</span></div>
-        </div>
-      </div>
-      
-      <nav className={styles.sidebarNav}>
-        <div className={styles.navSection}>
-          <div className={styles.navSectionTitle}>Navigation</div>
-          {navItems.map((item) => (
-            <Link
-              key={item.name}
-              href={item.href}
-              className={`${styles.navLink} ${pathname === item.href ? styles.navLinkActive : ''}`}
-            >
-              <svg className={styles.navIcon} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={item.icon} />
-              </svg>
-              {item.name}
-            </Link>
-          ))}
-        </div>
-      </nav>
-      
-      <div className={styles.sidebarFooter}>
-        <div className={styles.navSectionTitle}>Active Platforms</div>
-        <div className={styles.platformList}>
-          {platforms.map((platform) => (
-            <div key={platform.name} className={styles.platformItem}>
-              <div className={styles.platformName}>
-                <div className={styles.platformDot} style={{ backgroundColor: platform.color }} />
-                {platform.name}
-              </div>
-              <span className={styles.platformCooldown}>{platform.cooldown}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-    </aside>
-  )
 }
 
 // Default dashboard layout - comprehensive view
@@ -2523,13 +2455,14 @@ export default function AnalyticsPage() {
   }
 
   if (authLoading) {
-    return <div className={styles.pageContainer}><div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '50vh' }}><p>Loading...</p></div></div>
+    return <div className={styles.pageContainer}><Sidebar /><div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '50vh' }}><p>Loading...</p></div></div>
   }
 
   if (!canView) {
     return (
       <div className={styles.pageContainer}>
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '50vh', gap: '1rem' }}>
+        <Sidebar />
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '50vh', gap: '1rem' }}>
           <h2 style={{ fontSize: '1.5rem', fontWeight: 600, color: '#1f2937' }}>Access Denied</h2>
           <p style={{ color: '#6b7280' }}>You don&apos;t have permission to view Analytics.</p>
         </div>
@@ -2539,11 +2472,9 @@ export default function AnalyticsPage() {
 
   return (
     <div className={styles.pageContainer}>
-      <AnalyticsSidebar />
+      <Sidebar />
 
       <div className={styles.pageContent}>
-        <PageToggle />
-        
         <div className={styles.header}>
           <div className={styles.headerLeft}>
             <h1 className={styles.title}>Analytics</h1>

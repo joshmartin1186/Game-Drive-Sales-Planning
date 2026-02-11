@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import PptxGenJS from 'pptxgenjs'
 import Link from 'next/link'
+import { Sidebar } from '../components/Sidebar'
 
 interface NameValue { name: string; value: number }
 interface OutletSummary { name: string; count: number; tier: string; visitors: number }
@@ -676,6 +677,9 @@ ${social && social.total_posts > 0 ? `
   const cov = reportData?.coverage
 
   return (
+    <div style={{ display: 'flex', minHeight: '100vh' }}>
+      <Sidebar />
+      <div style={{ flex: 1, overflow: 'auto' }}>
     <div style={pageStyle}>
       <div style={headerStyle}>
         <h1 style={h1Style}>Client Report Builder</h1>
@@ -1556,6 +1560,8 @@ ${social && social.total_posts > 0 ? `
           </div>
         </div>
       )}
+    </div>
+      </div>
     </div>
   )
 }

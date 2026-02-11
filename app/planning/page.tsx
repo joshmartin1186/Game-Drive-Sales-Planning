@@ -9,6 +9,7 @@ import GanttChart from '../components/GanttChart'
 import SalesTable from '../components/SalesTable'
 import AddSaleModal from '../components/AddSaleModal'
 import EditSaleModal from '../components/EditSaleModal'
+import { Sidebar } from '../components/Sidebar'
 import styles from './planning.module.css'
 
 interface SalePrefill {
@@ -258,10 +259,15 @@ export default function PlanningPage() {
   
   if (authLoading || loading) {
     return (
-      <div className={styles.container}>
-        <div className={styles.loading}>
-          <div className={styles.spinner}></div>
-          <p>Loading planning data...</p>
+      <div style={{ display: 'flex', minHeight: '100vh' }}>
+        <Sidebar />
+        <div style={{ flex: 1, overflow: 'auto' }}>
+          <div className={styles.container}>
+            <div className={styles.loading}>
+              <div className={styles.spinner}></div>
+              <p>Loading planning data...</p>
+            </div>
+          </div>
         </div>
       </div>
     )
@@ -269,16 +275,24 @@ export default function PlanningPage() {
 
   if (!canView) {
     return (
-      <div className={styles.container}>
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '50vh', gap: '1rem' }}>
-          <h2 style={{ fontSize: '1.5rem', fontWeight: 600, color: '#1f2937' }}>Access Denied</h2>
-          <p style={{ color: '#6b7280' }}>You don&apos;t have permission to view Sales Planning.</p>
+      <div style={{ display: 'flex', minHeight: '100vh' }}>
+        <Sidebar />
+        <div style={{ flex: 1, overflow: 'auto' }}>
+          <div className={styles.container}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '50vh', gap: '1rem' }}>
+              <h2 style={{ fontSize: '1.5rem', fontWeight: 600, color: '#1f2937' }}>Access Denied</h2>
+              <p style={{ color: '#6b7280' }}>You don&apos;t have permission to view Sales Planning.</p>
+            </div>
+          </div>
         </div>
       </div>
     )
   }
 
   return (
+    <div style={{ display: 'flex', minHeight: '100vh' }}>
+      <Sidebar />
+      <div style={{ flex: 1, overflow: 'auto' }}>
     <div className={styles.container}>
       <header className={styles.header}>
         <div className={styles.headerLeft}>
@@ -372,6 +386,8 @@ export default function PlanningPage() {
           onClose={() => setEditingSale(null)}
         />
       )}
+    </div>
+      </div>
     </div>
   )
 }
