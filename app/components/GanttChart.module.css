@@ -540,6 +540,22 @@
   font-weight: 700 !important;
 }
 
+/* Coverage indicator dot on day headers */
+.coverageDot {
+  border-radius: 50%;
+  margin: 1px auto 0;
+  min-width: 4px;
+  min-height: 4px;
+  opacity: 0.85;
+  cursor: help;
+  transition: transform 0.15s;
+}
+
+.coverageDot:hover {
+  transform: scale(1.4);
+  opacity: 1;
+}
+
 /* Today Indicator Line */
 .todayIndicator {
   position: absolute;

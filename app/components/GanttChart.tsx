@@ -22,6 +22,13 @@ interface SalePrefill {
   saleType?: string
 }
 
+export interface CoverageDayData {
+  count: number
+  topTier: string  // 'A' | 'B' | 'C' | 'D' | ''
+  totalReach: number
+  items: { title: string; outlet: string; tier: string; type: string }[]
+}
+
 interface GanttChartProps {
   sales: SaleWithDetails[]
   products: (Product & { game: Game & { client: Client } })[]
@@ -41,6 +48,8 @@ interface GanttChartProps {
   onLaunchSaleDurationChange?: (productId: string, newDuration: number) => Promise<void>
   allSales: SaleWithDetails[]
   showEvents?: boolean
+  coverageByDate?: Record<string, CoverageDayData>
+  showCoverage?: boolean
 }
 
 interface SelectionState {
@@ -138,7 +147,9 @@ export default function GanttChart(props: GanttChartProps) {
     onEditLaunchDate,
     onLaunchSaleDurationChange,
     allSales,
-    showEvents = true
+    showEvents = true,
+    coverageByDate,
+    showCoverage = false
   } = props
   
   const [timelineStart, setTimelineStart] = useState(() => {
@@ -1722,13 +1733,23 @@ export default function GanttChart(props: GanttChartProps) {
                 const isFirstOfMonth = day.getDate() === 1
                 const isTodayDate = idx === todayIndex
                 const showDayNumber = dayWidth >= 14
+                const dateKey = format(day, 'yyyy-MM-dd')
+                const covData = showCoverage && coverageByDate ? coverageByDate[dateKey] : undefined
                 return (
-                  <div 
+                  <div
                     key={idx}
                     className={`${styles.dayHeader} ${isWeekend ? styles.weekend : ''} ${isFirstOfMonth ? styles.monthStart : ''} ${isTodayDate ? styles.todayHeader : ''}`}
                     style={{ width: dayWidth }}
+                    title={covData ? `${covData.count} article${covData.count !== 1 ? 's' : ''} on ${format(day, 'MMM d')}\nTop tier: ${covData.topTier || 'N/A'}\nReach: ${covData.totalReach.toLocaleString()}\n${covData.items.slice(0, 3).map(i => `• ${i.outlet}: ${i.title}`).join('\n')}${covData.items.length > 3 ? `\n+${covData.items.length - 3} more` : ''}` : undefined}
                   >
                     {showDayNumber ? day.getDate() : ''}
+                    {covData && (
+                      <div className={styles.coverageDot} style={{
+                        backgroundColor: covData.topTier === 'A' ? '#ef4444' : covData.topTier === 'B' ? '#f59e0b' : covData.topTier === 'C' ? '#3b82f6' : '#94a3b8',
+                        width: Math.min(6 + covData.count * 2, 12),
+                        height: Math.min(6 + covData.count * 2, 12),
+                      }} />
+                    )}
                   </div>
                 )
               })}

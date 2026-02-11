@@ -5,7 +5,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { parseISO, format, addDays } from 'date-fns'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
-import GanttChart from './components/GanttChart'
+import GanttChart, { CoverageDayData } from './components/GanttChart'
 import SalesTable from './components/SalesTable'
 import AddSaleModal from './components/AddSaleModal'
 import EditSaleModal from './components/EditSaleModal'
@@ -16,6 +16,7 @@ import ClearSalesModal from './components/ClearSalesModal'
 import TimelineExportModal from './components/TimelineExportModal'
 import EditLaunchDateModal from './components/EditLaunchDateModal'
 import GapAnalysis from './components/GapAnalysis'
+import CoverageCorrelation from './components/CoverageCorrelation'
 import ImportSalesModal from './components/ImportSalesModal'
 import VersionManager from './components/VersionManager'
 import DuplicateSaleModal from './components/DuplicateSaleModal'
@@ -63,6 +64,8 @@ export default function GameDriveDashboard() {
   const [duplicatingSale, setDuplicatingSale] = useState<SaleWithDetails | null>(null)
   const [viewMode, setViewMode] = useState<'gantt' | 'table'>('gantt')
   const [showEvents, setShowEvents] = useState(true)
+  const [showCoverage, setShowCoverage] = useState(false)
+  const [coverageByDate, setCoverageByDate] = useState<Record<string, CoverageDayData>>({})
   const [salePrefill, setSalePrefill] = useState<SalePrefill | null>(null)
   const [bulkEditSales, setBulkEditSales] = useState<SaleWithDetails[]>([])
   const [calendarGeneration, setCalendarGeneration] = useState<CalendarGenerationState | null>(null)
@@ -89,6 +92,8 @@ export default function GameDriveDashboard() {
   }, [setHandlers])
 
   useEffect(() => { fetchData() }, [])
+
+  useEffect(() => { if (showCoverage) fetchCoverageData() }, [showCoverage, filterClientId, filterGameId])
 
   async function fetchSales() {
     const { data: salesData, error: salesError } = await supabase.from('sales').select(`*, product:products(*, game:games(*, client:clients(*))), platform:platforms(*)`).order('start_date')
@@ -119,6 +124,30 @@ export default function GameDriveDashboard() {
       const { data: eventsData, error: eventsError } = await supabase.from('platform_events').select(`*, platform:platforms(*)`).order('start_date')
       if (eventsError) throw eventsError; setPlatformEvents(eventsData || [])
     } catch (err) { console.error('Error fetching platform events:', err) }
+  }
+
+  async function fetchCoverageData() {
+    try {
+      const params = new URLSearchParams()
+      if (filterClientId) params.set('client_id', filterClientId)
+      if (filterGameId) params.set('game_id', filterGameId)
+      const res = await fetch(`/api/coverage-timeline?${params.toString()}`)
+      if (!res.ok) return
+      const data = await res.json()
+      const byDate: Record<string, CoverageDayData> = {}
+      for (const item of (data.coverage || [])) {
+        const dateKey = item.publish_date?.slice(0, 10)
+        if (!dateKey) continue
+        if (!byDate[dateKey]) byDate[dateKey] = { count: 0, topTier: '', totalReach: 0, items: [] }
+        byDate[dateKey].count++
+        const tier = item.outlet?.tier || 'D'
+        const tierRank = { A: 4, B: 3, C: 2, D: 1 } as Record<string, number>
+        if ((tierRank[tier] || 0) > (tierRank[byDate[dateKey].topTier] || 0)) byDate[dateKey].topTier = tier
+        byDate[dateKey].totalReach += item.outlet?.monthly_unique_visitors || item.monthly_unique_visitors || 0
+        byDate[dateKey].items.push({ title: item.title || '', outlet: item.outlet?.name || 'Unknown', tier, type: item.coverage_type || '' })
+      }
+      setCoverageByDate(byDate)
+    } catch (err) { console.error('Error fetching coverage data:', err) }
   }
 
   async function handleSaleUpdate(saleId: string, updates: Partial<Sale>) {
@@ -648,6 +677,7 @@ export default function GameDriveDashboard() {
         <div className={styles.filterGroup}><label>Game:</label><select value={filterGameId} onChange={(e) => { setFilterGameId(e.target.value); setFilterProductId('') }}><option value="">All Games</option>{filteredGames.map(game => (<option key={game.id} value={game.id}>{game.name}</option>))}</select></div>
         <div className={styles.filterGroup}><label>Product:</label><select value={filterProductId} onChange={(e) => setFilterProductId(e.target.value)}><option value="">All Products</option>{filteredProducts.map(product => (<option key={product.id} value={product.id}>{product.name}</option>))}</select></div>
         <div className={styles.filterGroup}><label className={styles.checkboxLabel}><input type="checkbox" checked={showEvents} onChange={(e) => setShowEvents(e.target.checked)} />Show Platform Events</label></div>
+        <div className={styles.filterGroup}><label className={styles.checkboxLabel}><input type="checkbox" checked={showCoverage} onChange={(e) => setShowCoverage(e.target.checked)} />Show Coverage</label></div>
         {(filterClientId || filterGameId || filterProductId) && (<button className={styles.clearFilters} onClick={() => { setFilterClientId(''); setFilterGameId(''); setFilterProductId(''); setActiveVersionId(null); setActiveVersionSnapshot(null) }}>Clear Filters</button>)}
       </div>
 
@@ -685,8 +715,12 @@ export default function GameDriveDashboard() {
       </div>
 
       <div className={styles.mainContent}>
-        {viewMode === 'gantt' ? (<GanttChart sales={filteredSales} products={filteredProducts} platforms={platforms} platformEvents={platformEvents} timelineStart={timelineStart} monthCount={monthCount} onSaleUpdate={handleSaleUpdateWrapper} onSaleDelete={handleSaleDeleteWrapper} onSaleEdit={handleSaleEdit} onSaleDuplicate={handleSaleDuplicate} onCreateSale={handleTimelineCreate} onGenerateCalendar={handleGenerateCalendar} onClearSales={handleClearSales} onLaunchDateChange={handleLaunchDateChange} onEditLaunchDate={handleEditLaunchDate} onLaunchSaleDurationChange={handleLaunchSaleDurationChange} allSales={activeVersionId ? [] : sales} showEvents={showEvents} />) : (<SalesTable sales={filteredSales} platforms={platforms} onDelete={handleSaleDeleteWrapper} onEdit={handleSaleEdit} onDuplicate={handleSaleDuplicate} onBulkEdit={handleBulkEdit} />)}
+        {viewMode === 'gantt' ? (<GanttChart sales={filteredSales} products={filteredProducts} platforms={platforms} platformEvents={platformEvents} timelineStart={timelineStart} monthCount={monthCount} onSaleUpdate={handleSaleUpdateWrapper} onSaleDelete={handleSaleDeleteWrapper} onSaleEdit={handleSaleEdit} onSaleDuplicate={handleSaleDuplicate} onCreateSale={handleTimelineCreate} onGenerateCalendar={handleGenerateCalendar} onClearSales={handleClearSales} onLaunchDateChange={handleLaunchDateChange} onEditLaunchDate={handleEditLaunchDate} onLaunchSaleDurationChange={handleLaunchSaleDurationChange} allSales={activeVersionId ? [] : sales} showEvents={showEvents} coverageByDate={coverageByDate} showCoverage={showCoverage} />) : (<SalesTable sales={filteredSales} platforms={platforms} onDelete={handleSaleDeleteWrapper} onEdit={handleSaleEdit} onDuplicate={handleSaleDuplicate} onBulkEdit={handleBulkEdit} />)}
       </div>
+
+      {showCoverage && Object.keys(coverageByDate).length > 0 && (
+        <CoverageCorrelation coverageByDate={coverageByDate} sales={filteredSales} timelineStart={timelineStart} monthCount={monthCount} clientId={filterClientId || undefined} gameId={filterGameId || undefined} />
+      )}
 
       {showAddModal && (<AddSaleModal products={products} platforms={platforms} existingSales={activeVersionId ? [] : sales} onSave={handleSaleCreateWrapper} onClose={handleCloseAddModal} initialDate={salePrefill ? parseISO(salePrefill.startDate) : undefined} initialEndDate={salePrefill ? parseISO(salePrefill.endDate) : undefined} initialProductId={salePrefill?.productId} initialPlatformId={salePrefill?.platformId} />)}
       {editingSale && (<EditSaleModal sale={editingSale} products={products} platforms={platforms} existingSales={activeVersionId ? [] : sales} onSave={handleSaleUpdateWrapper} onDelete={handleSaleDeleteWrapper} onDuplicate={handleSaleDuplicate} onClose={() => setEditingSale(null)} />)}
