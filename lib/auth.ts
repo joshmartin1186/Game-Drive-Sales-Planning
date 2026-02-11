@@ -12,6 +12,7 @@ export type FeatureKey =
   | 'platform_settings'
   | 'export'
   | 'api_settings'
+  | 'pr_coverage'
 
 export interface UserProfile {
   id: string
@@ -46,6 +47,7 @@ export const FEATURES: { key: FeatureKey; label: string; description: string }[]
   { key: 'platform_settings', label: 'Platform Settings', description: 'Configure platform rules' },
   { key: 'export', label: 'Excel Export', description: 'Download reports' },
   { key: 'api_settings', label: 'API Settings', description: 'Steam API keys and sync' },
+  { key: 'pr_coverage', label: 'PR Coverage', description: 'Media outlet tracking and coverage' },
 ]
 
 // --- Helpers ---
@@ -126,4 +128,12 @@ export const ROUTE_FEATURE_MAP: Record<string, FeatureKey> = {
   '/platforms': 'platform_settings',
   '/export': 'export',
   '/settings': 'api_settings',
+  '/coverage': 'pr_coverage',
+  '/coverage/keywords': 'pr_coverage',
+  '/coverage/settings': 'pr_coverage',
+  '/coverage/sources': 'pr_coverage',
+  '/coverage/feed': 'pr_coverage',
+  '/coverage/dashboard': 'pr_coverage',
+  '/coverage/report': 'pr_coverage',
+  '/reports': 'analytics',
 }

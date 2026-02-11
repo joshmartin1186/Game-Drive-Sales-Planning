@@ -570,6 +570,47 @@ export default function GameDriveDashboard() {
     return { upcomingEventsCount: upcoming.length, upcomingEventDetails: details }
   }, [platformEvents, platforms])
 
+  // Sales breakdown by platform for interactive stat card
+  const salesByPlatformDetails = useMemo(() => {
+    const counts = new Map<string, { count: number; color: string }>()
+    for (const sale of filteredSales) {
+      const name = sale.platform?.name || 'Unknown'
+      const color = sale.platform?.color_hex || '#666'
+      const existing = counts.get(name) || { count: 0, color }
+      counts.set(name, { count: existing.count + 1, color })
+    }
+    return Array.from(counts.entries())
+      .sort((a, b) => b[1].count - a[1].count)
+      .map(([name, data]) => ({ label: `${name}: ${data.count}`, color: data.color }))
+  }, [filteredSales])
+
+  // Upcoming sales (next 30 days)
+  const upcomingSalesDetails = useMemo(() => {
+    const now = new Date()
+    const thirtyDaysOut = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000)
+    return filteredSales
+      .filter(s => { const start = new Date(s.start_date); return start > now && start <= thirtyDaysOut })
+      .sort((a, b) => new Date(a.start_date).getTime() - new Date(b.start_date).getTime())
+      .map(s => ({
+        label: s.product?.name || 'Unknown',
+        sublabel: `${s.platform?.name} | ${format(normalizeToLocalDate(s.start_date), 'MMM d')} - ${format(normalizeToLocalDate(s.end_date), 'MMM d')}${s.discount_percentage ? ` (${s.discount_percentage}% off)` : ''}`,
+        color: s.platform?.color_hex || '#666'
+      }))
+  }, [filteredSales])
+
+  // Products breakdown by type for interactive stat card
+  const productsByTypeDetails = useMemo(() => {
+    const typeLabels: Record<string, string> = { base: 'Base Games', edition: 'Editions', dlc: 'DLC', soundtrack: 'Soundtracks', bundle: 'Bundles' }
+    const counts = new Map<string, number>()
+    for (const product of filteredProducts) {
+      const type = product.product_type || 'base'
+      counts.set(type, (counts.get(type) || 0) + 1)
+    }
+    return Array.from(counts.entries())
+      .sort((a, b) => b[1] - a[1])
+      .map(([type, count]) => ({ label: `${typeLabels[type] || type}: ${count}` }))
+  }, [filteredProducts])
+
   const now = new Date(); const timelineStart = new Date(now.getFullYear(), now.getMonth(), 1); const monthCount = 12
 
   useEffect(() => {
@@ -594,8 +635,8 @@ export default function GameDriveDashboard() {
       {error && (<div className={styles.errorBanner}><span>Warning: {error}</span><button onClick={() => setError(null)}>×</button></div>)}
 
       <div className={styles.statsGrid}>
-        <StatCard icon="📊" iconColor="#10b981" title="TOTAL SALES" value={filteredSales.length} subtitle="Across all platforms" />
-        <StatCard icon="🎮" iconColor="#3b82f6" title="PRODUCTS" value={filteredProducts.length} subtitle="Games and DLCs" />
+        <StatCard icon="📊" iconColor="#10b981" title="TOTAL SALES" value={filteredSales.length} subtitle={upcomingSalesDetails.length > 0 ? `${upcomingSalesDetails.length} upcoming in 30 days` : 'Across all platforms'} tooltipTitle="Sales by Platform" tooltipItems={salesByPlatformDetails} tooltipEmptyMessage="No sales scheduled" />
+        <StatCard icon="🎮" iconColor="#3b82f6" title="PRODUCTS" value={filteredProducts.length} subtitle="Games and DLCs" tooltipTitle="Products by Type" tooltipItems={productsByTypeDetails} tooltipEmptyMessage="No products configured" />
         <StatCard icon="📅" iconColor="#8b5cf6" title="PLATFORM EVENTS" value={upcomingEventsCount} subtitle="Upcoming sales events" tooltipTitle="Upcoming Platform Events" tooltipItems={upcomingEventDetails} tooltipEmptyMessage="No upcoming platform events" />
         <StatCard icon={conflicts > 0 ? '⚠️' : '✅'} iconColor={conflicts > 0 ? '#ef4444' : '#22c55e'} title="CONFLICTS" value={conflicts} subtitle={conflicts === 0 ? 'All platforms clear' : 'Needs attention'} warning={conflicts > 0} tooltipTitle="Launch Sale Conflicts" tooltipItems={conflictDetails.map(c => ({ label: c.productName, sublabel: `${c.eventName} (${c.overlapDays}d overlap)`, warning: true }))} tooltipEmptyMessage="No conflicts detected" />
       </div>

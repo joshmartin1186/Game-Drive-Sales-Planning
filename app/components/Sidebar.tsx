@@ -61,6 +61,17 @@ export function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
       description: 'Configure cooldown rules'
     },
     {
+      name: 'Reports',
+      href: '/reports',
+      feature: 'analytics',
+      icon: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+        </svg>
+      ),
+      description: 'Client report builder'
+    },
+    {
       name: 'Excel Export',
       href: '/export',
       feature: 'export',
@@ -70,6 +81,17 @@ export function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
         </svg>
       ),
       description: 'Download reports'
+    },
+    {
+      name: 'PR Coverage',
+      href: '/coverage',
+      feature: 'pr_coverage',
+      icon: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" />
+        </svg>
+      ),
+      description: 'Media coverage tracking'
     },
     {
       name: 'API Settings',

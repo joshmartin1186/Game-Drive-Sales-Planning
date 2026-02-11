@@ -179,7 +179,7 @@ export interface LaunchConflict {
 // User management types
 export type UserRole = 'superadmin' | 'editor' | 'viewer'
 export type AccessLevel = 'none' | 'view' | 'edit'
-export type FeatureKey = 'sales_timeline' | 'analytics' | 'client_management' | 'platform_settings' | 'excel_export' | 'api_settings'
+export type FeatureKey = 'sales_timeline' | 'analytics' | 'client_management' | 'platform_settings' | 'excel_export' | 'api_settings' | 'pr_coverage'
 
 export interface UserProfile {
   id: string
@@ -207,4 +207,101 @@ export interface UserClient {
   user_id: string
   client_id: string
   created_at: string
+}
+
+// ============================================
+// PR Coverage Module Types
+// ============================================
+
+export type OutletTier = 'A' | 'B' | 'C' | 'D'
+export type ScanFrequency = 'hourly' | 'every_6h' | 'daily' | 'weekly'
+export type CoverageType = 'news' | 'review' | 'preview' | 'interview' | 'trailer' | 'trailer_repost' | 'stream' | 'video' | 'guide' | 'roundup' | 'mention' | 'feature'
+export type CoverageSentiment = 'positive' | 'neutral' | 'negative' | 'mixed'
+export type ApprovalStatus = 'auto_approved' | 'pending_review' | 'rejected' | 'manually_approved'
+export type CoverageSourceType = 'rss' | 'tavily' | 'youtube' | 'twitch' | 'reddit' | 'twitter' | 'tiktok' | 'instagram' | 'manual'
+export type KeywordType = 'whitelist' | 'blacklist'
+
+export interface Outlet {
+  id: string
+  name: string
+  domain?: string | null
+  country?: string | null
+  monthly_unique_visitors?: number | null
+  tier?: OutletTier | null
+  metacritic_status: boolean
+  custom_tags: string[]
+  rss_feed_url?: string | null
+  scan_frequency: ScanFrequency
+  traffic_last_updated?: string | null
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface CoverageKeyword {
+  id: string
+  client_id: string
+  game_id: string
+  keyword: string
+  keyword_type: KeywordType
+  created_at: string
+}
+
+export interface CoverageCampaign {
+  id: string
+  client_id: string
+  game_id?: string | null
+  name: string
+  start_date?: string | null
+  end_date?: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface CoverageItem {
+  id: string
+  client_id: string
+  game_id?: string | null
+  outlet_id?: string | null
+  campaign_id?: string | null
+
+  // Article data
+  title: string
+  url: string
+  publish_date?: string | null
+  territory?: string | null
+  coverage_type?: CoverageType | null
+
+  // Metrics
+  monthly_unique_visitors?: number | null
+  review_score?: number | null
+  quotes?: string | null
+  sentiment?: CoverageSentiment | null
+
+  // AI scoring
+  relevance_score?: number | null
+  relevance_reasoning?: string | null
+
+  // Approval workflow
+  approval_status: ApprovalStatus
+  approved_at?: string | null
+  approved_by?: string | null
+
+  // Source tracking
+  source_type: CoverageSourceType
+  source_metadata?: Record<string, unknown>
+
+  // Campaign section
+  campaign_section?: string | null
+
+  // Timestamps
+  discovered_at: string
+  created_at: string
+  updated_at: string
+
+  // Joined relations
+  outlet?: Outlet
+  game?: Game
+  client?: Client
+  campaign?: CoverageCampaign
 }

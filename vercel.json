@@ -3,6 +3,22 @@
     {
       "path": "/api/cron/process-sync-jobs",
       "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/cron/rss-scan",
+      "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/tavily-scan",
+      "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/cron/traffic-refresh",
+      "schedule": "0 3 * * 0"
+    },
+    {
+      "path": "/api/cron/coverage-enrich",
+      "schedule": "30 * * * *"
     }
   ],
   "buildCommand": "next build"

@@ -32,6 +32,7 @@ const FEATURES: { key: FeatureKey; label: string; description: string }[] = [
   { key: 'platform_settings', label: 'Platform Settings', description: 'Configure platform rules' },
   { key: 'excel_export', label: 'Excel Export', description: 'Download reports' },
   { key: 'api_settings', label: 'API Settings', description: 'Steam API keys and sync' },
+  { key: 'pr_coverage', label: 'PR Coverage', description: 'Media outlet tracking and coverage' },
 ];
 
 function getDefaultAccessForRole(role: UserRole): string {
@@ -70,6 +71,7 @@ export default function PermissionsPage() {
     platform_settings: 'default',
     excel_export: 'default',
     api_settings: 'default',
+    pr_coverage: 'default',
   });
 
   useEffect(() => {
@@ -103,6 +105,7 @@ export default function PermissionsPage() {
       platform_settings: 'default',
       excel_export: 'default',
       api_settings: 'default',
+      pr_coverage: 'default',
     });
     setSaveError(null);
     setInviteLink(null);
@@ -127,6 +130,7 @@ export default function PermissionsPage() {
       platform_settings: 'default',
       excel_export: 'default',
       api_settings: 'default',
+      pr_coverage: 'default',
     };
     user.permissions.forEach((p) => {
       perms[p.feature] = p.access_level;
