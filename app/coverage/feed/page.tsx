@@ -28,6 +28,9 @@ interface CoverageItem {
   approval_status: string
   source_type: string
   campaign_section: string | null
+  duplicate_group_id: string | null
+  is_original: boolean
+  syndication_count: number
   discovered_at: string
   created_at: string
   outlet?: { id: string; name: string; domain: string | null; tier: string | null; monthly_unique_visitors: number | null } | null
@@ -120,6 +123,7 @@ export default function CoverageFeedPage() {
 
   // View mode
   const [viewMode, setViewMode] = useState<'all' | 'pending'>('all')
+  const [hideDuplicates, setHideDuplicates] = useState(false)
 
   // Selection
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -164,6 +168,7 @@ export default function CoverageFeedPage() {
     if (dateFrom) params.set('date_from', dateFrom)
     if (dateTo) params.set('date_to', dateTo)
     if (debouncedSearch) params.set('search', debouncedSearch)
+    if (hideDuplicates) params.set('hide_duplicates', 'true')
     params.set('sort_by', sortBy)
     params.set('sort_dir', sortDir)
     params.set('limit', '200')
@@ -179,7 +184,7 @@ export default function CoverageFeedPage() {
       console.error('Failed to fetch coverage items:', err)
     }
     setIsLoading(false)
-  }, [clientFilter, gameFilter, typeFilter, sentimentFilter, approvalFilter, sourceFilter, tierFilter, territoryFilter, campaignFilter, dateFrom, dateTo, debouncedSearch, sortBy, sortDir, viewMode])
+  }, [clientFilter, gameFilter, typeFilter, sentimentFilter, approvalFilter, sourceFilter, tierFilter, territoryFilter, campaignFilter, dateFrom, dateTo, debouncedSearch, sortBy, sortDir, viewMode, hideDuplicates])
 
   useEffect(() => {
     if (canView) fetchItems()
@@ -346,6 +351,17 @@ export default function CoverageFeedPage() {
               }}
             >
               Review Queue ({pendingCount})
+            </button>
+            <button
+              onClick={() => setHideDuplicates(!hideDuplicates)}
+              style={{
+                padding: '8px 16px', borderRadius: '8px', fontSize: '13px', fontWeight: 500, cursor: 'pointer',
+                backgroundColor: hideDuplicates ? '#7c3aed' : 'white',
+                color: hideDuplicates ? 'white' : '#475569',
+                border: hideDuplicates ? '1px solid #7c3aed' : '1px solid #e2e8f0'
+              }}
+            >
+              {hideDuplicates ? 'Showing Unique' : 'Collapse Duplicates'}
             </button>
             <div style={{ flex: 1 }} />
             <div style={{ display: 'flex', gap: '8px', fontSize: '13px' }}>
@@ -583,11 +599,23 @@ export default function CoverageFeedPage() {
                             >
                               {item.title}
                             </a>
-                            {item.game && (
-                              <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>
-                                {item.game.name}
-                              </div>
-                            )}
+                            <div style={{ display: 'flex', gap: '4px', marginTop: '2px', alignItems: 'center' }}>
+                              {item.game && (
+                                <span style={{ fontSize: '11px', color: '#94a3b8' }}>
+                                  {item.game.name}
+                                </span>
+                              )}
+                              {item.syndication_count > 1 && (
+                                <span style={{ fontSize: '10px', fontWeight: 600, padding: '1px 6px', borderRadius: '10px', background: '#ede9fe', color: '#7c3aed' }} title={`${item.syndication_count} syndicated versions`}>
+                                  {item.syndication_count} syndications
+                                </span>
+                              )}
+                              {item.is_original === false && (
+                                <span style={{ fontSize: '10px', fontWeight: 600, padding: '1px 6px', borderRadius: '10px', background: '#f3f4f6', color: '#6b7280' }}>
+                                  syndicated
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td style={{ padding: '8px 12px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: '#1e293b' }}>
                             {formatNumber(item.monthly_unique_visitors || item.outlet?.monthly_unique_visitors)}

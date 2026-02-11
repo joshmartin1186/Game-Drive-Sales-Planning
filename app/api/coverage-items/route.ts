@@ -56,6 +56,12 @@ export async function GET(request: NextRequest) {
     if (dateTo) query = query.lte('publish_date', dateTo)
     if (tier) query = query.not('outlet_id', 'is', null)
 
+    // Hide duplicates: only show originals (collapse syndications)
+    const hideDuplicates = searchParams.get('hide_duplicates') === 'true'
+    if (hideDuplicates) {
+      query = query.or('is_original.eq.true,duplicate_group_id.is.null')
+    }
+
     const { data, error, count } = await query
 
     if (error) {
@@ -72,7 +78,38 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    return NextResponse.json({ data: filtered, count: tier ? filtered.length : count })
+    // For each item with a duplicate_group_id, count syndications
+    const groupIds = new Set<string>()
+    for (const item of filtered) {
+      const i = item as Record<string, unknown>
+      if (i.duplicate_group_id) groupIds.add(String(i.duplicate_group_id))
+    }
+
+    let syndicationCounts: Record<string, number> = {}
+    if (groupIds.size > 0) {
+      const { data: countData } = await supabase
+        .from('coverage_items')
+        .select('duplicate_group_id')
+        .in('duplicate_group_id', Array.from(groupIds))
+
+      if (countData) {
+        for (const row of countData) {
+          const gid = String((row as Record<string, unknown>).duplicate_group_id)
+          syndicationCounts[gid] = (syndicationCounts[gid] || 0) + 1
+        }
+      }
+    }
+
+    // Attach syndication_count to each item
+    const enriched = filtered.map((item: Record<string, unknown>) => {
+      const gid = item.duplicate_group_id ? String(item.duplicate_group_id) : null
+      return {
+        ...item,
+        syndication_count: gid ? (syndicationCounts[gid] || 1) : 1,
+      }
+    })
+
+    return NextResponse.json({ data: enriched, count: tier ? filtered.length : count })
   } catch (err) {
     console.error('Coverage items GET error:', err)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
