@@ -86,6 +86,22 @@ export async function POST(request: NextRequest) {
 
     const hasConflicts = directConflicts.length > 0 || cooldownConflicts.length > 0
 
+    // Fetch historical max discount for this product+platform
+    let historicalMaxDiscount: number | null = null
+    const { data: discountData } = await supabase
+      .from('sales')
+      .select('discount_percentage')
+      .eq('product_id', productId)
+      .eq('platform_id', platformId)
+      .not('discount_percentage', 'is', null)
+      .neq('status', 'rejected')
+      .order('discount_percentage', { ascending: false })
+      .limit(1)
+
+    if (discountData && discountData.length > 0 && discountData[0].discount_percentage != null) {
+      historicalMaxDiscount = discountData[0].discount_percentage
+    }
+
     return NextResponse.json({
       valid: !hasConflicts,
       conflicts: {
@@ -94,7 +110,8 @@ export async function POST(request: NextRequest) {
       },
       cooldownEnd: cooldownEndDate,
       platform: platform.name,
-      cooldownDays: platform.cooldown_days
+      cooldownDays: platform.cooldown_days,
+      historicalMaxDiscount
     })
 
   } catch (error) {

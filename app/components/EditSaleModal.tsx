@@ -54,7 +54,8 @@ export default function EditSaleModal({
   const [saving, setSaving] = useState(false)
   const [validationError, setValidationError] = useState<string | null>(null)
   const [durationWarning, setDurationWarning] = useState<string | null>(null)
-  
+  const [discountWarning, setDiscountWarning] = useState<string | null>(null)
+
   const selectedPlatform = platforms.find(p => p.id === platformId)
   
   // Calculate cooldown end date
@@ -111,16 +112,49 @@ export default function EditSaleModal({
     }
   }, [selectedPlatform, duration])
   
+  // Check discount warnings (historical max + platform bounds)
+  useEffect(() => {
+    const warnings: string[] = []
+
+    // Historical max discount for this product+platform (exclude current sale)
+    if (productId && platformId) {
+      const historicalSales = existingSales.filter(s =>
+        s.product_id === productId &&
+        s.platform_id === platformId &&
+        s.id !== sale.id &&
+        s.discount_percentage != null
+      )
+      if (historicalSales.length > 0) {
+        const maxHistorical = Math.max(...historicalSales.map(s => s.discount_percentage || 0))
+        if (discountPercentage > maxHistorical) {
+          warnings.push(`Highest discount ever for this product/platform was ${maxHistorical}%`)
+        }
+      }
+    }
+
+    // Platform min/max discount bounds
+    if (selectedPlatform) {
+      if (selectedPlatform.min_discount_percent && discountPercentage < selectedPlatform.min_discount_percent) {
+        warnings.push(`Below ${selectedPlatform.name} minimum of ${selectedPlatform.min_discount_percent}%`)
+      }
+      if (selectedPlatform.max_discount_percent && discountPercentage > selectedPlatform.max_discount_percent) {
+        warnings.push(`Exceeds ${selectedPlatform.name} maximum of ${selectedPlatform.max_discount_percent}%`)
+      }
+    }
+
+    setDiscountWarning(warnings.length > 0 ? warnings.join(' · ') : null)
+  }, [productId, platformId, discountPercentage, existingSales, selectedPlatform, sale.id])
+
   // Validate on change
   useEffect(() => {
     if (!productId || !platformId || !startDate || !endDate) {
       setValidationError(null)
       return
     }
-    
+
     const platform = platforms.find(p => p.id === platformId)
     if (!platform) return
-    
+
     const validation = validateSale(
       {
         product_id: productId,
@@ -306,12 +340,15 @@ export default function EditSaleModal({
                 required
               />
               <span className={styles.hint}>5% - 95%</span>
+              {discountWarning && (
+                <span className={styles.hint} style={{ color: '#b45309', fontWeight: 600 }}>⚠️ {discountWarning}</span>
+              )}
             </div>
-            
+
             <div className={styles.field}>
               <label>Sale Name</label>
-              <input 
-                type="text" 
+              <input
+                type="text"
                 value={saleName}
                 onChange={e => setSaleName(e.target.value)}
                 placeholder="Custom Sale"
