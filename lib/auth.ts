@@ -136,5 +136,6 @@ export const ROUTE_FEATURE_MAP: Record<string, FeatureKey> = {
   '/coverage/feed': 'pr_coverage',
   '/coverage/dashboard': 'pr_coverage',
   '/coverage/report': 'pr_coverage',
+  '/coverage/timeline': 'pr_coverage',
   '/reports': 'analytics',
 }

@@ -256,6 +256,12 @@ export default function CoverageSettingsPage() {
             }}>
               Dashboard
             </Link>
+            <Link href="/coverage/timeline" style={{
+              padding: '10px 20px', fontSize: '14px', fontWeight: 500, cursor: 'pointer',
+              color: '#64748b', textDecoration: 'none', marginBottom: '-2px'
+            }}>
+              Timeline
+            </Link>
             <Link href="/coverage/report" style={{
               padding: '10px 20px', fontSize: '14px', fontWeight: 500, cursor: 'pointer',
               color: '#64748b', textDecoration: 'none', marginBottom: '-2px'
