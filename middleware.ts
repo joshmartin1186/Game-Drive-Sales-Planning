@@ -21,6 +21,11 @@ export async function middleware(req: NextRequest) {
     return res
   }
 
+  // Allow public feed pages and API through (no auth required)
+  if (pathname.startsWith('/feed/') || pathname.startsWith('/api/public-feed/')) {
+    return res
+  }
+
   // If no session and not on login page, redirect to login
   if (!session && pathname !== '/login') {
     const loginUrl = req.nextUrl.clone()
