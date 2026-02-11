@@ -149,9 +149,9 @@ CREATE TABLE coverage_campaigns (
 | YouTube | `streamers/youtube-scraper` | `/api/cron/youtube-scan` |
 | Twitch | `epctex/twitch-scraper` | `/api/cron/twitch-scan` |
 | Reddit | `trudax/reddit-scraper-lite` | `/api/cron/reddit-scan` |
-| Twitter/X | TBD (Issue #73) | — |
-| TikTok | TBD (Issue #72) | — |
-| Instagram | TBD (Issue #72) | — |
+| Twitter/X | `apidojo/tweet-scraper` | `/api/cron/twitter-scan` |
+| TikTok | `clockworks/tiktok-scraper` | `/api/cron/tiktok-scan` |
+| Instagram | `apify/instagram-scraper` | `/api/cron/instagram-scan` |
 
 All Apify actors use the same API key from `service_api_keys` table (`service_name = 'apify'`).
 
