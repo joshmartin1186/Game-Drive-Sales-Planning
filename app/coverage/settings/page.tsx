@@ -46,13 +46,20 @@ const SERVICE_FIELDS: Record<string, { fields: string[]; labels: Record<string, 
     labels: { api_key: 'API Key' },
     description: 'Google Gemini AI for relevance scoring, type classification & sentiment. Free tier available.',
     docsUrl: 'https://aistudio.google.com/apikey'
+  },
+  resend: {
+    fields: ['api_key'],
+    labels: { api_key: 'API Key' },
+    description: 'Email delivery for coverage digests. Free tier: 100 emails/day.',
+    docsUrl: 'https://resend.com'
   }
 }
 
 const SERVICE_ICONS: Record<string, string> = {
   tavily: '🔍',
   apify: '🤖',
-  gemini: '✨'
+  gemini: '✨',
+  resend: '📧'
 }
 
 const STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
