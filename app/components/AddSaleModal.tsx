@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { format, addDays, parseISO, differenceInDays } from 'date-fns'
 import { Sale, Platform, Product, Game, Client, SaleWithDetails } from '@/lib/types'
 import { validateSale } from '@/lib/validation'
+import SalePredictionPanel from './SalePredictionPanel'
 import styles from './AddSaleModal.module.css'
 
 interface AddSaleModalProps {
@@ -372,11 +373,24 @@ export default function AddSaleModal({
             </div>
           </div>
           
+          {/* AI Prediction Panel */}
+          {productId && platformId && selectedProduct && (
+            <SalePredictionPanel
+              productId={productId}
+              platformId={platformId}
+              clientId={selectedProduct.game?.client?.id || ''}
+              discountPercentage={discountPercentage}
+              durationDays={duration}
+              startDate={startDate}
+              goalType={goalType || undefined}
+            />
+          )}
+
           <div className={styles.row}>
             <div className={styles.field}>
               <label>Goal</label>
-              <select 
-                value={goalType} 
+              <select
+                value={goalType}
                 onChange={e => setGoalType(e.target.value as typeof goalType)}
               >
                 <option value="">Select goal...</option>
@@ -386,7 +400,7 @@ export default function AddSaleModal({
                 <option value="revenue">Revenue</option>
               </select>
             </div>
-            
+
             <div className={styles.field}>
               <label>Cooldown Until</label>
               <input 
