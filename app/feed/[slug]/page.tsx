@@ -32,18 +32,27 @@ function formatNumber(val: number): string {
   return val.toLocaleString()
 }
 
-const tierColors: Record<string, { bg: string; text: string }> = {
-  A: { bg: '#dcfce7', text: '#166534' },
-  B: { bg: '#dbeafe', text: '#1e40af' },
-  C: { bg: '#fef3c7', text: '#92400e' },
-  D: { bg: '#f3f4f6', text: '#374151' },
-  untiered: { bg: '#f3f4f6', text: '#6b7280' },
+function formatFullNumber(val: number | null | undefined): string {
+  if (val == null || val === 0) return '—'
+  return val.toLocaleString()
 }
 
-const typeIcons: Record<string, string> = {
-  review: '★', news: '📰', preview: '👀', interview: '🎤',
-  trailer: '🎬', stream: '🔴', video: '📺', guide: '📖',
-  'round-up': '📋', mention: '💬', feature: '📝', article: '📄',
+function formatDate(dateStr: string | null): string {
+  if (!dateStr) return '—'
+  try {
+    const d = new Date(dateStr + 'T00:00:00')
+    return d.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })
+  } catch {
+    return dateStr
+  }
+}
+
+const tierColors: Record<string, { bg: string; text: string; border: string }> = {
+  A: { bg: '#dcfce7', text: '#166534', border: '#bbf7d0' },
+  B: { bg: '#dbeafe', text: '#1e40af', border: '#bfdbfe' },
+  C: { bg: '#fef3c7', text: '#92400e', border: '#fde68a' },
+  D: { bg: '#f3f4f6', text: '#374151', border: '#e5e7eb' },
+  untiered: { bg: '#f9fafb', text: '#6b7280', border: '#e5e7eb' },
 }
 
 export default function PublicFeedPage() {
@@ -94,23 +103,27 @@ export default function PublicFeedPage() {
   // Password gate
   if (needsPassword) {
     return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f8fafc', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' }}>
-        <div style={{ background: '#fff', padding: '40px', borderRadius: '16px', boxShadow: '0 4px 24px rgba(0,0,0,0.08)', maxWidth: '400px', width: '100%', textAlign: 'center' }}>
-          <div style={{ fontSize: '48px', marginBottom: '16px' }}>🔒</div>
-          <h2 style={{ fontSize: '20px', fontWeight: 600, color: '#1e293b', marginBottom: '8px' }}>Password Required</h2>
-          <p style={{ fontSize: '14px', color: '#64748b', marginBottom: '24px' }}>Enter the password to view this coverage feed.</p>
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg, #f0f4ff 0%, #f8fafc 100%)', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' }}>
+        <div style={{ background: '#fff', padding: '48px', borderRadius: '20px', boxShadow: '0 8px 32px rgba(0,0,0,0.08)', maxWidth: '420px', width: '100%', textAlign: 'center' }}>
+          <div style={{ width: '64px', height: '64px', borderRadius: '16px', background: '#f0f4ff', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px', fontSize: '28px' }}>🔒</div>
+          <h2 style={{ fontSize: '22px', fontWeight: 700, color: '#1e293b', marginBottom: '8px' }}>Password Required</h2>
+          <p style={{ fontSize: '14px', color: '#64748b', marginBottom: '28px', lineHeight: 1.5 }}>Enter the password to view this coverage report.</p>
           <input
             type="password"
             value={password}
             onChange={e => setPassword(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && fetchFeed(password)}
             placeholder="Enter password..."
-            style={{ width: '100%', padding: '10px 16px', border: '1px solid #d1d5db', borderRadius: '8px', fontSize: '14px', marginBottom: '16px' }}
+            style={{ width: '100%', padding: '12px 16px', border: '2px solid #e2e8f0', borderRadius: '10px', fontSize: '14px', marginBottom: '16px', outline: 'none', transition: 'border-color 0.2s' }}
+            onFocus={e => e.target.style.borderColor = '#3b82f6'}
+            onBlur={e => e.target.style.borderColor = '#e2e8f0'}
           />
           <button
             onClick={() => fetchFeed(password)}
-            style={{ width: '100%', padding: '10px', background: '#3b82f6', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}
-          >View Feed</button>
+            style={{ width: '100%', padding: '12px', background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)', color: '#fff', border: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: 600, cursor: 'pointer', transition: 'transform 0.1s, box-shadow 0.2s', boxShadow: '0 2px 8px rgba(37,99,235,0.3)' }}
+            onMouseDown={e => (e.target as HTMLElement).style.transform = 'scale(0.98)'}
+            onMouseUp={e => (e.target as HTMLElement).style.transform = 'scale(1)'}
+          >View Coverage Report</button>
         </div>
       </div>
     )
@@ -118,10 +131,11 @@ export default function PublicFeedPage() {
 
   if (loading) {
     return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f8fafc', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' }}>
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f8fafc', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' }}>
         <div style={{ textAlign: 'center', color: '#64748b' }}>
-          <div style={{ fontSize: '32px', marginBottom: '12px' }}>⏳</div>
-          <div>Loading coverage feed...</div>
+          <div style={{ width: '48px', height: '48px', border: '3px solid #e2e8f0', borderTopColor: '#3b82f6', borderRadius: '50%', margin: '0 auto 16px', animation: 'spin 0.8s linear infinite' }} />
+          <div style={{ fontSize: '15px', fontWeight: 500 }}>Loading coverage report...</div>
+          <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
         </div>
       </div>
     )
@@ -129,11 +143,11 @@ export default function PublicFeedPage() {
 
   if (error) {
     return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f8fafc', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' }}>
-        <div style={{ textAlign: 'center', color: '#dc2626', maxWidth: '400px' }}>
-          <div style={{ fontSize: '48px', marginBottom: '12px' }}>😞</div>
-          <h2 style={{ fontSize: '20px', fontWeight: 600, marginBottom: '8px' }}>Feed Not Available</h2>
-          <p style={{ fontSize: '14px', color: '#64748b' }}>{error}</p>
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f8fafc', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' }}>
+        <div style={{ textAlign: 'center', maxWidth: '400px' }}>
+          <div style={{ width: '64px', height: '64px', borderRadius: '16px', background: '#fef2f2', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px', fontSize: '28px' }}>⚠️</div>
+          <h2 style={{ fontSize: '20px', fontWeight: 700, color: '#1e293b', marginBottom: '8px' }}>Feed Not Available</h2>
+          <p style={{ fontSize: '14px', color: '#64748b', lineHeight: 1.5 }}>{error}</p>
         </div>
       </div>
     )
@@ -141,7 +155,7 @@ export default function PublicFeedPage() {
 
   if (!feedData) return null
 
-  const { game, summary, items, campaign_sections, coverage_types } = feedData
+  const { game, client, summary, items, campaign_sections, coverage_types } = feedData
   const dateRange = summary.date_range
 
   // Filter items
@@ -157,141 +171,284 @@ export default function PublicFeedPage() {
     grouped[section].push(item)
   }
 
+  // Check if any items have review scores or quotes
+  const hasReviewScores = filteredItems.some(i => i.review_score != null)
+  const hasQuotes = filteredItems.some(i => i.quotes)
+
   return (
-    <div style={{ minHeight: '100vh', background: '#f8fafc', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' }}>
+    <div style={{ minHeight: '100vh', background: '#f1f5f9', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' }}>
       {/* Header */}
-      <div style={{ background: 'linear-gradient(135deg, #1e293b 0%, #334155 100%)', color: '#fff', padding: '48px 24px', textAlign: 'center' }}>
-        <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
-          <h1 style={{ fontSize: '32px', fontWeight: 700, marginBottom: '8px' }}>{game.name}</h1>
-          <p style={{ fontSize: '14px', color: '#94a3b8', marginBottom: '24px' }}>
-            Media Coverage Report{dateRange.from && dateRange.to ? ` — ${dateRange.from} to ${dateRange.to}` : ''}
+      <div style={{
+        background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #334155 100%)',
+        color: '#fff', padding: '52px 32px 48px', textAlign: 'center',
+        borderBottom: '4px solid #3b82f6'
+      }}>
+        <div style={{ maxWidth: '1100px', margin: '0 auto' }}>
+          {/* Client name */}
+          <div style={{
+            display: 'inline-block', padding: '4px 16px', borderRadius: '20px',
+            background: 'rgba(59, 130, 246, 0.2)', border: '1px solid rgba(59, 130, 246, 0.3)',
+            fontSize: '13px', fontWeight: 600, color: '#93c5fd', letterSpacing: '0.5px',
+            textTransform: 'uppercase', marginBottom: '16px'
+          }}>
+            {client.name}
+          </div>
+
+          {/* Game name */}
+          <h1 style={{
+            fontSize: '36px', fontWeight: 800, marginBottom: '8px',
+            color: '#ffffff', letterSpacing: '-0.5px',
+            textShadow: '0 2px 4px rgba(0,0,0,0.2)'
+          }}>
+            {game.name}
+          </h1>
+
+          {/* Subtitle */}
+          <p style={{ fontSize: '15px', color: '#cbd5e1', marginBottom: '32px', fontWeight: 400 }}>
+            Media Coverage Report{dateRange.from && dateRange.to ? ` \u2014 ${formatDate(dateRange.from)} to ${formatDate(dateRange.to)}` : ''}
           </p>
 
           {/* Summary stats */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', maxWidth: '800px', margin: '0 auto' }}>
+          <div style={{
+            display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px',
+            maxWidth: '860px', margin: '0 auto'
+          }}>
             {[
-              { label: 'Total Pieces', value: formatNumber(summary.total_pieces) },
-              { label: 'Audience Reach', value: formatNumber(summary.total_audience_reach) },
-              { label: 'Est. Views', value: formatNumber(summary.estimated_views) },
-              { label: 'Avg Review Score', value: summary.avg_review_score?.toString() ?? 'N/A' },
+              { label: 'Total Pieces', value: summary.total_pieces.toLocaleString(), icon: '📊' },
+              { label: 'Audience Reach', value: formatNumber(summary.total_audience_reach), icon: '👥' },
+              { label: 'Est. Views', value: formatNumber(summary.estimated_views), icon: '👁️' },
+              { label: 'Avg Review Score', value: summary.avg_review_score ? `${summary.avg_review_score.toFixed(1)}/10` : 'N/A', icon: '⭐' },
             ].map(stat => (
-              <div key={stat.label} style={{ background: 'rgba(255,255,255,0.1)', borderRadius: '12px', padding: '16px' }}>
-                <div style={{ fontSize: '28px', fontWeight: 700 }}>{stat.value}</div>
-                <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '4px' }}>{stat.label}</div>
+              <div key={stat.label} style={{
+                background: 'rgba(255,255,255,0.08)', borderRadius: '14px', padding: '20px 16px',
+                backdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.1)',
+                transition: 'background 0.2s'
+              }}>
+                <div style={{ fontSize: '13px', marginBottom: '8px' }}>{stat.icon}</div>
+                <div style={{ fontSize: '28px', fontWeight: 800, color: '#fff', letterSpacing: '-0.5px' }}>{stat.value}</div>
+                <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '4px', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 500 }}>{stat.label}</div>
               </div>
             ))}
           </div>
         </div>
       </div>
 
-      {/* Filters */}
-      <div style={{ maxWidth: '1000px', margin: '0 auto', padding: '24px' }}>
-        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginBottom: '24px' }}>
+      {/* Content */}
+      <div style={{ maxWidth: '1100px', margin: '0 auto', padding: '28px 24px' }}>
+        {/* Filters bar */}
+        <div style={{
+          display: 'flex', gap: '12px', flexWrap: 'wrap', marginBottom: '24px',
+          alignItems: 'center', padding: '14px 20px',
+          background: '#fff', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+          border: '1px solid #e2e8f0'
+        }}>
+          <span style={{ fontSize: '13px', fontWeight: 600, color: '#475569', marginRight: '4px' }}>Filter:</span>
           <select
             value={filterType}
             onChange={e => setFilterType(e.target.value)}
-            style={{ padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: '8px', fontSize: '14px', background: '#fff' }}
+            style={{
+              padding: '7px 12px', border: '1px solid #e2e8f0', borderRadius: '8px',
+              fontSize: '13px', background: '#f8fafc', color: '#334155', cursor: 'pointer',
+              fontWeight: 500, outline: 'none'
+            }}
           >
             <option value="">All Types</option>
-            {coverage_types.map(t => <option key={t} value={t}>{t}</option>)}
+            {coverage_types.map(t => (
+              <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>
+            ))}
           </select>
           {campaign_sections.length > 0 && (
             <select
               value={filterSection}
               onChange={e => setFilterSection(e.target.value)}
-              style={{ padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: '8px', fontSize: '14px', background: '#fff' }}
+              style={{
+                padding: '7px 12px', border: '1px solid #e2e8f0', borderRadius: '8px',
+                fontSize: '13px', background: '#f8fafc', color: '#334155', cursor: 'pointer',
+                fontWeight: 500, outline: 'none'
+              }}
             >
               <option value="">All Sections</option>
               {campaign_sections.map(s => <option key={s} value={s}>{s}</option>)}
             </select>
           )}
-          <div style={{ marginLeft: 'auto', fontSize: '13px', color: '#64748b', alignSelf: 'center' }}>
-            Showing {filteredItems.length} of {items.length} pieces
+          <div style={{ marginLeft: 'auto', fontSize: '13px', color: '#64748b', fontWeight: 500 }}>
+            Showing <strong style={{ color: '#1e293b' }}>{filteredItems.length}</strong> of {items.length} pieces
           </div>
         </div>
 
-        {/* Coverage items grouped by section */}
+        {/* Coverage items grouped by section — TABLE layout */}
         {Object.entries(grouped).map(([section, sectionItems]) => (
           <div key={section} style={{ marginBottom: '32px' }}>
-            <h2 style={{ fontSize: '18px', fontWeight: 600, color: '#1e293b', marginBottom: '16px', paddingBottom: '8px', borderBottom: '2px solid #e2e8f0' }}>
-              {section}
-              <span style={{ fontSize: '13px', fontWeight: 400, color: '#64748b', marginLeft: '8px' }}>({sectionItems.length})</span>
-            </h2>
+            {/* Section header */}
+            <div style={{
+              background: 'linear-gradient(135deg, #1e293b 0%, #334155 100%)',
+              padding: '14px 20px', borderRadius: '12px 12px 0 0',
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+            }}>
+              <span style={{ fontWeight: 700, fontSize: '15px', color: '#fff', letterSpacing: '-0.2px' }}>
+                {section}
+              </span>
+              <span style={{ fontSize: '12px', fontWeight: 500, color: '#94a3b8' }}>
+                {sectionItems.length} {sectionItems.length === 1 ? 'piece' : 'pieces'}
+              </span>
+            </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              {sectionItems.map(item => {
-                const outlet = item.outlet as unknown as OutletData | null
-                const tier = outlet?.tier || 'untiered'
-                const tc = tierColors[tier] || tierColors.untiered
+            {/* Table */}
+            <div style={{
+              background: '#fff', borderRadius: '0 0 12px 12px',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.06)', overflow: 'hidden',
+              border: '1px solid #e2e8f0', borderTop: 'none'
+            }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                <thead>
+                  <tr style={{ borderBottom: '2px solid #e2e8f0' }}>
+                    <th style={{ textAlign: 'left', padding: '10px 14px', fontWeight: 600, color: '#64748b', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', background: '#f8fafc', width: '90px' }}>Date</th>
+                    <th style={{ textAlign: 'left', padding: '10px 14px', fontWeight: 600, color: '#64748b', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', background: '#f8fafc', width: '90px' }}>Territory</th>
+                    <th style={{ textAlign: 'left', padding: '10px 14px', fontWeight: 600, color: '#64748b', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', background: '#f8fafc', width: '160px' }}>Media Outlet</th>
+                    <th style={{ textAlign: 'center', padding: '10px 14px', fontWeight: 600, color: '#64748b', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', background: '#f8fafc', width: '50px' }}>Tier</th>
+                    <th style={{ textAlign: 'left', padding: '10px 14px', fontWeight: 600, color: '#64748b', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', background: '#f8fafc', width: '80px' }}>Type</th>
+                    <th style={{ textAlign: 'left', padding: '10px 14px', fontWeight: 600, color: '#64748b', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', background: '#f8fafc' }}>Title</th>
+                    <th style={{ textAlign: 'right', padding: '10px 14px', fontWeight: 600, color: '#64748b', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', background: '#f8fafc', width: '120px' }}>Monthly Visitors</th>
+                    {hasReviewScores && (
+                      <th style={{ textAlign: 'center', padding: '10px 14px', fontWeight: 600, color: '#64748b', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', background: '#f8fafc', width: '70px' }}>Score</th>
+                    )}
+                    {hasQuotes && (
+                      <th style={{ textAlign: 'left', padding: '10px 14px', fontWeight: 600, color: '#64748b', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', background: '#f8fafc', width: '180px' }}>Notes</th>
+                    )}
+                  </tr>
+                </thead>
+                <tbody>
+                  {sectionItems.map((item, i) => {
+                    const outlet = item.outlet as unknown as OutletData | null
+                    const tier = outlet?.tier || 'untiered'
+                    const tc = tierColors[tier] || tierColors.untiered
+                    const visitors = outlet?.monthly_unique_visitors || item.monthly_unique_visitors
 
-                return (
-                  <div key={item.id} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '16px', display: 'flex', gap: '16px', alignItems: 'flex-start' }}>
-                    {/* Type icon */}
-                    <div style={{ fontSize: '24px', minWidth: '36px', textAlign: 'center', paddingTop: '2px' }}>
-                      {typeIcons[item.coverage_type] || '📄'}
-                    </div>
+                    return (
+                      <tr key={item.id} style={{
+                        borderBottom: i < sectionItems.length - 1 ? '1px solid #f1f5f9' : 'none',
+                        background: i % 2 === 0 ? '#ffffff' : '#fafbfc',
+                        transition: 'background 0.15s'
+                      }}
+                        onMouseEnter={e => (e.currentTarget.style.background = '#f0f7ff')}
+                        onMouseLeave={e => (e.currentTarget.style.background = i % 2 === 0 ? '#ffffff' : '#fafbfc')}
+                      >
+                        {/* Date */}
+                        <td style={{ padding: '10px 14px', color: '#64748b', fontSize: '12px', whiteSpace: 'nowrap' }}>
+                          {formatDate(item.publish_date)}
+                        </td>
 
-                    {/* Content */}
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px', flexWrap: 'wrap' }}>
-                        {/* Outlet name */}
-                        <span style={{ fontWeight: 600, color: '#1e293b', fontSize: '14px' }}>
-                          {outlet?.name || 'Unknown Outlet'}
-                        </span>
-                        {/* Tier badge */}
-                        <span style={{ background: tc.bg, color: tc.text, padding: '1px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 600 }}>
-                          Tier {tier}
-                        </span>
-                        {/* Type badge */}
-                        <span style={{ background: '#f1f5f9', color: '#475569', padding: '1px 8px', borderRadius: '12px', fontSize: '11px' }}>
-                          {item.coverage_type}
-                        </span>
                         {/* Territory */}
-                        {item.territory && (
-                          <span style={{ fontSize: '11px', color: '#64748b' }}>{item.territory}</span>
-                        )}
-                      </div>
+                        <td style={{ padding: '10px 14px', color: '#475569', fontSize: '12px' }}>
+                          {item.territory || outlet?.country || '—'}
+                        </td>
 
-                      {/* Title */}
-                      {item.url ? (
-                        <a href={item.url} target="_blank" rel="noopener noreferrer" style={{ color: '#3b82f6', textDecoration: 'none', fontSize: '14px', lineHeight: '1.4' }}>
-                          {item.title || item.url}
-                        </a>
-                      ) : (
-                        <span style={{ color: '#334155', fontSize: '14px' }}>{item.title || 'Untitled'}</span>
-                      )}
+                        {/* Media Outlet */}
+                        <td style={{ padding: '10px 14px', fontWeight: 600, color: '#1e293b', fontSize: '13px' }}>
+                          {outlet?.name || '—'}
+                        </td>
 
-                      {/* Meta row */}
-                      <div style={{ display: 'flex', gap: '16px', marginTop: '8px', fontSize: '12px', color: '#64748b' }}>
-                        {item.publish_date && <span>{item.publish_date}</span>}
-                        {outlet?.monthly_unique_visitors && (
-                          <span>{formatNumber(outlet.monthly_unique_visitors)} monthly visitors</span>
-                        )}
-                        {item.review_score != null && (
-                          <span style={{ fontWeight: 600, color: Number(item.review_score) >= 7 ? '#166534' : Number(item.review_score) >= 5 ? '#92400e' : '#dc2626' }}>
-                            Score: {item.review_score}/10
+                        {/* Tier */}
+                        <td style={{ padding: '10px 14px', textAlign: 'center' }}>
+                          {tier !== 'untiered' ? (
+                            <span style={{
+                              display: 'inline-block', padding: '2px 10px', borderRadius: '10px',
+                              fontSize: '11px', fontWeight: 700,
+                              background: tc.bg, color: tc.text, border: `1px solid ${tc.border}`
+                            }}>{tier}</span>
+                          ) : (
+                            <span style={{ color: '#94a3b8', fontSize: '12px' }}>—</span>
+                          )}
+                        </td>
+
+                        {/* Type */}
+                        <td style={{ padding: '10px 14px', fontSize: '12px' }}>
+                          <span style={{
+                            display: 'inline-block', padding: '2px 8px', borderRadius: '6px',
+                            background: '#f1f5f9', color: '#475569', fontSize: '11px', fontWeight: 500,
+                            textTransform: 'capitalize'
+                          }}>
+                            {item.coverage_type || '—'}
                           </span>
+                        </td>
+
+                        {/* Title */}
+                        <td style={{ padding: '10px 14px', maxWidth: '300px' }}>
+                          {item.url ? (
+                            <a href={item.url} target="_blank" rel="noopener noreferrer" style={{
+                              color: '#2563eb', textDecoration: 'none', fontSize: '13px',
+                              lineHeight: 1.4, fontWeight: 500,
+                              display: 'block', overflow: 'hidden', textOverflow: 'ellipsis'
+                            }}
+                              onMouseEnter={e => (e.target as HTMLElement).style.textDecoration = 'underline'}
+                              onMouseLeave={e => (e.target as HTMLElement).style.textDecoration = 'none'}
+                            >
+                              {item.title || item.url}
+                            </a>
+                          ) : (
+                            <span style={{ color: '#334155', fontSize: '13px' }}>{item.title || 'Untitled'}</span>
+                          )}
+                        </td>
+
+                        {/* Monthly Visitors */}
+                        <td style={{
+                          padding: '10px 14px', textAlign: 'right', fontVariantNumeric: 'tabular-nums',
+                          color: '#334155', fontSize: '12px', fontWeight: 500
+                        }}>
+                          {formatFullNumber(visitors)}
+                        </td>
+
+                        {/* Review Score */}
+                        {hasReviewScores && (
+                          <td style={{ padding: '10px 14px', textAlign: 'center' }}>
+                            {item.review_score != null ? (
+                              <span style={{
+                                fontWeight: 700, fontSize: '13px',
+                                color: Number(item.review_score) >= 8 ? '#166534' : Number(item.review_score) >= 6 ? '#1e40af' : Number(item.review_score) >= 5 ? '#92400e' : '#dc2626'
+                              }}>
+                                {item.review_score}
+                              </span>
+                            ) : (
+                              <span style={{ color: '#d1d5db' }}>—</span>
+                            )}
+                          </td>
                         )}
-                      </div>
-                    </div>
-                  </div>
-                )
-              })}
+
+                        {/* Quotes/Notes */}
+                        {hasQuotes && (
+                          <td style={{ padding: '10px 14px', fontSize: '12px', color: '#64748b', maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {item.quotes || ''}
+                          </td>
+                        )}
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
             </div>
           </div>
         ))}
 
         {filteredItems.length === 0 && (
-          <div style={{ textAlign: 'center', padding: '48px', color: '#64748b' }}>
+          <div style={{
+            textAlign: 'center', padding: '64px 24px', color: '#64748b',
+            background: '#fff', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)'
+          }}>
             <div style={{ fontSize: '32px', marginBottom: '12px' }}>📭</div>
-            <div>No coverage items match the selected filters.</div>
+            <div style={{ fontSize: '15px', fontWeight: 500 }}>No coverage items match the selected filters.</div>
           </div>
         )}
       </div>
 
       {/* Footer */}
-      <div style={{ textAlign: 'center', padding: '24px', borderTop: '1px solid #e2e8f0', color: '#94a3b8', fontSize: '12px' }}>
-        Powered by GameDrive
+      <div style={{
+        textAlign: 'center', padding: '28px 24px',
+        borderTop: '1px solid #e2e8f0', color: '#94a3b8', fontSize: '12px',
+        background: '#fff'
+      }}>
+        <span style={{ fontWeight: 600, color: '#64748b' }}>GameDrive</span>
+        <span style={{ margin: '0 8px', color: '#d1d5db' }}>|</span>
+        Coverage Tracking & Media Intelligence
       </div>
     </div>
   )
