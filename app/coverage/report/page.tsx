@@ -69,7 +69,7 @@ export default function CoverageReportPage() {
 
   // Filter state
   const [clients, setClients] = useState<{ id: string; name: string }[]>([])
-  const [games, setGames] = useState<{ id: string; name: string; client_id: string }[]>([])
+  const [games, setGames] = useState<{ id: string; name: string; client_id: string; slug: string | null; public_feed_enabled: boolean | null; public_feed_password: string | null }[]>([])
   const [selectedClient, setSelectedClient] = useState('')
   const [selectedGame, setSelectedGame] = useState('')
   const [dateFrom, setDateFrom] = useState('')
@@ -87,6 +87,11 @@ export default function CoverageReportPage() {
   // Export state
   const [exporting, setExporting] = useState(false)
 
+  // Live feed link state
+  const [feedLinkLoading, setFeedLinkLoading] = useState(false)
+  const [feedLink, setFeedLink] = useState<string | null>(null)
+  const [feedLinkCopied, setFeedLinkCopied] = useState(false)
+
   // PDF ref
   const reportRef = useRef<HTMLDivElement>(null)
 
@@ -95,7 +100,7 @@ export default function CoverageReportPage() {
     if (!canView) return
     const fetchLists = async () => {
       const { data: c } = await supabase.from('clients').select('id, name').order('name')
-      const { data: g } = await supabase.from('games').select('id, name, client_id').order('name')
+      const { data: g } = await supabase.from('games').select('id, name, client_id, slug, public_feed_enabled, public_feed_password').order('name')
       if (c) setClients(c)
       if (g) setGames(g)
     }
@@ -404,6 +409,83 @@ export default function CoverageReportPage() {
     setTimeout(() => { printWindow.print() }, 500)
   }
 
+  // Generate live feed link
+  const handleGenerateFeedLink = async () => {
+    if (!selectedGame) return
+    setFeedLinkLoading(true)
+    setFeedLink(null)
+    setFeedLinkCopied(false)
+
+    try {
+      const game = games.find(g => g.id === selectedGame)
+      if (!game) throw new Error('Game not found')
+
+      let slug = game.slug
+
+      // Auto-generate slug if not set
+      if (!slug) {
+        slug = game.name
+          .toLowerCase()
+          .replace(/[^a-z0-9\s-]/g, '')
+          .replace(/\s+/g, '-')
+          .replace(/-+/g, '-')
+          .replace(/^-|-$/g, '')
+        if (!slug) slug = game.id.slice(0, 8)
+      }
+
+      // Enable public feed if not already
+      if (!game.public_feed_enabled || game.slug !== slug) {
+        const { error } = await supabase
+          .from('games')
+          .update({
+            slug,
+            public_feed_enabled: true,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', game.id)
+
+        if (error) throw error
+
+        // Update local state
+        setGames(prev => prev.map(g =>
+          g.id === game.id ? { ...g, slug, public_feed_enabled: true } : g
+        ))
+      }
+
+      // Build the feed URL with date params if set
+      const baseUrl = `${window.location.origin}/feed/${slug}`
+      const params = new URLSearchParams()
+      if (dateFrom) params.set('date_from', dateFrom)
+      if (dateTo) params.set('date_to', dateTo)
+      const fullUrl = params.toString() ? `${baseUrl}?${params}` : baseUrl
+
+      setFeedLink(fullUrl)
+    } catch (err) {
+      console.error('Failed to generate feed link:', err)
+      alert('Failed to generate feed link. Please try again.')
+    }
+    setFeedLinkLoading(false)
+  }
+
+  const handleCopyFeedLink = async () => {
+    if (!feedLink) return
+    try {
+      await navigator.clipboard.writeText(feedLink)
+      setFeedLinkCopied(true)
+      setTimeout(() => setFeedLinkCopied(false), 2000)
+    } catch {
+      // Fallback for clipboard API failure
+      const input = document.createElement('input')
+      input.value = feedLink
+      document.body.appendChild(input)
+      input.select()
+      document.execCommand('copy')
+      document.body.removeChild(input)
+      setFeedLinkCopied(true)
+      setTimeout(() => setFeedLinkCopied(false), 2000)
+    }
+  }
+
   const filteredGames = selectedClient
     ? games.filter(g => g.client_id === selectedClient)
     : games
@@ -614,10 +696,90 @@ export default function CoverageReportPage() {
                 >
                   Export PDF
                 </button>
+
+                <div style={{ borderLeft: '1px solid #e2e8f0', height: '36px', alignSelf: 'center' }} />
+
+                <button
+                  onClick={handleGenerateFeedLink}
+                  disabled={!selectedGame || items.length === 0 || feedLinkLoading}
+                  title={!selectedGame ? 'Select a specific game to generate a live feed link' : ''}
+                  style={{
+                    padding: '10px 20px',
+                    backgroundColor: !selectedGame || items.length === 0 ? '#94a3b8' : feedLinkLoading ? '#7c3aed' : '#7c3aed',
+                    color: 'white', border: 'none', borderRadius: '8px',
+                    fontSize: '14px', fontWeight: 500,
+                    cursor: !selectedGame || items.length === 0 ? 'not-allowed' : 'pointer',
+                    opacity: !selectedGame || items.length === 0 ? 0.5 : 1,
+                    display: 'flex', alignItems: 'center', gap: '6px'
+                  }}
+                >
+                  {feedLinkLoading ? 'Generating...' : '🔗 Live Feed Link'}
+                </button>
+
                 <span style={{ fontSize: '13px', color: '#64748b', alignSelf: 'center' }}>
                   {items.length} coverage items
                 </span>
               </div>
+
+              {/* Live Feed Link Panel */}
+              {feedLink && (
+                <div style={{
+                  backgroundColor: '#f5f3ff', border: '1px solid #c4b5fd', borderRadius: '10px',
+                  padding: '16px 20px', marginBottom: '20px',
+                  display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap'
+                }}>
+                  <div style={{ flex: 1, minWidth: '200px' }}>
+                    <div style={{ fontSize: '12px', fontWeight: 600, color: '#6d28d9', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                      Live Feed Link
+                    </div>
+                    <div style={{
+                      display: 'flex', alignItems: 'center', gap: '8px',
+                      backgroundColor: 'white', border: '1px solid #ddd6fe', borderRadius: '6px',
+                      padding: '8px 12px', fontSize: '13px', color: '#1e293b',
+                      fontFamily: 'monospace', wordBreak: 'break-all'
+                    }}>
+                      <span style={{ flex: 1 }}>{feedLink}</span>
+                      <button
+                        onClick={handleCopyFeedLink}
+                        style={{
+                          padding: '4px 12px', backgroundColor: feedLinkCopied ? '#16a34a' : '#7c3aed',
+                          color: 'white', border: 'none', borderRadius: '4px',
+                          fontSize: '12px', fontWeight: 500, cursor: 'pointer',
+                          whiteSpace: 'nowrap', transition: 'background-color 0.2s'
+                        }}
+                      >
+                        {feedLinkCopied ? '✓ Copied!' : 'Copy'}
+                      </button>
+                    </div>
+                    <p style={{ fontSize: '11px', color: '#7c3aed', marginTop: '6px' }}>
+                      Share this link with your client. It shows only approved coverage items and updates automatically as new coverage is discovered.
+                    </p>
+                  </div>
+                  <a
+                    href={feedLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      padding: '8px 16px', backgroundColor: 'white', color: '#7c3aed',
+                      border: '1px solid #c4b5fd', borderRadius: '6px',
+                      fontSize: '13px', fontWeight: 500, textDecoration: 'none',
+                      whiteSpace: 'nowrap'
+                    }}
+                  >
+                    Open Preview ↗
+                  </a>
+                  <button
+                    onClick={() => { setFeedLink(null); setFeedLinkCopied(false) }}
+                    style={{
+                      padding: '4px 8px', backgroundColor: 'transparent', color: '#a78bfa',
+                      border: 'none', cursor: 'pointer', fontSize: '18px', lineHeight: 1
+                    }}
+                    title="Dismiss"
+                  >
+                    ×
+                  </button>
+                </div>
+              )}
 
               {/* Summary Stats */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '20px' }}>

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useSearchParams } from 'next/navigation'
 
 interface OutletData { name: string; domain: string; tier: string; monthly_unique_visitors: number; country: string }
 interface CampaignData { name: string }
@@ -48,6 +48,7 @@ const typeIcons: Record<string, string> = {
 
 export default function PublicFeedPage() {
   const params = useParams()
+  const searchParams = useSearchParams()
   const slug = params.slug as string
 
   const [feedData, setFeedData] = useState<FeedData | null>(null)
@@ -62,9 +63,14 @@ export default function PublicFeedPage() {
     setLoading(true)
     setError(null)
     try {
-      const params = new URLSearchParams()
-      if (pw) params.set('password', pw)
-      const res = await fetch(`/api/public-feed/${slug}?${params}`)
+      const qp = new URLSearchParams()
+      if (pw) qp.set('password', pw)
+      // Forward date filters from URL query params
+      const dateFrom = searchParams.get('date_from')
+      const dateTo = searchParams.get('date_to')
+      if (dateFrom) qp.set('date_from', dateFrom)
+      if (dateTo) qp.set('date_to', dateTo)
+      const res = await fetch(`/api/public-feed/${slug}?${qp}`)
       const data = await res.json()
 
       if (res.status === 401 && data.needs_password) {
@@ -81,7 +87,7 @@ export default function PublicFeedPage() {
     } finally {
       setLoading(false)
     }
-  }, [slug])
+  }, [slug, searchParams])
 
   useEffect(() => { fetchFeed() }, [fetchFeed])
 
