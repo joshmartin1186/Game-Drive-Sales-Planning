@@ -3,6 +3,9 @@ import { getServerSupabase } from '@/lib/supabase'
 import { GoogleGenAI } from '@google/genai'
 import { sendDiscordNotification } from '@/lib/discord'
 
+export const dynamic = 'force-dynamic'
+export const maxDuration = 60
+
 function getSupabase() {
   return getServerSupabase()
 }
@@ -42,7 +45,8 @@ export async function GET(request: NextRequest) {
 
     const ai = new GoogleGenAI({ apiKey: geminiKey.api_key })
 
-    // Fetch unscored items (max 30 per cron run to stay within limits)
+    // Fetch unscored items (max 10 per cron run — Gemini free tier = 15 RPM,
+    // with 4.5s delay between calls, 10 items ≈ 45s, leaving headroom for the 60s function timeout)
     const { data: items, error } = await supabase
       .from('coverage_items')
       .select(`
@@ -53,7 +57,7 @@ export async function GET(request: NextRequest) {
       `)
       .is('relevance_score', null)
       .order('discovered_at', { ascending: false })
-      .limit(30)
+      .limit(10)
 
     if (error) throw error
     if (!items || items.length === 0) {
@@ -98,7 +102,14 @@ export async function GET(request: NextRequest) {
     let errors = 0
     const errorDetails: string[] = []
 
-    for (const item of items) {
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i]
+
+      // Rate limit: wait 4.5s between Gemini calls (free tier = 15 RPM)
+      if (i > 0) {
+        await new Promise(resolve => setTimeout(resolve, 4500))
+      }
+
       try {
         const pair = `${item.client_id}|${item.game_id || ''}`
         const keywords = keywordMap[pair] || []
