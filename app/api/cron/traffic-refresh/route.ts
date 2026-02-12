@@ -16,33 +16,26 @@ function suggestTier(monthlyVisitors: number | null): string | null {
 }
 
 function parseTrafficFromHtml(html: string): number | null {
+  // Hypestat HTML structure: <dt>Monthly Visits:</dt><dd>8,472,032</dd>
+  // Primary pattern: target the exact <dt>/<dd> structure Hypestat uses
   const patterns = [
+    // Exact Hypestat structure: <dt...>Monthly Visits:</dt><dd>NUMBER</dd>
+    /Monthly Visits:<\/dt><dd>([\d,]+)<\/dd>/i,
+    // Daily Unique Visitors as fallback (multiply by 30)
+    /Daily Unique Visitors:<\/dt><dd>([\d,]+)<\/dd>/i,
+    // Generic patterns for other traffic sites
     /Monthly\s+Visits?\s*[:\-]\s*([\d,]+)/i,
     /monthly\s+unique\s+visitors?\s*[:\-]\s*([\d,]+)/i,
-    /Estimated\s+Monthly\s+Visits?\s*[:\-]\s*([\d,]+)/i,
-    /<td[^>]*>Monthly\s+Visits?<\/td>\s*<td[^>]*>([\d,]+)/i,
-    /data-monthly-visits="([\d,]+)"/i,
-    /visitors?\s+per\s+month\s*[:\-]\s*([\d,]+)/i,
-    /monthly_visits['":\s]+([\d,]+)/i,
-    /([\d,]{4,})\s+monthly\s+visits?/i,
-    /([\d,]{4,})\s+unique\s+visitors?\s+per\s+month/i,
   ]
 
-  for (const pattern of patterns) {
-    const match = html.match(pattern)
+  for (let i = 0; i < patterns.length; i++) {
+    const match = html.match(patterns[i])
     if (match) {
       const num = parseInt(match[1].replace(/,/g, ''))
-      if (!isNaN(num) && num > 0) return num
-    }
-  }
-
-  const visitSection = html.match(/visit[^<]{0,200}/gi)
-  if (visitSection) {
-    for (const section of visitSection) {
-      const numMatch = section.match(/([\d,]{4,})/)
-      if (numMatch) {
-        const num = parseInt(numMatch[1].replace(/,/g, ''))
-        if (!isNaN(num) && num > 100) return num
+      if (!isNaN(num) && num > 0) {
+        // If this was the Daily Unique Visitors pattern, multiply by 30
+        if (i === 1) return num * 30
+        return num
       }
     }
   }
