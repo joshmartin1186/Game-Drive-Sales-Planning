@@ -43,7 +43,11 @@
 
 ## Current Status: February 12, 2026
 
-### 🎉 Latest Session Summary - PR COVERAGE OUTLET & RSS FEED SEEDING
+### 🎉 Latest Session Summary - PR COVERAGE PIPELINE HARDENING + CLIENT FEED
+**Focus:** Fixed coverage enrichment pipeline bugs, hardened Hypestat traffic scraping, added auto-outlet creation to RSS scanner, switched Gemini model, and built the client-facing Live Feed Link system with a polished public feed page redesign.
+**Result:** AI enrichment pipeline fully operational with Gemini 2.5 Flash Lite, all 166 outlets now have live Hypestat traffic data, public feed page redesigned with professional table layout matching client spreadsheets, and a "Live Feed Link" button added to the Export tab for one-click client sharing.
+
+### Previous Session: February 12, 2026 (Earlier)
 **Focus:** Populated the PR Coverage system with 160 media outlets extracted from 3 real coverage reports (Over the Hill, Sprint City, Escape Simulator 2), researched RSS feeds for all outlets, and configured automated daily scanning.
 **Result:** 160 outlets added to database, 65 active RSS feed sources created, 20 tracking keywords configured across 5 clients. Hourly cron already running via Vercel to scan feeds and match against game keywords.
 
@@ -93,10 +97,84 @@
 | **PR Coverage: Outlet Seeding** | ✅ **Complete** | **100%** |
 | **PR Coverage: RSS Feed Tracking** | ✅ **Complete** | **100%** |
 | **PR Coverage: Keyword Configuration** | ✅ **Complete** | **100%** |
+| **PR Coverage: AI Enrichment Pipeline** | ✅ **Complete** | **100%** |
+| **PR Coverage: Hypestat Traffic Pipeline** | ✅ **Complete** | **100%** |
+| **PR Coverage: Auto-Outlet Creation** | ✅ **Complete** | **100%** |
+| **PR Coverage: Live Feed Link + Public Feed** | ✅ **Complete** | **100%** |
 
 ---
 
-## February 12, 2026 - PR Coverage Outlet & RSS Feed Seeding
+## February 12, 2026 (Session 2) - Pipeline Hardening + Client Feed
+
+### ✅ AI Enrichment Pipeline Fixes (COMPLETE)
+Fixed multiple issues with the Gemini-powered coverage enrichment cron:
+- **coverage_type bug:** Items stuck on "news" because code only checked for `=== 'article'` — added `|| item.coverage_type === 'news'` condition
+- **Content snippets:** Now passes `content_snippet` from `source_metadata` to Gemini prompt for better classification
+- **Detailed coverage type descriptions:** Added full type definitions to the prompt (review, preview, interview, feature, etc.)
+- **Rate limiting:** Added 4.5s delay between Gemini API calls, reduced batch from 30 to 10 items per cron run
+- **Model switch:** Migrated from `gemini-2.0-flash-lite` (retiring March 3, 2026) to `gemini-2.5-flash-lite` (15 RPM, $0.10/$0.40 per 1M tokens)
+- **Error reporting:** Added detailed error info to API response for debugging
+
+### ✅ Hypestat Traffic Pipeline (COMPLETE)
+Fixed and operationalized the weekly traffic refresh cron:
+- **Broken regex:** Generic patterns were matching SEMRush affiliate ad ID `13,053` as visitor count. Also matched the year `2026` for Screen Rant
+- **Fix:** Removed all generic regex patterns, kept only exact Hypestat HTML structure: `Monthly Visits:</dt><dd>NUMBER</dd>` and `Daily Unique Visitors:</dt><dd>NUMBER</dd>`
+- **User-Agent:** Changed from `GameDrive/1.0` to real Chrome UA to avoid bot detection
+- **Verified correct:** Forbes=96M, IGN=101M, Kotaku=8.5M, Eurogamer=8.5M
+- **Processed all 166 outlets** across 8 batch runs
+- **Final tier distribution:** 18 Tier A, 40 Tier B, 45 Tier C, 62 Tier D (6 without data)
+
+### ✅ Auto-Outlet Creation for RSS Scanner (COMPLETE)
+- RSS scan now auto-creates outlet records when articles come from unknown domains (matching existing Tavily behavior)
+- Extracts domain from article URL, looks up in outlets table, creates if not found
+- Also fixed Tavily scanner: removed invalid `outlet_type` column reference
+
+### ✅ Outlet Backfill (COMPLETE)
+Created 6 missing outlet records and linked them to orphaned coverage items:
+- Reddit, Room Escape Artist, X (Twitter), Pine Studio, Steam Community, Steam Store
+
+### ✅ Live Feed Link Button on Export Page (COMPLETE)
+Added "🔗 Live Feed Link" button to the PR Coverage Export tab (`/coverage/report`):
+- Appears alongside Excel and PDF export buttons, separated by a visual divider
+- **Requires a game to be selected** — grayed out with tooltip otherwise
+- When clicked: auto-generates URL slug from game name, enables `public_feed_enabled` in database
+- Shows a purple info panel with the URL, Copy button (with "✓ Copied!" feedback), and "Open Preview ↗" link
+- Date filters are passed through as query params (e.g., `?date_from=2025-01-01&date_to=2025-12-31`)
+- Panel is dismissable with × button
+
+### ✅ Public Feed Page Redesign (COMPLETE)
+Complete UI overhaul of `/feed/[slug]` — the client-facing coverage page:
+- **Table layout** matching the spreadsheet format: Date, Territory, Media Outlet, Tier, Type, Title (clickable), Monthly Visitors, Review Score, Notes/Quotes
+- **Client name** now shown as bright blue pill badge above game name — clearly readable on dark header
+- **Game name** uses pure white with text-shadow for maximum contrast
+- **Dates** formatted DD/MM/YYYY (European format for Dutch agency)
+- **Dynamic columns:** Review Score and Notes only appear when data exists
+- **Monthly visitors** shown as full formatted numbers (e.g., `147,224,140`)
+- **Section headers** use matching dark gradient with piece counts
+- **Filter bar** wrapped in white card with subtle shadow
+- **Row hover highlighting** with alternating row colors
+- **Spinner** loading state (replaced emoji)
+- **Footer:** "GameDrive | Coverage Tracking & Media Intelligence"
+- **Date filtering from URL:** Feed page now forwards `date_from`/`date_to` query params to API
+
+### Commits
+- `f1afb861` — Fix coverage_type bug, add content snippets to Gemini, backfill outlets
+- `4c934342` — Switch to gemini-2.5-flash-lite
+- `dcc1e5a7` — Add auto-create outlet to RSS scan
+- `b3ba38dc` — Fix Hypestat parsing: remove generic regex, use real browser UA
+- `70c37e81` — Add Live Feed Link button to Export page
+- `871762ee` — Redesign public feed page: table layout, better header readability
+
+### 🔜 Next: Apify Scrapers
+Tomorrow's session will focus on building Apify integration for social platform monitoring:
+- **Issue #97** — YouTube, Twitch, Reddit, Twitter/X, TikTok, Instagram all via Apify
+- Build Source Management UI for Apify configuration
+- Create `/api/cron/apify-scan` cron endpoint
+- Process results through existing enrichment pipeline
+
+---
+
+## February 12, 2026 (Session 1) - PR Coverage Outlet & RSS Feed Seeding
 
 ### ✅ Media Outlet Database Population (COMPLETE)
 Extracted and catalogued **160 unique media outlets** from 3 real client coverage reports:
@@ -386,6 +464,8 @@ Identified and fixed critical issues for real data import:
 | Reports | `/reports` | Client report builder | ✅ Complete |
 | Excel Export | `/export` | Export sales data | ✅ Complete |
 | PR Coverage | `/coverage` | Coverage feed & dashboard | ✅ Complete |
+| PR Coverage Export | `/coverage/report` | Reports, Excel/PDF export, Live Feed Link | ✅ Complete |
+| Public Coverage Feed | `/feed/[slug]` | Client-facing coverage feed (public, no auth) | ✅ Complete |
 | API Settings | `/settings` | API key management | ✅ Complete |
 | Permissions | `/permissions` | User management & RBAC | ✅ Complete |
 | Admin | `/admin` | Admin panel | ✅ Complete |
@@ -516,4 +596,4 @@ Identified and fixed critical issues for real data import:
 
 ---
 
-*Last Updated: February 12, 2026 - Seeded 160 media outlets, 65 RSS feed sources, and 20 tracking keywords into PR Coverage system. 3 new clients (Funselektor, Second Stage Studio, Pine Studio) and 3 games (Over the Hill, Sprint City, Escape Simulator 2) created. Hourly RSS cron scanning active.*
+*Last Updated: February 12, 2026 - Fixed AI enrichment pipeline (Gemini 2.5 Flash Lite), hardened Hypestat traffic scraping for all 166 outlets, added auto-outlet creation to RSS scanner, built Live Feed Link button on Export page, and redesigned public feed page with professional table layout. Tomorrow: Apify scrapers for social platform monitoring (Issue #97).*
