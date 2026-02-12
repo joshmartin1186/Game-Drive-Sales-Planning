@@ -166,7 +166,7 @@ Respond with ONLY valid JSON:
 {"relevance_score": <number>, "relevance_reasoning": "<string>", "suggested_type": "<string>", "sentiment": "<string>"}`
 
         const response = await ai.models.generateContent({
-          model: 'gemini-2.0-flash-lite',
+          model: 'gemini-2.5-flash-lite',
           contents: prompt,
           config: { responseMimeType: 'application/json' },
         })
