@@ -112,10 +112,16 @@ function matchesKeywords(
   return { matched: true, score, matchedTerms }
 }
 
-function determineApprovalStatus(relevanceScore: number): string {
-  if (relevanceScore >= 80) return 'auto_approved'
-  if (relevanceScore >= 50) return 'pending_review'
-  return 'rejected'
+// Pre-process XML to fix common issues before parsing
+function sanitizeXml(xml: string): string {
+  // Fix unescaped ampersands (common in RSS feeds): & not followed by #, a valid entity name, and ;
+  let sanitized = xml.replace(/&(?!(?:#[0-9]+|#x[0-9a-fA-F]+|amp|lt|gt|quot|apos);)/g, '&amp;')
+  // Fix unquoted attribute values like <tag attr=value> → <tag attr="value">
+  sanitized = sanitized.replace(/<([a-zA-Z][a-zA-Z0-9]*)\s+([^>]*?)>/g, (_match, tag: string, attrs: string) => {
+    const fixedAttrs = attrs.replace(/(\w+)\s*=\s*([^"'\s>][^\s>]*)/g, '$1="$2"')
+    return `<${tag} ${fixedAttrs}>`
+  })
+  return sanitized
 }
 
 // ─── Main Handler ───────────────────────────────────────────────────────────
@@ -204,12 +210,14 @@ export async function GET(request: Request) {
     }
 
     // 5. Process each RSS source
+    // Use lenient XML parsing to handle malformed feeds (unescaped entities, bad attributes)
     const parser = new Parser({
       timeout: 15000,
       headers: {
         'User-Agent': 'GameDrive/1.0 Coverage Monitor',
         'Accept': 'application/rss+xml, application/xml, text/xml, application/atom+xml'
-      }
+      },
+      customFields: { item: [] }
     })
 
     const stats = {
@@ -245,7 +253,26 @@ export async function GET(request: Request) {
       }
 
       try {
-        const feed = await parser.parseURL(feedUrl)
+        // Fetch raw XML, sanitize, then parse — handles malformed feeds
+        let feed
+        try {
+          feed = await parser.parseURL(feedUrl)
+        } catch (directErr) {
+          // If direct parse fails, try fetch + sanitize
+          console.log(`[RSS Scan] Direct parse failed for ${source.name}, trying sanitized fetch...`)
+          const res = await fetch(feedUrl, {
+            headers: {
+              'User-Agent': 'GameDrive/1.0 Coverage Monitor',
+              'Accept': 'application/rss+xml, application/xml, text/xml, application/atom+xml'
+            },
+            redirect: 'follow',
+            signal: AbortSignal.timeout(15000)
+          })
+          if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`)
+          const rawXml = await res.text()
+          const cleanXml = sanitizeXml(rawXml)
+          feed = await parser.parseString(cleanXml)
+        }
         stats.sources_scanned++
 
         const newItems: Array<Record<string, unknown>> = []
@@ -308,8 +335,8 @@ export async function GET(request: Request) {
           // Add to existing URLs to prevent intra-batch duplicates
           existingUrls.add(normalizedUrl)
 
-          const approvalStatus = determineApprovalStatus(bestMatch.score)
-
+          // Don't set relevance_score here — leave null so coverage-enrich cron
+          // picks it up for AI scoring with Gemini. Store keyword match info in metadata.
           newItems.push({
             client_id: matchedClientId,
             game_id: matchedGameId,
@@ -317,14 +344,12 @@ export async function GET(request: Request) {
             title: entry.title.trim(),
             url: normalizedUrl,
             publish_date: entry.isoDate ? entry.isoDate.split('T')[0] : null,
-            coverage_type: 'news', // Default — can be enriched later
+            coverage_type: 'news', // Default — Gemini will refine this
             monthly_unique_visitors: source.outlet?.monthly_unique_visitors || null,
             sentiment: null,
-            relevance_score: bestMatch.score,
-            relevance_reasoning: bestMatch.matchedTerms.length > 0
-              ? `Matched keywords: ${bestMatch.matchedTerms.join(', ')}`
-              : 'Broad match (no specific keywords)',
-            approval_status: approvalStatus,
+            relevance_score: null, // Left null for AI enrichment
+            relevance_reasoning: null, // AI will fill this in
+            approval_status: 'pending_review', // AI will upgrade or reject
             source_type: 'rss',
             source_metadata: {
               feed_url: feedUrl,
@@ -332,7 +357,9 @@ export async function GET(request: Request) {
               source_id: source.id,
               guid: entry.guid || entry.id || null,
               author: entry.creator || entry.author || null,
-              categories: entry.categories || []
+              categories: entry.categories || [],
+              keyword_score: bestMatch.score,
+              matched_keywords: bestMatch.matchedTerms
             },
             discovered_at: new Date().toISOString()
           })

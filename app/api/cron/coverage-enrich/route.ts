@@ -47,7 +47,7 @@ export async function GET(request: NextRequest) {
       .select(`
         id, title, url, territory, coverage_type, quotes, sentiment,
         relevance_score, review_score, monthly_unique_visitors,
-        client_id, game_id, approval_status,
+        client_id, game_id, approval_status, source_metadata,
         outlet:outlets(id, name, domain, tier, monthly_unique_visitors)
       `)
       .is('relevance_score', null)
@@ -104,24 +104,39 @@ export async function GET(request: NextRequest) {
         const outlet = item.outlet as unknown as Record<string, unknown> | null
         const outletName = String(outlet?.name || outlet?.domain || 'Unknown')
 
-        const prompt = `You are a PR coverage analyst for a video game publishing company. Analyze this coverage item.
+        // Get keyword match context from RSS source metadata
+        const sourceMeta = (item.source_metadata || {}) as Record<string, unknown>
+        const keywordScore = sourceMeta.keyword_score as number | undefined
+        const matchedKeywords = (sourceMeta.matched_keywords || []) as string[]
+
+        const prompt = `You are a PR coverage analyst for a video game PR & marketing agency called Game Drive. Your job is to determine whether a news article is ACTUALLY about one of our client's games.
+
+CRITICAL: Be strict. Many articles match keywords but are NOT about our game. Common false positives:
+- Game name appears in a "best of" list but isn't the focus of the article
+- A keyword like "Forever" or common word matches unrelated content
+- The article mentions the game only in passing (1 line in a long article)
+- The game name matches a common English word or phrase
 
 GAME CONTEXT:
-- Keywords: ${keywords.join(', ')}
 - Game: ${gameName || 'Not specified'}
+- Client Keywords: ${keywords.length > 0 ? keywords.join(', ') : 'None configured'}
+- RSS Keyword Matches: ${matchedKeywords.length > 0 ? matchedKeywords.join(', ') : 'None'}
+- RSS Keyword Score: ${keywordScore ?? 'N/A'}
 
-COVERAGE ITEM:
+ARTICLE:
 - Title: "${item.title || ''}"
 - URL: ${item.url || ''}
 - Outlet: ${outletName}
-- Territory: ${item.territory || 'Unknown'}
-- Quotes/Notes: ${item.quotes || 'None'}
 
-Provide:
-1. RELEVANCE SCORE (0-100): 80+ = clearly about the game, 50-79 = likely related, <50 = not relevant
-2. REASONING: Brief 1-sentence explanation
-3. COVERAGE TYPE: One of: ${COVERAGE_TYPES.join(', ')}
-4. SENTIMENT: One of: ${SENTIMENT_VALUES.join(', ')}
+SCORING GUIDE:
+- 90-100: Article is primarily/entirely about this specific game (review, preview, interview, dedicated article)
+- 70-89: Article significantly covers this game (featured in round-up, multi-game article with substantial mention)
+- 50-69: Game is mentioned but not a main focus (brief mention in list, tangential reference)
+- 20-49: Weak connection — keyword match but article isn't really about this game
+- 0-19: False positive — keyword matched but content is unrelated
+
+COVERAGE TYPE: One of: ${COVERAGE_TYPES.join(', ')}
+SENTIMENT: One of: ${SENTIMENT_VALUES.join(', ')}
 
 Respond with ONLY valid JSON:
 {"relevance_score": <number>, "relevance_reasoning": "<string>", "suggested_type": "<string>", "sentiment": "<string>"}`
