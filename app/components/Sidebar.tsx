@@ -64,7 +64,7 @@ export function Sidebar() {
     },
     {
       name: 'PR Coverage',
-      href: '/coverage',
+      href: '/coverage/feed',
       feature: 'pr_coverage',
       icon: (
         <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -133,9 +133,11 @@ export function Sidebar() {
         {/* Main navigation */}
         <nav className={collapsed ? styles.navCollapsed : styles.nav}>
           {visibleNavItems.map((item) => {
-            const isActive = item.href === '/'
+            // For coverage, match all /coverage/* routes
+            const matchPath = item.href === '/coverage/feed' ? '/coverage' : item.href
+            const isActive = matchPath === '/'
               ? pathname === '/'
-              : pathname.startsWith(item.href)
+              : pathname.startsWith(matchPath)
 
             if (collapsed) {
               return (

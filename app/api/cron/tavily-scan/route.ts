@@ -65,12 +65,6 @@ function normalizeUrl(url: string): string {
   }
 }
 
-function determineApprovalStatus(score: number): string {
-  if (score >= 80) return 'auto_approved'
-  if (score >= 50) return 'pending_review'
-  return 'rejected'
-}
-
 // ─── Main Handler ───────────────────────────────────────────────────────────
 
 export async function GET(request: Request) {
@@ -244,24 +238,26 @@ export async function GET(request: Request) {
               const isBlacklisted = blacklistGlobal.some(bk => text.includes(bk))
               if (isBlacklisted) continue
 
-              // Score based on content relevance
-              let score = 60 // Base score for Tavily results (they're already search-relevant)
+              // Compute a keyword score for metadata (but don't set relevance_score — let Gemini do it)
+              let keywordScore = 60 // Base score for Tavily results (they're already search-relevant)
+              const matchedTerms: string[] = []
               if (source.game_id && games) {
                 const game = games.find(g => g.id === source.game_id)
                 if (game && result.title.toLowerCase().includes(game.name.toLowerCase())) {
-                  score += 25 // Title mentions the game
+                  keywordScore += 25
+                  matchedTerms.push(game.name)
                 }
               }
-              if (result.score && result.score > 0.7) score += 10
-              score = Math.min(score, 100)
+              if (result.score && result.score > 0.7) keywordScore += 10
+              keywordScore = Math.min(keywordScore, 100)
 
               existingUrls.add(normalizedUrl)
 
-              // Try to match outlet by domain
+              // Try to match outlet by domain, auto-create if not found
               let outletId = source.outlet_id
-              if (!outletId) {
-                try {
-                  const resultDomain = new URL(result.url).hostname.replace('www.', '')
+              try {
+                const resultDomain = new URL(result.url).hostname.replace('www.', '')
+                if (!outletId) {
                   const { data: outlet } = await supabase
                     .from('outlets')
                     .select('id, monthly_unique_visitors')
@@ -269,28 +265,53 @@ export async function GET(request: Request) {
                     .single()
                   if (outlet) {
                     outletId = outlet.id
+                  } else {
+                    // Auto-create outlet from domain
+                    const outletName = resultDomain
+                      .replace(/\.(com|net|org|co\.uk|io|gg|tv)$/i, '')
+                      .split('.').pop() || resultDomain
+                    const { data: newOutlet } = await supabase
+                      .from('outlets')
+                      .insert({
+                        name: outletName.charAt(0).toUpperCase() + outletName.slice(1),
+                        domain: resultDomain,
+                        tier: null,
+                        outlet_type: 'website'
+                      })
+                      .select('id')
+                      .single()
+                    if (newOutlet) outletId = newOutlet.id
                   }
-                } catch { /* ignore */ }
-              }
+                }
+              } catch { /* ignore outlet lookup errors */ }
 
+              // Use publish date from Tavily, fall back to today
+              const publishDate = result.publishedDate
+                ? result.publishedDate.split('T')[0]
+                : new Date().toISOString().split('T')[0]
+
+              // Don't set relevance_score — leave null so coverage-enrich cron
+              // picks it up for AI scoring with Gemini
               newItems.push({
                 client_id: matchedClientId,
                 game_id: matchedGameId,
                 outlet_id: outletId,
                 title: result.title.trim(),
                 url: normalizedUrl,
-                publish_date: result.publishedDate ? result.publishedDate.split('T')[0] : null,
-                coverage_type: 'news',
-                relevance_score: score,
-                relevance_reasoning: `Tavily search: "${query}" (score: ${result.score?.toFixed(2) || 'n/a'})`,
-                approval_status: determineApprovalStatus(score),
+                publish_date: publishDate,
+                coverage_type: 'news', // Gemini will refine this
+                relevance_score: null, // Left null for AI enrichment
+                relevance_reasoning: null, // AI will fill this
+                approval_status: 'pending_review', // AI will upgrade or reject
                 source_type: 'tavily',
                 source_metadata: {
                   search_query: query,
                   source_id: source.id,
                   tavily_score: result.score || null,
                   content_snippet: result.content?.substring(0, 300) || null,
-                  search_domain: domain || null
+                  search_domain: domain || null,
+                  keyword_score: keywordScore,
+                  matched_keywords: matchedTerms
                 },
                 discovered_at: new Date().toISOString()
               })
