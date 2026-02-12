@@ -16,41 +16,37 @@ function suggestTier(monthlyVisitors: number | null): string | null {
 }
 
 function parseTrafficFromHtml(html: string): number | null {
-  // Hypestat HTML structure: <dt>Monthly Visits:</dt><dd>8,472,032</dd>
-  // Primary pattern: target the exact <dt>/<dd> structure Hypestat uses
-  const patterns = [
-    // Exact Hypestat structure: <dt...>Monthly Visits:</dt><dd>NUMBER</dd>
-    /Monthly Visits:<\/dt><dd>([\d,]+)<\/dd>/i,
-    // Daily Unique Visitors as fallback (multiply by 30)
-    /Daily Unique Visitors:<\/dt><dd>([\d,]+)<\/dd>/i,
-    // Generic patterns for other traffic sites
-    /Monthly\s+Visits?\s*[:\-]\s*([\d,]+)/i,
-    /monthly\s+unique\s+visitors?\s*[:\-]\s*([\d,]+)/i,
-  ]
+  // Hypestat HTML structure: <dt...>Monthly Visits:</dt><dd>8,472,032</dd>
+  // Only use the exact Hypestat <dt>/<dd> structure to avoid false positives
+  // from ad affiliate IDs (e.g. SEMRush "/display-ad/13053")
 
-  for (let i = 0; i < patterns.length; i++) {
-    const match = html.match(patterns[i])
-    if (match) {
-      const num = parseInt(match[1].replace(/,/g, ''))
-      if (!isNaN(num) && num > 0) {
-        // If this was the Daily Unique Visitors pattern, multiply by 30
-        if (i === 1) return num * 30
-        return num
-      }
-    }
+  // Primary: Monthly Visits from the stats table
+  const monthlyMatch = html.match(/Monthly Visits:<\/dt><dd>([\d,]+)<\/dd>/i)
+  if (monthlyMatch) {
+    const num = parseInt(monthlyMatch[1].replace(/,/g, ''))
+    if (!isNaN(num) && num > 0) return num
   }
 
+  // Fallback: Daily Unique Visitors × 30
+  const dailyMatch = html.match(/Daily Unique Visitors:<\/dt><dd>([\d,]+)<\/dd>/i)
+  if (dailyMatch) {
+    const num = parseInt(dailyMatch[1].replace(/,/g, ''))
+    if (!isNaN(num) && num > 0) return num * 30
+  }
+
+  // No generic/loose patterns — they match ad IDs and produce garbage data
   return null
 }
 
-async function fetchHypestatTraffic(domain: string, tavilyApiKey: string | null): Promise<{ visitors: number | null; method: string }> {
+async function fetchHypestatTraffic(domain: string, tavilyApiKey: string | null): Promise<{ visitors: number | null; method: string; debug?: string }> {
   // Method 1: Direct HTML fetch
   try {
     const url = `https://hypestat.com/info/${domain}`
     const response = await fetch(url, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; GameDrive/1.0)',
-        'Accept': 'text/html,application/xhtml+xml'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5',
       },
       signal: AbortSignal.timeout(10000)
     })
@@ -59,6 +55,10 @@ async function fetchHypestatTraffic(domain: string, tavilyApiKey: string | null)
       const html = await response.text()
       const visitors = parseTrafficFromHtml(html)
       if (visitors) return { visitors, method: 'hypestat_html' }
+      // Debug: check if the expected pattern exists at all
+      const hasMonthlyDt = html.includes('Monthly Visits:</dt>')
+      const hasDailyDt = html.includes('Daily Unique Visitors:</dt>')
+      return { visitors: null, method: 'none', debug: `html_size=${html.length} has_monthly_dt=${hasMonthlyDt} has_daily_dt=${hasDailyDt}` }
     }
   } catch { /* continue to fallback */ }
 
@@ -186,7 +186,7 @@ export async function GET(request: Request) {
             .eq('id', outlet.id)
 
           stats.failed++
-          stats.errors.push(`${outlet.name} (${domain}): no data found`)
+          stats.errors.push(`${outlet.name} (${domain}): no data found [${result.debug || 'no debug'}]`)
         }
       } catch (err) {
         stats.failed++
