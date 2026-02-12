@@ -1,19 +1,32 @@
 'use client'
 
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useAuth } from '@/lib/auth-context'
 import type { FeatureKey } from '@/lib/auth'
 import styles from './Sidebar.module.css'
 
-interface SidebarProps {
-  collapsed?: boolean;
-  onToggle?: () => void;
-}
+const STORAGE_KEY = 'gamedrive-sidebar-collapsed'
 
-export function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
+export function Sidebar() {
   const pathname = usePathname()
   const { profile, loading, isSuperAdmin, hasAccess, signOut } = useAuth()
+  const [collapsed, setCollapsed] = useState(false)
+
+  // Hydrate collapsed state from localStorage
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY)
+      if (stored === 'true') setCollapsed(true)
+    } catch {}
+  }, [])
+
+  const toggleCollapse = () => {
+    const next = !collapsed
+    setCollapsed(next)
+    try { localStorage.setItem(STORAGE_KEY, String(next)) } catch {}
+  }
 
   const navItems: { name: string; href: string; icon: React.ReactNode; description: string; feature: FeatureKey }[] = [
     {
@@ -73,12 +86,10 @@ export function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
     },
   ]
 
-  // Filter nav items based on user permissions
   const visibleNavItems = navItems.filter((item) =>
     hasAccess(item.feature, 'view')
   )
 
-  // Settings is visible if user has access to any settings-related feature
   const canSeeSettings =
     hasAccess('api_settings', 'view') ||
     hasAccess('client_management', 'view') ||
@@ -87,15 +98,61 @@ export function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
 
   const isSettingsActive = pathname.startsWith('/settings')
 
+  const platforms = [
+    { name: 'Steam', color: '#1b2838', cooldown: '30d' },
+    { name: 'PlayStation', color: '#0070d1', cooldown: '42d' },
+    { name: 'Xbox', color: '#107c10', cooldown: '28d' },
+    { name: 'Nintendo', color: '#e60012', cooldown: '56d' },
+    { name: 'Epic', color: '#000000', cooldown: '14d' }
+  ]
+
+  const userInitial = profile
+    ? (profile.display_name || profile.email || '?').charAt(0).toUpperCase()
+    : '?'
+
   return (
-    <div className={styles.sidebarWrapper}>
-      <div className={styles.sidebar}>
+    <div className={collapsed ? styles.sidebarWrapperCollapsed : styles.sidebarWrapper}>
+      <div className={collapsed ? styles.sidebarCollapsed : styles.sidebar}>
+        {/* Collapse toggle */}
+        <button
+          onClick={toggleCollapse}
+          className={collapsed ? styles.collapseButton : styles.collapseButtonExpanded}
+          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        >
+          {collapsed ? (
+            <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+            </svg>
+          ) : (
+            <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M11 19l-7-7 7-7M19 19l-7-7 7-7" />
+            </svg>
+          )}
+        </button>
+
         {/* Main navigation */}
-        <nav className={styles.nav}>
+        <nav className={collapsed ? styles.navCollapsed : styles.nav}>
           {visibleNavItems.map((item) => {
             const isActive = item.href === '/'
               ? pathname === '/'
               : pathname.startsWith(item.href)
+
+            if (collapsed) {
+              return (
+                <Link
+                  key={item.name}
+                  href={item.href}
+                  className={isActive ? styles.navItemCollapsedActive : styles.navItemCollapsed}
+                  title={item.name}
+                >
+                  <div className={styles.navIconCollapsed}>
+                    {item.icon}
+                  </div>
+                  <span className={styles.tooltip}>{item.name}</span>
+                </Link>
+              )
+            }
+
             return (
               <Link
                 key={item.name}
@@ -105,7 +162,7 @@ export function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
                 <div className={styles.navIcon}>
                   {item.icon}
                 </div>
-                <div>
+                <div className={styles.navText}>
                   <div className={styles.navLabel}>{item.name}</div>
                   <div className={styles.navDescription}>
                     {item.description}
@@ -118,63 +175,85 @@ export function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
 
         {/* Settings — bottom pinned */}
         {canSeeSettings && (
-          <div className={styles.settingsSection}>
-            <Link
-              href="/settings"
-              className={isSettingsActive ? styles.navItemActive : styles.navItem}
-            >
-              <div className={styles.navIcon}>
-                <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-              </div>
-              <div>
-                <div className={styles.navLabel}>Settings</div>
-                <div className={styles.navDescription}>Configuration</div>
-              </div>
-            </Link>
+          <div className={collapsed ? styles.settingsSectionCollapsed : styles.settingsSection}>
+            {collapsed ? (
+              <Link
+                href="/settings"
+                className={isSettingsActive ? styles.navItemCollapsedActive : styles.navItemCollapsed}
+                title="Settings"
+              >
+                <div className={styles.navIconCollapsed}>
+                  <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                </div>
+                <span className={styles.tooltip}>Settings</span>
+              </Link>
+            ) : (
+              <Link
+                href="/settings"
+                className={isSettingsActive ? styles.navItemActive : styles.navItem}
+              >
+                <div className={styles.navIcon}>
+                  <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                </div>
+                <div className={styles.navText}>
+                  <div className={styles.navLabel}>Settings</div>
+                  <div className={styles.navDescription}>Configuration</div>
+                </div>
+              </Link>
+            )}
           </div>
         )}
 
         {/* Active platforms */}
-        <div className={styles.platformsSection}>
-          <div className={styles.platformsLabel}>Active Platforms</div>
-          <div className={styles.platformsList}>
-            {[
-              { name: 'Steam', color: '#1b2838', cooldown: '30d' },
-              { name: 'PlayStation', color: '#0070d1', cooldown: '42d' },
-              { name: 'Xbox', color: '#107c10', cooldown: '28d' },
-              { name: 'Nintendo', color: '#e60012', cooldown: '56d' },
-              { name: 'Epic', color: '#000000', cooldown: '14d' }
-            ].map((platform) => (
-              <div key={platform.name} className={styles.platformRow}>
-                <div className={styles.platformName}>
-                  <div
-                    className={styles.platformDot}
-                    style={{ backgroundColor: platform.color }}
-                  />
-                  <span className={styles.platformNameText}>{platform.name}</span>
-                </div>
-                <span className={styles.platformCooldown}>{platform.cooldown}</span>
-              </div>
-            ))}
+        {collapsed ? (
+          <div className={styles.platformsSectionCollapsed}>
+            <div className={styles.platformDotsRow}>
+              {platforms.map((platform) => (
+                <div
+                  key={platform.name}
+                  className={styles.platformDotCollapsed}
+                  style={{ backgroundColor: platform.color }}
+                  title={`${platform.name} (${platform.cooldown})`}
+                />
+              ))}
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className={styles.platformsSection}>
+            <div className={styles.platformsLabel}>Active Platforms</div>
+            <div className={styles.platformsList}>
+              {platforms.map((platform) => (
+                <div key={platform.name} className={styles.platformRow}>
+                  <div className={styles.platformName}>
+                    <div
+                      className={styles.platformDot}
+                      style={{ backgroundColor: platform.color }}
+                    />
+                    <span className={styles.platformNameText}>{platform.name}</span>
+                  </div>
+                  <span className={styles.platformCooldown}>{platform.cooldown}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* User info & sign out */}
         {profile && (
-          <div className={styles.userSection}>
-            <div className={styles.userRow}>
-              <div className={styles.userInfo}>
-                <div className={styles.userName}>
-                  {profile.display_name || profile.email}
-                </div>
-                <div className={styles.userRole}>{profile.role}</div>
+          collapsed ? (
+            <div className={styles.userSectionCollapsed}>
+              <div className={styles.userAvatar} title={profile.display_name || profile.email}>
+                {userInitial}
               </div>
               <button
                 onClick={signOut}
-                className={styles.signOutButton}
+                className={styles.signOutButtonCollapsed}
                 title="Sign out"
               >
                 <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -182,7 +261,27 @@ export function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
                 </svg>
               </button>
             </div>
-          </div>
+          ) : (
+            <div className={styles.userSection}>
+              <div className={styles.userRow}>
+                <div className={styles.userInfo}>
+                  <div className={styles.userName}>
+                    {profile.display_name || profile.email}
+                  </div>
+                  <div className={styles.userRole}>{profile.role}</div>
+                </div>
+                <button
+                  onClick={signOut}
+                  className={styles.signOutButton}
+                  title="Sign out"
+                >
+                  <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          )
         )}
       </div>
     </div>

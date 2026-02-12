@@ -1,20 +1,33 @@
-/* Sidebar container */
+/* Sidebar container — flex spacer that reserves space for the fixed sidebar */
 .sidebarWrapper {
   display: none;
   flex-shrink: 0;
+  width: 256px;
+  transition: width 0.2s ease;
+}
+
+.sidebarWrapperCollapsed {
+  display: none;
+  flex-shrink: 0;
+  width: 64px;
+  transition: width 0.2s ease;
 }
 
 @media (min-width: 1024px) {
   .sidebarWrapper {
     display: flex;
   }
+  .sidebarWrapperCollapsed {
+    display: flex;
+  }
 }
 
+/* Fixed sidebar panel */
 .sidebar {
   display: flex;
   flex-direction: column;
   width: 256px;
-  padding-top: 20px;
+  padding-top: 12px;
   padding-bottom: 16px;
   background: white;
   border-right: 1px solid #e5e7eb;
@@ -23,13 +36,56 @@
   top: 0;
   left: 0;
   overflow-y: auto;
+  overflow-x: hidden;
   z-index: 40;
+  transition: width 0.2s ease;
+}
+
+.sidebarCollapsed {
+  composes: sidebar;
+  width: 64px;
+}
+
+/* Collapse toggle button */
+.collapseButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+  background: #f8fafc;
+  color: #64748b;
+  cursor: pointer;
+  margin: 4px auto 12px auto;
+  transition: color 0.15s, background-color 0.15s, border-color 0.15s;
+  flex-shrink: 0;
+}
+
+.collapseButton:hover {
+  color: #1e293b;
+  background-color: #e2e8f0;
+  border-color: #cbd5e1;
+}
+
+.collapseButtonExpanded {
+  composes: collapseButton;
+  margin: 4px 16px 12px auto;
 }
 
 /* Navigation area */
 .nav {
   flex: 1;
   padding: 0 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.navCollapsed {
+  flex: 1;
+  padding: 0 8px;
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -48,6 +104,8 @@
   color: #4b5563;
   border: none;
   cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
 }
 
 .navItem:hover {
@@ -68,12 +126,73 @@
   color: #1d4ed8;
 }
 
+/* Collapsed nav item — icon only, centered */
+.navItemCollapsed {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 0;
+  font-size: 14px;
+  font-weight: 500;
+  border-radius: 6px;
+  transition: background-color 0.15s, color 0.15s;
+  text-decoration: none;
+  color: #4b5563;
+  border: none;
+  cursor: pointer;
+  position: relative;
+}
+
+.navItemCollapsed:hover {
+  background-color: #f9fafb;
+  color: #111827;
+}
+
+.navItemCollapsedActive {
+  composes: navItemCollapsed;
+  background-color: #eff6ff;
+  color: #1d4ed8;
+}
+
+.navItemCollapsedActive:hover {
+  background-color: #eff6ff;
+  color: #1d4ed8;
+}
+
+/* Tooltip for collapsed state */
+.navItemCollapsed:hover .tooltip,
+.navItemCollapsedActive:hover .tooltip {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(0);
+}
+
+.tooltip {
+  position: absolute;
+  left: calc(100% + 8px);
+  top: 50%;
+  transform: translateX(-4px) translateY(-50%);
+  background: #1e293b;
+  color: white;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.15s, visibility 0.15s, transform 0.15s;
+  pointer-events: none;
+  z-index: 50;
+}
+
 /* Icon container */
 .navIcon {
   margin-right: 12px;
   color: #9ca3af;
   display: flex;
   align-items: center;
+  flex-shrink: 0;
 }
 
 .navItemActive .navIcon {
@@ -85,6 +204,26 @@
 }
 
 .navItemActive:hover .navIcon {
+  color: #3b82f6;
+}
+
+.navIconCollapsed {
+  margin-right: 0;
+  color: #9ca3af;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.navItemCollapsedActive .navIconCollapsed {
+  color: #3b82f6;
+}
+
+.navItemCollapsed:hover .navIconCollapsed {
+  color: #6b7280;
+}
+
+.navItemCollapsedActive:hover .navIconCollapsed {
   color: #3b82f6;
 }
 
@@ -103,9 +242,22 @@
   color: #3b82f6;
 }
 
+/* Text container — hidden when collapsed */
+.navText {
+  overflow: hidden;
+  min-width: 0;
+}
+
 /* Settings section — pinned near bottom */
 .settingsSection {
   padding: 0 16px;
+  margin-top: 8px;
+  border-top: 1px solid #e5e7eb;
+  padding-top: 8px;
+}
+
+.settingsSectionCollapsed {
+  padding: 0 8px;
   margin-top: 8px;
   border-top: 1px solid #e5e7eb;
   padding-top: 8px;
@@ -116,6 +268,14 @@
   flex-shrink: 0;
   padding: 16px;
   border-top: 1px solid #e5e7eb;
+  overflow: hidden;
+}
+
+.platformsSectionCollapsed {
+  flex-shrink: 0;
+  padding: 8px;
+  border-top: 1px solid #e5e7eb;
+  overflow: hidden;
 }
 
 .platformsLabel {
@@ -147,6 +307,15 @@
   height: 12px;
   border-radius: 50%;
   margin-right: 8px;
+  flex-shrink: 0;
+}
+
+.platformDotCollapsed {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin: 2px auto;
+  flex-shrink: 0;
 }
 
 .platformNameText {
@@ -157,11 +326,28 @@
   color: #6b7280;
 }
 
+/* Collapsed platforms — just dots */
+.platformDotsRow {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
 /* User info */
 .userSection {
   flex-shrink: 0;
   padding: 12px 16px;
   border-top: 1px solid #e5e7eb;
+}
+
+.userSectionCollapsed {
+  flex-shrink: 0;
+  padding: 8px;
+  border-top: 1px solid #e5e7eb;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 .userRow {
@@ -205,4 +391,37 @@
 .signOutButton:hover {
   color: #4b5563;
   background-color: #f3f4f6;
+}
+
+.signOutButtonCollapsed {
+  margin-left: 0;
+  padding: 6px;
+  border-radius: 6px;
+  color: #9ca3af;
+  background: none;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  transition: color 0.15s, background-color 0.15s;
+}
+
+.signOutButtonCollapsed:hover {
+  color: #4b5563;
+  background-color: #f3f4f6;
+}
+
+/* User avatar for collapsed state */
+.userAvatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #e0e7ff;
+  color: #4338ca;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 4px;
 }

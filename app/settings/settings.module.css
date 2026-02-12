@@ -12,15 +12,8 @@
 .mainContent {
   flex: 1;
   padding: 24px 32px;
-  margin-left: 256px;
-  max-width: calc(100% - 256px);
-}
-
-@media (max-width: 1024px) {
-  .mainContent {
-    margin-left: 0;
-    max-width: 100%;
-  }
+  min-width: 0;
+  overflow: auto;
 }
 
 .header {
