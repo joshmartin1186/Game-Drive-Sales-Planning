@@ -96,6 +96,7 @@ export async function GET(request: NextRequest) {
     // Process items
     let enriched = 0
     let errors = 0
+    const errorDetails: string[] = []
 
     for (const item of items) {
       try {
@@ -218,7 +219,9 @@ Respond with ONLY valid JSON:
 
         enriched++
       } catch (err) {
-        console.error(`Enrichment error for item ${item.id}:`, err)
+        const errMsg = err instanceof Error ? err.message : String(err)
+        console.error(`Enrichment error for item ${item.id}:`, errMsg)
+        errorDetails.push(`${String(item.title || '').substring(0, 50)}: ${errMsg.substring(0, 200)}`)
         errors++
       }
     }
@@ -228,6 +231,7 @@ Respond with ONLY valid JSON:
       enriched,
       errors,
       total: items.length,
+      ...(errorDetails.length > 0 ? { error_details: errorDetails.slice(0, 5) } : {}),
     })
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Unknown error'
