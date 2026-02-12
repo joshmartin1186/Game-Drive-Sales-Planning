@@ -1,0 +1,208 @@
+/* Sidebar container */
+.sidebarWrapper {
+  display: none;
+  flex-shrink: 0;
+}
+
+@media (min-width: 1024px) {
+  .sidebarWrapper {
+    display: flex;
+  }
+}
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  width: 256px;
+  padding-top: 20px;
+  padding-bottom: 16px;
+  background: white;
+  border-right: 1px solid #e5e7eb;
+  height: 100vh;
+  position: fixed;
+  top: 0;
+  left: 0;
+  overflow-y: auto;
+  z-index: 40;
+}
+
+/* Navigation area */
+.nav {
+  flex: 1;
+  padding: 0 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* Nav item base */
+.navItem {
+  display: flex;
+  align-items: center;
+  padding: 8px 8px;
+  font-size: 14px;
+  font-weight: 500;
+  border-radius: 6px;
+  transition: background-color 0.15s, color 0.15s;
+  text-decoration: none;
+  color: #4b5563;
+  border: none;
+  cursor: pointer;
+}
+
+.navItem:hover {
+  background-color: #f9fafb;
+  color: #111827;
+}
+
+/* Active nav item */
+.navItemActive {
+  composes: navItem;
+  background-color: #eff6ff;
+  border-right: 2px solid #3b82f6;
+  color: #1d4ed8;
+}
+
+.navItemActive:hover {
+  background-color: #eff6ff;
+  color: #1d4ed8;
+}
+
+/* Icon container */
+.navIcon {
+  margin-right: 12px;
+  color: #9ca3af;
+  display: flex;
+  align-items: center;
+}
+
+.navItemActive .navIcon {
+  color: #3b82f6;
+}
+
+.navItem:hover .navIcon {
+  color: #6b7280;
+}
+
+.navItemActive:hover .navIcon {
+  color: #3b82f6;
+}
+
+/* Text in nav items */
+.navLabel {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.navDescription {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.navItemActive .navDescription {
+  color: #3b82f6;
+}
+
+/* Settings section — pinned near bottom */
+.settingsSection {
+  padding: 0 16px;
+  margin-top: 8px;
+  border-top: 1px solid #e5e7eb;
+  padding-top: 8px;
+}
+
+/* Platform reference */
+.platformsSection {
+  flex-shrink: 0;
+  padding: 16px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.platformsLabel {
+  font-size: 12px;
+  color: #6b7280;
+  margin-bottom: 8px;
+}
+
+.platformsList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.platformRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.platformName {
+  display: flex;
+  align-items: center;
+}
+
+.platformDot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  margin-right: 8px;
+}
+
+.platformNameText {
+  color: #4b5563;
+}
+
+.platformCooldown {
+  color: #6b7280;
+}
+
+/* User info */
+.userSection {
+  flex-shrink: 0;
+  padding: 12px 16px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.userRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.userInfo {
+  min-width: 0;
+}
+
+.userName {
+  font-size: 14px;
+  font-weight: 500;
+  color: #374151;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.userRole {
+  font-size: 12px;
+  color: #6b7280;
+  text-transform: capitalize;
+}
+
+.signOutButton {
+  margin-left: 8px;
+  padding: 6px;
+  border-radius: 6px;
+  color: #9ca3af;
+  background: none;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  transition: color 0.15s, background-color 0.15s;
+}
+
+.signOutButton:hover {
+  color: #4b5563;
+  background-color: #f3f4f6;
+}
