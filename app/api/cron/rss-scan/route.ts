@@ -335,17 +335,50 @@ export async function GET(request: Request) {
           // Add to existing URLs to prevent intra-batch duplicates
           existingUrls.add(normalizedUrl)
 
+          // Try to match outlet by domain, auto-create if not found
+          let outletId = source.outlet_id
+          let outletVisitors = source.outlet?.monthly_unique_visitors || null
+          try {
+            const articleDomain = new URL(normalizedUrl).hostname.replace('www.', '')
+            if (!outletId) {
+              const { data: outlet } = await supabase
+                .from('outlets')
+                .select('id, monthly_unique_visitors')
+                .eq('domain', articleDomain)
+                .single()
+              if (outlet) {
+                outletId = outlet.id
+                outletVisitors = outlet.monthly_unique_visitors
+              } else {
+                // Auto-create outlet from domain
+                const outletName = articleDomain
+                  .replace(/\.(com|net|org|co\.uk|io|gg|tv)$/i, '')
+                  .split('.').pop() || articleDomain
+                const { data: newOutlet } = await supabase
+                  .from('outlets')
+                  .insert({
+                    name: outletName.charAt(0).toUpperCase() + outletName.slice(1),
+                    domain: articleDomain,
+                    tier: null
+                  })
+                  .select('id')
+                  .single()
+                if (newOutlet) outletId = newOutlet.id
+              }
+            }
+          } catch { /* ignore outlet lookup errors */ }
+
           // Don't set relevance_score here — leave null so coverage-enrich cron
           // picks it up for AI scoring with Gemini. Store keyword match info in metadata.
           newItems.push({
             client_id: matchedClientId,
             game_id: matchedGameId,
-            outlet_id: source.outlet_id,
+            outlet_id: outletId,
             title: entry.title.trim(),
             url: normalizedUrl,
             publish_date: entry.isoDate ? entry.isoDate.split('T')[0] : null,
             coverage_type: 'news', // Default — Gemini will refine this
-            monthly_unique_visitors: source.outlet?.monthly_unique_visitors || null,
+            monthly_unique_visitors: outletVisitors,
             sentiment: null,
             relevance_score: null, // Left null for AI enrichment
             relevance_reasoning: null, // AI will fill this in
