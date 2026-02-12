@@ -275,8 +275,7 @@ export async function GET(request: Request) {
                       .insert({
                         name: outletName.charAt(0).toUpperCase() + outletName.slice(1),
                         domain: resultDomain,
-                        tier: null,
-                        outlet_type: 'website'
+                        tier: null
                       })
                       .select('id')
                       .single()

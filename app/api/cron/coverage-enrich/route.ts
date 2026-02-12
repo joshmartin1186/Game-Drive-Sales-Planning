@@ -105,10 +105,11 @@ export async function GET(request: NextRequest) {
         const outlet = item.outlet as unknown as Record<string, unknown> | null
         const outletName = String(outlet?.name || outlet?.domain || 'Unknown')
 
-        // Get keyword match context from RSS source metadata
+        // Get keyword match context and content snippet from source metadata
         const sourceMeta = (item.source_metadata || {}) as Record<string, unknown>
         const keywordScore = sourceMeta.keyword_score as number | undefined
         const matchedKeywords = (sourceMeta.matched_keywords || []) as string[]
+        const contentSnippet = sourceMeta.content_snippet as string | undefined
 
         const prompt = `You are a PR coverage analyst for a video game PR & marketing agency called Game Drive. Your job is to determine whether a news article is ACTUALLY about one of our client's games.
 
@@ -127,7 +128,7 @@ GAME CONTEXT:
 ARTICLE:
 - Title: "${item.title || ''}"
 - URL: ${item.url || ''}
-- Outlet: ${outletName}
+- Outlet: ${outletName}${contentSnippet ? `\n- Content Preview: "${contentSnippet}"` : ''}
 
 SCORING GUIDE:
 - 90-100: Article is primarily/entirely about this specific game (review, preview, interview, dedicated article)
@@ -136,7 +137,17 @@ SCORING GUIDE:
 - 20-49: Weak connection — keyword match but article isn't really about this game
 - 0-19: False positive — keyword matched but content is unrelated
 
-COVERAGE TYPE: One of: ${COVERAGE_TYPES.join(', ')}
+COVERAGE TYPE — Choose the most specific type that fits. One of: ${COVERAGE_TYPES.join(', ')}
+- "review" = scored review of a game
+- "preview" = hands-on or first-look before release
+- "interview" = Q&A with developers or publishers
+- "guide" = how-to, tips, walkthrough, tutorial
+- "trailer" = article about a trailer or gameplay reveal
+- "feature" = in-depth editorial or analysis piece
+- "round-up" = list article featuring multiple games
+- "mention" = brief mention in a larger article
+- "news" = general news announcement (default if unsure)
+
 SENTIMENT: One of: ${SENTIMENT_VALUES.join(', ')}
 
 Respond with ONLY valid JSON:
@@ -168,7 +179,9 @@ Respond with ONLY valid JSON:
           updated_at: new Date().toISOString(),
         }
 
-        if (!item.coverage_type || item.coverage_type === 'article') {
+        // Always update coverage_type with AI suggestion unless manually set
+        // Items from RSS/Tavily are inserted as 'news' by default
+        if (!item.coverage_type || item.coverage_type === 'article' || item.coverage_type === 'news') {
           updates.coverage_type = suggestedType
         }
 
