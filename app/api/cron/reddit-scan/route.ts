@@ -87,21 +87,33 @@ export async function GET(request: NextRequest) {
       const queries = group.keywords.slice(0, 5) // Max 5 queries per group to limit cost
 
       try {
-        // === Pass 1: General keyword search (no subreddit filter) ===
-        const generalRes = await callRedditActor(apifyKey, queries, undefined)
-        if (generalRes) {
-          const result = await processRedditPosts(supabase, generalRes, group.clientId, group.gameId)
-          totalFound += result.found
-          totalNew += result.newItems
-        }
+        // subredditName is ADDITIVE — each call always includes general Reddit results
+        // plus results from the specified subreddit. So to save credits:
+        // - If user configured subreddits: make ONE call with the first subreddit
+        //   (this gets general results + that subreddit's results in a single call)
+        // - If no subreddits configured: make ONE general call (no subredditName)
+        // Dedup by URL prevents duplicate inserts across calls.
 
-        // === Pass 2: Targeted subreddit searches ===
-        for (const subreddit of Array.from(configuredSubreddits)) {
-          const subRes = await callRedditActor(apifyKey, queries, subreddit)
-          if (subRes) {
-            const result = await processRedditPosts(supabase, subRes, group.clientId, group.gameId)
+        const subredditList = Array.from(configuredSubreddits)
+
+        if (subredditList.length === 0) {
+          // No subreddits configured — just do a general search
+          const res = await callRedditActor(apifyKey, queries, undefined)
+          if (res) {
+            const result = await processRedditPosts(supabase, res, group.clientId, group.gameId)
             totalFound += result.found
             totalNew += result.newItems
+          }
+        } else {
+          // Each call is additive (general + subreddit), so one call per subreddit.
+          // The general results overlap across calls but dedup handles it.
+          for (const subreddit of subredditList) {
+            const res = await callRedditActor(apifyKey, queries, subreddit)
+            if (res) {
+              const result = await processRedditPosts(supabase, res, group.clientId, group.gameId)
+              totalFound += result.found
+              totalNew += result.newItems
+            }
           }
         }
       } catch (err) {
