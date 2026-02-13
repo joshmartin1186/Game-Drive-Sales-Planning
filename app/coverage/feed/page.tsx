@@ -592,16 +592,37 @@ export default function CoverageFeedPage() {
                               </span>
                             ) : <span style={{ color: '#d1d5db' }}>—</span>}
                           </td>
-                          <td style={{ padding: '8px 12px', maxWidth: '300px' }}>
+                          <td style={{ padding: '8px 12px', maxWidth: '350px' }}>
                             <a
                               href={item.url}
                               target="_blank"
                               rel="noopener noreferrer"
-                              style={{ color: '#2563eb', textDecoration: 'none', fontSize: '13px', lineHeight: '1.3' }}
+                              style={{ color: '#2563eb', textDecoration: 'none', fontSize: '13px', lineHeight: '1.3', fontWeight: 500 }}
                               title={item.url}
                             >
                               {item.title}
                             </a>
+                            {item.url && (
+                              <a
+                                href={item.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                style={{
+                                  display: 'block',
+                                  fontSize: '11px',
+                                  color: '#94a3b8',
+                                  textDecoration: 'none',
+                                  marginTop: '1px',
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap',
+                                  maxWidth: '320px',
+                                }}
+                                title={item.url}
+                              >
+                                {item.url.replace(/^https?:\/\/(www\.)?/, '').substring(0, 60)}{item.url.replace(/^https?:\/\/(www\.)?/, '').length > 60 ? '...' : ''}
+                              </a>
+                            )}
                             <div style={{ display: 'flex', gap: '4px', marginTop: '2px', alignItems: 'center' }}>
                               {item.game && (
                                 <span style={{ fontSize: '11px', color: '#94a3b8' }}>
