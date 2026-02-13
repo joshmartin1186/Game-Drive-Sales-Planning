@@ -5,8 +5,8 @@ function getSupabase() {
   return getServerSupabase()
 }
 
-// Apify YouTube scraper actor
-const APIFY_YOUTUBE_ACTOR = 'streamers/youtube-scraper'
+// Apify YouTube scraper actor — verified working
+const APIFY_YOUTUBE_ACTOR = 'streamers~youtube-scraper'
 
 // GET /api/cron/youtube-scan — Scan YouTube for game coverage videos via Apify
 export async function GET(request: NextRequest) {
@@ -33,18 +33,17 @@ export async function GET(request: NextRequest) {
 
     const apifyKey = keyData.api_key
 
-    // Get active keyword sets for all clients/games
+    // Get whitelist keywords for all clients/games
     const { data: keywords } = await supabase
       .from('coverage_keywords')
       .select('keyword, client_id, game_id')
-      .eq('is_active', true)
-      .eq('is_blacklist', false)
+      .eq('keyword_type', 'whitelist')
 
     if (!keywords || keywords.length === 0) {
       return NextResponse.json({ message: 'No keywords configured' })
     }
 
-    // Group keywords by client+game for dedup
+    // Group keywords by client+game — combine into single search query
     const searchTerms: Map<string, { query: string; clientId: string; gameId: string | null }> = new Map()
     for (const kw of keywords) {
       const key = `${kw.client_id}|${kw.game_id || ''}`
@@ -59,16 +58,20 @@ export async function GET(request: NextRequest) {
     for (const [, term] of Array.from(searchTerms.entries())) {
       try {
         // Run Apify YouTube scraper actor synchronously
+        // Uses verified input schema from streamers~youtube-scraper
         const actorRes = await fetch(
           `https://api.apify.com/v2/acts/${APIFY_YOUTUBE_ACTOR}/run-sync-get-dataset-items?token=${apifyKey}`,
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              searchKeywords: [term.query],
+              searchQueries: [term.query],
               maxResults: 10,
-              sortBy: 'date',
-              uploadDate: 'week',
+              maxResultStreams: 0,
+              maxResultsShorts: 0,
+              sortVideosBy: 'NEWEST',
+              dateFilter: 'month',
+              downloadSubtitles: false,
             }),
           }
         )
@@ -84,26 +87,34 @@ export async function GET(request: NextRequest) {
         totalFound += videos.length
 
         for (const video of videos) {
-          const url = video.url || (video.id ? `https://www.youtube.com/watch?v=${video.id}` : null)
-          if (!url) continue
+          // Real response fields: url, id, title, channelName, channelUrl,
+          // channelUsername, numberOfSubscribers, date, viewCount, likes,
+          // commentsCount, duration, text (description), hashtags
+          const videoUrl = video.url || (video.id ? `https://www.youtube.com/watch?v=${video.id}` : null)
+          if (!videoUrl) continue
 
-          const channelName = video.channelName || video.channelTitle || 'Unknown Channel'
+          // Clean URL — remove &t= timestamp params that some results include
+          const cleanUrl = videoUrl.split('&t=')[0]
+
+          const channelName = video.channelName || 'Unknown Channel'
           const channelUrl = video.channelUrl || ''
-          const subscribers = Number(video.subscriberCount || video.channelSubscribers || 0)
+          const subscribers = Number(video.numberOfSubscribers || 0)
           const publishDate = video.date ? new Date(video.date).toISOString().split('T')[0] : null
 
           // Check for existing item by URL
           const { data: existing } = await supabase
             .from('coverage_items')
             .select('id')
-            .eq('url', url)
+            .eq('url', cleanUrl)
             .eq('client_id', term.clientId)
             .limit(1)
 
           if (existing && existing.length > 0) continue
 
           // Find or create outlet for the channel
-          const channelDomain = channelUrl ? channelUrl.replace('https://', '').replace('http://', '') : `youtube.com/c/${channelName}`
+          const channelDomain = channelUrl
+            ? channelUrl.replace('https://', '').replace('http://', '')
+            : `youtube.com/@${video.channelUsername || channelName}`
           let outletId: string | null = null
 
           const { data: existingOutlet } = await supabase
@@ -134,15 +145,23 @@ export async function GET(request: NextRequest) {
             game_id: term.gameId,
             outlet_id: outletId,
             title: video.title || 'Untitled Video',
-            url,
+            url: cleanUrl,
             publish_date: publishDate,
             coverage_type: 'video',
             monthly_unique_visitors: subscribers,
-            territory: video.defaultLanguage || null,
+            territory: null,
             source_type: 'youtube',
             source_metadata: {
-              video_id: video.id, channel_name: channelName, channel_url: channelUrl,
-              subscribers, views: video.viewCount || video.views, likes: video.likes,
+              video_id: video.id,
+              channel_name: channelName,
+              channel_url: channelUrl,
+              channel_username: video.channelUsername || null,
+              subscribers,
+              views: video.viewCount || 0,
+              likes: video.likes || 0,
+              comments: video.commentsCount || 0,
+              duration: video.duration || null,
+              hashtags: video.hashtags || [],
             },
             approval_status: 'pending_review',
             discovered_at: new Date().toISOString(),
