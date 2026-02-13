@@ -398,7 +398,7 @@ ${cov ? `
   </tbody></table>` : ''}
 
   ${cov.items.length > 0 ? `<h3>Coverage Items</h3><table><thead><tr><th>Date</th><th>Outlet</th><th>Title</th><th>Territory</th><th>Type</th></tr></thead><tbody>
-    ${cov.items.slice(0, 50).map(i => `<tr><td>${i.publish_date || ''}</td><td>${(i.outlet as unknown as Record<string, string>)?.name || ''}</td><td>${i.title || ''}</td><td>${i.territory || ''}</td><td>${i.coverage_type || ''}</td></tr>`).join('')}
+    ${cov.items.slice(0, 50).map(i => `<tr><td>${i.publish_date || ''}</td><td>${(i.outlet as unknown as Record<string, string>)?.name || ''}</td><td>${i.url ? `<a href="${i.url}" target="_blank" rel="noopener noreferrer" style="color:#2563eb;text-decoration:none">${i.title || ''}</a>` : (i.title || '')}</td><td>${i.territory || ''}</td><td>${i.coverage_type || ''}</td></tr>`).join('')}
   </tbody></table>` : ''}
   ${annotations.pr_coverage ? `<div class="annotation">${annotations.pr_coverage}</div>` : ''}
 </div>` : ''}

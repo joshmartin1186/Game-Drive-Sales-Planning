@@ -390,7 +390,7 @@ export default function CoverageReportPage() {
             <td>${item.outlet?.name || '—'}</td>
             <td>${item.outlet?.tier ? `<span class="tier-badge tier-${item.outlet.tier}">${item.outlet.tier}</span>` : '—'}</td>
             <td>${item.coverage_type || '—'}</td>
-            <td>${item.title}</td>
+            <td>${item.url ? `<a href="${item.url}" target="_blank" rel="noopener noreferrer" style="color:#2563eb;text-decoration:none">${item.title}</a>` : item.title}</td>
             <td style="text-align:right">${formatFullNumber(item.outlet?.monthly_unique_visitors || item.monthly_unique_visitors)}</td>
             ${group.items.some(i => i.review_score) ? `<td style="text-align:center">${item.review_score || '—'}</td>` : ''}
           </tr>
