@@ -290,11 +290,15 @@ export default function SourcesPage() {
         if (formConfig.min_followers) cfg.min_followers = parseInt(formConfig.min_followers) || 0
         break
       case 'tiktok':
-      case 'instagram':
-        if (formConfig.keywords) cfg.keywords = formConfig.keywords.split(',').map(k => k.trim()).filter(Boolean)
-        if (formConfig.hashtags) cfg.hashtags = formConfig.hashtags.split(',').map(h => h.trim().replace(/^#/, '')).filter(Boolean)
+        if (formConfig.profiles) cfg.profiles = formConfig.profiles.split(',').map((p: string) => p.trim().replace(/^@/, '')).filter(Boolean)
+        if (formConfig.hashtags) cfg.hashtags = formConfig.hashtags.split(',').map((h: string) => h.trim().replace(/^#/, '')).filter(Boolean)
+        if (formConfig.keywords) cfg.keywords = formConfig.keywords.split(',').map((k: string) => k.trim()).filter(Boolean)
         if (formConfig.min_followers) cfg.min_followers = parseInt(formConfig.min_followers) || 0
-        if (formConfig.actor_id) cfg.actor_id = formConfig.actor_id.trim()
+        break
+      case 'instagram':
+        if (formConfig.hashtags) cfg.hashtags = formConfig.hashtags.split(',').map((h: string) => h.trim().replace(/^#/, '')).filter(Boolean)
+        if (formConfig.keywords) cfg.keywords = formConfig.keywords.split(',').map((k: string) => k.trim()).filter(Boolean)
+        if (formConfig.min_followers) cfg.min_followers = parseInt(formConfig.min_followers) || 0
         break
       case 'sullygnome':
         if (formConfig.game_name) cfg.game_name = formConfig.game_name.trim()
@@ -533,13 +537,20 @@ export default function SourcesPage() {
           </>
         )
       case 'tiktok':
+        return (
+          <>
+            {field('profiles', 'Profiles to Track (comma-separated)', '@IGN, @gamespot, @nintendo')}
+            {field('hashtags', 'Hashtags (comma-separated)', 'indiegame, gaming, steamgame')}
+            {field('keywords', 'Keywords (comma-separated)', 'game name, studio name')}
+            {field('min_followers', 'Min Followers', '1000', 'number')}
+          </>
+        )
       case 'instagram':
         return (
           <>
-            {field('keywords', 'Keywords (comma-separated)', 'game name, #hashtag')}
-            {field('hashtags', 'Hashtags (comma-separated)', 'gaming, indiedev')}
+            {field('hashtags', 'Hashtags (comma-separated)', 'indiegame, gaming, pcgaming')}
+            {field('keywords', 'Keywords (comma-separated)', 'game name, studio name')}
             {field('min_followers', 'Min Followers', '1000', 'number')}
-            {field('actor_id', 'Apify Actor ID', 'actor-name/slug')}
           </>
         )
       case 'sullygnome':
@@ -644,8 +655,14 @@ export default function SourcesPage() {
               : `@${String(source.config.handle)}`
             }</span>
           ) : null}
+          {source.source_type === 'tiktok' && Array.isArray(source.config?.profiles) && (source.config.profiles as string[]).length > 0 ? (
+            <span>{(source.config.profiles as string[]).map((p: string) => `@${p}`).join(', ')}</span>
+          ) : null}
+          {['tiktok', 'instagram'].includes(source.source_type) && Array.isArray(source.config?.hashtags) && (source.config.hashtags as string[]).length > 0 ? (
+            <span>{source.source_type === 'tiktok' && Array.isArray(source.config?.profiles) && (source.config.profiles as string[]).length > 0 ? ' · ' : ''}#{(source.config.hashtags as string[]).join(', #')}</span>
+          ) : null}
           {['twitter', 'tiktok', 'instagram'].includes(source.source_type) && Array.isArray(source.config?.keywords) ? (
-            <span>{source.source_type === 'twitter' && (source.config?.handles || source.config?.handle) ? ' · ' : ''}Keywords: {(source.config.keywords as string[]).join(', ')}</span>
+            <span>{(source.source_type === 'twitter' && (source.config?.handles || source.config?.handle)) || (source.source_type === 'tiktok' && (Array.isArray(source.config?.profiles) || Array.isArray(source.config?.hashtags))) || (source.source_type === 'instagram' && Array.isArray(source.config?.hashtags)) ? ' · ' : ''}Keywords: {(source.config.keywords as string[]).join(', ')}</span>
           ) : null}
           {source.outlet ? (
             <span style={{ marginLeft: '8px' }}>
