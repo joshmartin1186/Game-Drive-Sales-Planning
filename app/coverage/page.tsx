@@ -671,8 +671,20 @@ export default function CoveragePage() {
                             </span>
                           )}
                         </td>
-                        <td style={{ padding: '10px 16px', color: '#64748b' }}>
-                          {outlet.domain || '—'}
+                        <td style={{ padding: '10px 16px' }}>
+                          {outlet.domain ? (
+                            <a
+                              href={`https://${outlet.domain}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              style={{ color: '#2563eb', textDecoration: 'none', fontSize: '14px' }}
+                              title={`Open https://${outlet.domain}`}
+                            >
+                              {outlet.domain}
+                            </a>
+                          ) : (
+                            <span style={{ color: '#d1d5db' }}>—</span>
+                          )}
                         </td>
                         <td style={{ padding: '10px 16px', color: '#64748b' }}>
                           {outlet.country || '—'}
