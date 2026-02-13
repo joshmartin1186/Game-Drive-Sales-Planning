@@ -280,8 +280,8 @@ export default function SourcesPage() {
         if (formConfig.twitch_game_id) cfg.twitch_game_id = formConfig.twitch_game_id.trim()
         break
       case 'reddit':
-        if (formConfig.subreddit) cfg.subreddit = formConfig.subreddit.trim().replace(/^\/?(r\/)?/, '')
-        if (formConfig.keywords) cfg.keywords = formConfig.keywords.split(',').map(k => k.trim()).filter(Boolean)
+        if (formConfig.subreddits) cfg.subreddits = formConfig.subreddits.split(',').map((s: string) => s.trim().replace(/^\/?(r\/)?/, '')).filter(Boolean)
+        if (formConfig.keywords) cfg.keywords = formConfig.keywords.split(',').map((k: string) => k.trim()).filter(Boolean)
         if (formConfig.min_upvotes) cfg.min_upvotes = parseInt(formConfig.min_upvotes) || 0
         break
       case 'twitter':
@@ -515,7 +515,7 @@ export default function SourcesPage() {
       case 'reddit':
         return (
           <>
-            {field('subreddit', 'Subreddit', 'gaming')}
+            {field('subreddits', 'Subreddits (comma-separated)', 'gaming, pcgaming, indiegaming, NintendoSwitch')}
             {field('keywords', 'Keywords (comma-separated)', 'game name, studio')}
             {field('min_upvotes', 'Minimum Upvotes', '10', 'number')}
           </>
@@ -621,8 +621,11 @@ export default function SourcesPage() {
           {source.source_type === 'twitch' && source.config?.game_name ? (
             <span>Game: <strong>{String(source.config.game_name)}</strong></span>
           ) : null}
-          {source.source_type === 'reddit' && source.config?.subreddit ? (
-            <span>r/<strong>{String(source.config.subreddit)}</strong></span>
+          {source.source_type === 'reddit' && (source.config?.subreddits || source.config?.subreddit) ? (
+            <span>{Array.isArray(source.config.subreddits)
+              ? (source.config.subreddits as string[]).map((s: string) => `r/${s}`).join(', ')
+              : `r/${String(source.config.subreddit)}`
+            }</span>
           ) : null}
           {['twitter', 'tiktok', 'instagram'].includes(source.source_type) && Array.isArray(source.config?.keywords) ? (
             <span>Keywords: {(source.config.keywords as string[]).join(', ')}</span>

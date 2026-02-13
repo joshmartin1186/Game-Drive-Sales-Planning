@@ -5,15 +5,13 @@ function getSupabase() {
   return getServerSupabase()
 }
 
-// Apify Reddit scraper actor
-const APIFY_REDDIT_ACTOR = 'trudax/reddit-scraper-lite'
-
-const DEFAULT_SUBREDDITS = [
-  'gaming', 'pcgaming', 'Steam', 'NintendoSwitch', 'PS5',
-  'XboxSeriesX', 'indiegaming', 'Games',
-]
+// Apify Reddit scraper actor — verified working
+const APIFY_REDDIT_ACTOR = 'fatihtahta~reddit-scraper-search-fast'
 
 // GET /api/cron/reddit-scan — Scan Reddit for game mentions via Apify
+// Two modes:
+//   1. General keyword search (no subreddit filter) — catches mentions across all of Reddit
+//   2. Targeted subreddit search — scans specific subreddits from coverage_sources config
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get('authorization')
   const cronSecret = process.env.CRON_SECRET
@@ -38,133 +36,96 @@ export async function GET(request: NextRequest) {
 
     const apifyKey = keyData.api_key
 
-    // Get keywords
+    // Get whitelist keywords grouped by client+game
     const { data: keywords } = await supabase
       .from('coverage_keywords')
       .select('keyword, client_id, game_id')
-      .eq('is_active', true)
-      .eq('is_blacklist', false)
+      .eq('keyword_type', 'whitelist')
 
     if (!keywords || keywords.length === 0) {
       return NextResponse.json({ message: 'No keywords configured' })
     }
 
-    // Group by client+game
-    const searchTerms: { query: string; clientId: string; gameId: string | null }[] = []
-    const seen = new Set<string>()
+    // Group keywords by client+game
+    const keywordGroups: Map<string, { keywords: string[]; clientId: string; gameId: string | null }> = new Map()
     for (const kw of keywords) {
       const key = `${kw.client_id}|${kw.game_id || ''}`
-      if (!seen.has(key)) {
-        seen.add(key)
-        searchTerms.push({ query: kw.keyword, clientId: kw.client_id, gameId: kw.game_id })
+      if (!keywordGroups.has(key)) {
+        keywordGroups.set(key, { keywords: [], clientId: kw.client_id, gameId: kw.game_id })
+      }
+      keywordGroups.get(key)!.keywords.push(kw.keyword)
+    }
+
+    // Get Reddit sources with subreddit configs
+    const { data: redditSources } = await supabase
+      .from('coverage_sources')
+      .select('id, config, game_id')
+      .eq('source_type', 'reddit')
+      .eq('is_active', true)
+
+    // Collect all configured subreddits across all sources
+    const configuredSubreddits: Set<string> = new Set()
+    if (redditSources) {
+      for (const source of redditSources) {
+        const cfg = source.config as Record<string, unknown> | null
+        if (!cfg) continue
+        // Support both singular and plural config fields
+        if (cfg.subreddits && Array.isArray(cfg.subreddits)) {
+          for (const sub of cfg.subreddits) configuredSubreddits.add(String(sub).toLowerCase())
+        }
+        if (cfg.subreddit && typeof cfg.subreddit === 'string') {
+          configuredSubreddits.add(cfg.subreddit.toLowerCase())
+        }
       }
     }
 
     let totalFound = 0
     let totalNew = 0
 
-    for (const term of searchTerms) {
+    for (const [, group] of Array.from(keywordGroups.entries())) {
+      // Use all keywords as search queries
+      const queries = group.keywords.slice(0, 5) // Max 5 queries per group to limit cost
+
       try {
-        // Build search URLs for each subreddit
-        const searchUrls = DEFAULT_SUBREDDITS.map(
-          sub => `https://www.reddit.com/r/${sub}/search.json?q=${encodeURIComponent(term.query)}&sort=new&restrict_sr=on&t=week&limit=10`
-        )
-
-        // Run Apify Reddit scraper actor synchronously
-        const actorRes = await fetch(
-          `https://api.apify.com/v2/acts/${APIFY_REDDIT_ACTOR}/run-sync-get-dataset-items?token=${apifyKey}`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              startUrls: searchUrls.map(url => ({ url })),
-              maxItems: 80,
-              sort: 'new',
-            }),
-          }
-        )
-
-        if (!actorRes.ok) {
-          console.error(`Apify Reddit actor error for "${term.query}": ${actorRes.status}`)
-          continue
+        // === Pass 1: General keyword search (no subreddit filter) ===
+        const generalRes = await callRedditActor(apifyKey, queries, undefined)
+        if (generalRes) {
+          const result = await processRedditPosts(supabase, generalRes, group.clientId, group.gameId)
+          totalFound += result.found
+          totalNew += result.newItems
         }
 
-        const posts = await actorRes.json()
-        if (!Array.isArray(posts)) continue
-
-        totalFound += posts.length
-
-        for (const post of posts) {
-          const permalink = post.permalink || post.url || null
-          if (!permalink) continue
-
-          const url = permalink.startsWith('http') ? permalink : `https://www.reddit.com${permalink}`
-
-          // Check for existing
-          const { data: existing } = await supabase
-            .from('coverage_items')
-            .select('id')
-            .eq('url', url)
-            .eq('client_id', term.clientId)
-            .limit(1)
-
-          if (existing && existing.length > 0) continue
-
-          const publishDate = post.createdAt || post.created_utc
-            ? new Date(post.createdAt || (post.created_utc ? post.created_utc * 1000 : Date.now())).toISOString().split('T')[0]
-            : null
-
-          const subreddit = post.subreddit || post.communityName || 'unknown'
-          const subredditDomain = `reddit.com/r/${subreddit}`
-
-          // Find or create outlet for subreddit
-          let outletId: string | null = null
-
-          const { data: existingOutlet } = await supabase
-            .from('outlets')
-            .select('id')
-            .eq('domain', subredditDomain)
-            .limit(1)
-
-          if (existingOutlet && existingOutlet.length > 0) {
-            outletId = existingOutlet[0].id
-          } else {
-            const { data: newOutlet } = await supabase
-              .from('outlets')
-              .insert({
-                name: `r/${subreddit}`,
-                domain: subredditDomain,
-                tier: 'C',
-                is_active: true,
-              })
-              .select('id')
-              .single()
-            if (newOutlet) outletId = newOutlet.id
+        // === Pass 2: Targeted subreddit searches ===
+        for (const subreddit of Array.from(configuredSubreddits)) {
+          const subRes = await callRedditActor(apifyKey, queries, subreddit)
+          if (subRes) {
+            const result = await processRedditPosts(supabase, subRes, group.clientId, group.gameId)
+            totalFound += result.found
+            totalNew += result.newItems
           }
-
-          await supabase.from('coverage_items').insert({
-            client_id: term.clientId,
-            game_id: term.gameId,
-            outlet_id: outletId,
-            title: post.title || 'Untitled Post',
-            url,
-            publish_date: publishDate,
-            coverage_type: 'mention',
-            territory: null,
-            source_type: 'reddit',
-            source_metadata: {
-              subreddit, author: post.author || post.username,
-              score: post.score || post.upVotes, num_comments: post.numberOfComments || post.numComments,
-              upvote_ratio: post.upvoteRatio,
-            },
-            approval_status: 'pending_review',
-            discovered_at: new Date().toISOString(),
-          })
-
-          totalNew++
         }
       } catch (err) {
-        console.error(`Reddit Apify scan error for "${term.query}":`, err)
+        console.error(`Reddit Apify scan error for keywords [${queries.join(', ')}]:`, err)
+      }
+    }
+
+    // Update source run metadata
+    if (redditSources) {
+      for (const source of redditSources) {
+        await supabase
+          .from('coverage_sources')
+          .update({
+            last_run_at: new Date().toISOString(),
+            last_run_status: 'success',
+            last_run_message: `Found ${totalFound} posts, ${totalNew} new`,
+            items_found_last_run: totalNew,
+            total_items_found: (source as unknown as Record<string, number>).total_items_found
+              ? ((source as unknown as Record<string, number>).total_items_found || 0) + totalNew
+              : totalNew,
+            consecutive_failures: 0,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', source.id)
       }
     }
 
@@ -172,10 +133,166 @@ export async function GET(request: NextRequest) {
       message: `Reddit scan complete: ${totalFound} found, ${totalNew} new`,
       found: totalFound,
       new_items: totalNew,
+      subreddits_tracked: Array.from(configuredSubreddits),
     })
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Unknown error'
     console.error('Reddit scan error:', message)
     return NextResponse.json({ error: message }, { status: 500 })
   }
+}
+
+// Call the Apify Reddit actor
+async function callRedditActor(
+  apifyKey: string,
+  queries: string[],
+  subredditName: string | undefined
+): Promise<RedditPost[] | null> {
+  const body: Record<string, unknown> = {
+    queries,
+    maxPosts: 10,
+    maxComments: 1,
+    scrapeComments: false,
+    includeNsfw: false,
+    sort: 'new',
+    timeframe: 'month',
+  }
+
+  // Only add subredditName if targeting a specific subreddit
+  if (subredditName) {
+    body.subredditName = subredditName
+  }
+
+  const actorRes = await fetch(
+    `https://api.apify.com/v2/acts/${APIFY_REDDIT_ACTOR}/run-sync-get-dataset-items?token=${apifyKey}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }
+  )
+
+  if (!actorRes.ok) {
+    console.error(`Apify Reddit actor error: ${actorRes.status}`)
+    return null
+  }
+
+  const posts = await actorRes.json()
+  if (!Array.isArray(posts)) return null
+  return posts as RedditPost[]
+}
+
+interface RedditPost {
+  kind?: string
+  id?: string
+  title?: string
+  body?: string
+  author?: string
+  score?: number
+  upvote_ratio?: number
+  num_comments?: number
+  subreddit?: string
+  created_utc?: string
+  url?: string
+  flair?: string
+  over_18?: boolean
+  is_video?: boolean
+  domain?: string
+  is_self?: boolean
+}
+
+// Process Reddit posts into coverage items
+async function processRedditPosts(
+  supabase: ReturnType<typeof getSupabase>,
+  posts: RedditPost[],
+  clientId: string,
+  gameId: string | null
+): Promise<{ found: number; newItems: number }> {
+  let newItems = 0
+
+  for (const post of posts) {
+    if (!post.url) continue
+
+    // Skip NSFW
+    if (post.over_18) continue
+
+    const url = post.url
+
+    // Check for existing item by URL
+    const { data: existing } = await supabase
+      .from('coverage_items')
+      .select('id')
+      .eq('url', url)
+      .eq('client_id', clientId)
+      .limit(1)
+
+    if (existing && existing.length > 0) continue
+
+    const publishDate = post.created_utc
+      ? new Date(post.created_utc).toISOString().split('T')[0]
+      : null
+
+    const subreddit = post.subreddit || 'unknown'
+    const subredditDomain = `reddit.com/r/${subreddit}`
+
+    // Find or create outlet for subreddit
+    let outletId: string | null = null
+
+    const { data: existingOutlet } = await supabase
+      .from('outlets')
+      .select('id')
+      .eq('domain', subredditDomain)
+      .limit(1)
+
+    if (existingOutlet && existingOutlet.length > 0) {
+      outletId = existingOutlet[0].id
+    } else {
+      const { data: newOutlet } = await supabase
+        .from('outlets')
+        .insert({
+          name: `r/${subreddit}`,
+          domain: subredditDomain,
+          tier: 'C',
+          is_active: true,
+        })
+        .select('id')
+        .single()
+      if (newOutlet) outletId = newOutlet.id
+    }
+
+    // Determine coverage type based on content
+    const coverageType = post.is_video ? 'video'
+      : post.is_self ? 'mention'
+      : post.domain && !post.domain.startsWith('self.') ? 'news'
+      : 'mention'
+
+    await supabase.from('coverage_items').insert({
+      client_id: clientId,
+      game_id: gameId,
+      outlet_id: outletId,
+      title: post.title || 'Untitled Post',
+      url,
+      publish_date: publishDate,
+      coverage_type: coverageType,
+      territory: null,
+      source_type: 'reddit',
+      source_metadata: {
+        post_id: post.id,
+        subreddit,
+        author: post.author,
+        score: post.score || 0,
+        num_comments: post.num_comments || 0,
+        upvote_ratio: post.upvote_ratio || 0,
+        flair: post.flair || null,
+        is_video: post.is_video || false,
+        domain: post.domain || null,
+      },
+      approval_status: 'pending_review',
+      discovered_at: new Date().toISOString(),
+    })
+
+    newItems++
+  }
+
+  return { found: posts.length, newItems }
 }
