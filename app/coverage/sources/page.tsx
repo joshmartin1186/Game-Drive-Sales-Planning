@@ -285,6 +285,10 @@ export default function SourcesPage() {
         if (formConfig.min_upvotes) cfg.min_upvotes = parseInt(formConfig.min_upvotes) || 0
         break
       case 'twitter':
+        if (formConfig.handles) cfg.handles = formConfig.handles.split(',').map((h: string) => h.trim().replace(/^@/, '')).filter(Boolean)
+        if (formConfig.keywords) cfg.keywords = formConfig.keywords.split(',').map((k: string) => k.trim()).filter(Boolean)
+        if (formConfig.min_followers) cfg.min_followers = parseInt(formConfig.min_followers) || 0
+        break
       case 'tiktok':
       case 'instagram':
         if (formConfig.keywords) cfg.keywords = formConfig.keywords.split(',').map(k => k.trim()).filter(Boolean)
@@ -521,6 +525,13 @@ export default function SourcesPage() {
           </>
         )
       case 'twitter':
+        return (
+          <>
+            {field('handles', 'Handles to Track (comma-separated)', '@IGN, @PCGamer, @GameSpot')}
+            {field('keywords', 'Keywords (comma-separated)', 'game name, studio name')}
+            {field('min_followers', 'Min Followers', '1000', 'number')}
+          </>
+        )
       case 'tiktok':
       case 'instagram':
         return (
@@ -627,8 +638,14 @@ export default function SourcesPage() {
               : `r/${String(source.config.subreddit)}`
             }</span>
           ) : null}
+          {source.source_type === 'twitter' && (source.config?.handles || source.config?.handle) ? (
+            <span>{Array.isArray(source.config.handles)
+              ? (source.config.handles as string[]).map((h: string) => `@${h}`).join(', ')
+              : `@${String(source.config.handle)}`
+            }</span>
+          ) : null}
           {['twitter', 'tiktok', 'instagram'].includes(source.source_type) && Array.isArray(source.config?.keywords) ? (
-            <span>Keywords: {(source.config.keywords as string[]).join(', ')}</span>
+            <span>{source.source_type === 'twitter' && (source.config?.handles || source.config?.handle) ? ' · ' : ''}Keywords: {(source.config.keywords as string[]).join(', ')}</span>
           ) : null}
           {source.outlet ? (
             <span style={{ marginLeft: '8px' }}>
