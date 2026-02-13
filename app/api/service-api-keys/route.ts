@@ -169,7 +169,7 @@ export async function POST(request: NextRequest) {
             message = 'No API token configured'
             break
           }
-          const res = await fetch('https://api.apify.com/v2/user/me', {
+          const res = await fetch('https://api.apify.com/v2/users/me', {
             headers: { Authorization: `Bearer ${keyData.api_key}` }
           })
           if (res.ok) {
