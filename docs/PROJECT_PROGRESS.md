@@ -41,9 +41,13 @@
 
 ---
 
-## Current Status: February 13, 2026
+## Current Status: February 24, 2026
 
-### 🎉 Latest Session Summary - APIFY SCRAPERS (ALL 5 PLATFORMS) + UI POLISH
+### 🎉 Latest Session Summary - CONFIGURABLE AI MODELS + GLOBAL AI CHATBOT
+**Focus:** Made Gemini model selection configurable in Settings and built a global AI chatbot that lets users query their data from any page.
+**Result:** Two major features shipped — configurable model tiers (Flash Lite/Flash/Pro) with separate selections for predictions vs chatbot, and a floating AI chatbot with two-step query planning, SSE streaming, retry-with-backoff for rate limits, and friendly error messages.
+
+### Previous Session: February 13, 2026
 **Focus:** Tested, verified, and wired up Apify scrapers for all 5 social platforms (YouTube, Reddit, Twitter/X, TikTok, Instagram). Added platform-specific configuration UIs, clickable links in PDF exports and coverage feed, and clickable outlet domains.
 **Result:** All 5 Apify social platform scanners fully operational with verified actors, platform-specific Source Management forms, clickable URLs throughout the app. Twitch skipped (not needed).
 
@@ -107,6 +111,95 @@
 | **PR Coverage: Live Feed Link + Public Feed** | ✅ **Complete** | **100%** |
 | **PR Coverage: Apify Social Scrapers (#97)** | ✅ **Complete** | **100%** |
 | **PR Coverage: Clickable Links & URLs** | ✅ **Complete** | **100%** |
+| **Configurable AI Model Selection** | ✅ **Complete** | **100%** |
+| **Global AI Chatbot** | ✅ **Complete** | **100%** |
+
+---
+
+## February 24, 2026 - Configurable AI Models + Global AI Chatbot
+
+### ✅ Configurable Gemini Model Selection (COMPLETE)
+Made the Gemini AI model configurable system-wide with separate selections for different use cases:
+
+**Database Changes:**
+- Added `model_id` and `chatbot_model_id` columns to `service_api_keys` table (NULL = use default)
+
+**Shared Config Module — `lib/gemini-config.ts`:**
+- Single source of truth for all Gemini model configuration
+- 3 model tiers: Flash Lite (free/cheapest), Flash (balanced/paid), Pro (most capable/paid)
+- `getGeminiConfig()` helper reads API key + model preferences from `service_api_keys`
+- Exports `GEMINI_MODELS`, `GeminiModelId`, `DEFAULT_MODEL`
+
+**Routes Updated to Use Configurable Model:**
+- `app/api/sales/predict/route.ts` — Revenue predictions
+- `app/api/sales/predict-batch/route.ts` — Batch predictions for calendar auto-generation
+- `app/api/coverage-enrich/route.ts` — Manual coverage enrichment
+- `app/api/cron/coverage-enrich/route.ts` — Automated cron enrichment
+- `app/api/service-api-keys/route.ts` — Accepts `model_id` and `chatbot_model_id` on PUT
+
+**Settings UI — `app/settings/system-keys/page.tsx`:**
+- Two model dropdowns on the Gemini card (visible when configured and user has edit access):
+  - "Predictions & Enrichment Model" — controls revenue predictions + coverage AI scoring
+  - "Chatbot Model" — controls the global chatbot
+- Inline save with auto-dismiss toast on model change
+- Defaults to Flash Lite when NULL
+
+### ✅ Prediction Engine Extraction (COMPLETE)
+- Extracted `computePrediction()` into standalone `lib/prediction-engine.ts`
+- Added `geminiModelId` as optional parameter (defaults to Flash Lite)
+- Created `app/api/sales/predict-batch/route.ts` for batch predictions
+- Created `lib/hooks/useCalendarPredictions.ts` for calendar auto-generation
+- Updated `SaleCalendarPreviewModal` with AI prediction integration
+
+### ✅ Global AI Chatbot (COMPLETE)
+Built a floating AI chatbot accessible from every page in the application:
+
+**Backend — `app/api/chatbot/route.ts`:**
+- Two-step query pattern: (1) Gemini plans structured queries → (2) Execute on Supabase → (3) Stream answer via SSE
+- Auth-aware: verifies user via `createRouteHandlerClient`, restricts data to user's accessible clients
+- Uses `getServerSupabase()` (service role) for API key lookup and data queries
+- Max 5 queries per message, 20 rows each
+- Supports conversation history (last 10 messages)
+- SSE streaming with `data: {json}\n\n` format and `[DONE]` sentinel
+
+**Schema Context — `lib/chatbot-schema.ts`:**
+- Full database schema documentation for Gemini context (all tables, columns, relationships)
+- `QUERY_PLANNER_PROMPT` — instructs Gemini to output structured JSON query plans
+- `ANSWER_PROMPT` + `buildAnswerPrompt()` — response formatting guidelines
+
+**Frontend — `app/components/ChatBot.tsx` + `ChatBot.module.css`:**
+- Floating blue button (bottom-right, z-index 2000) with chat bubble icon
+- 400×560px panel with slide-up animation
+- Empty state with 4 suggestion buttons for common queries
+- Real-time SSE streaming with pulsing dot indicator
+- Auto-scroll, auto-resize textarea, Enter-to-send (Shift+Enter for newline)
+- AbortController for canceling in-flight requests on close
+- Only renders for authenticated users (`useAuth()` guard)
+- Responsive: full-width on mobile (<480px)
+
+**Error Handling & Resilience:**
+- `friendlyGeminiError()` — parses raw Gemini API errors into human-readable messages
+- `withRetry()` — exponential backoff (2s, 4s) for 429 rate limit errors
+- Specific messages for: rate limits, invalid API key, model not found, server errors
+- Strips JSON noise from error messages, truncates long errors
+
+**Layout Integration — `app/layout.tsx`:**
+- `<ChatBot />` added inside `<Providers>` after `{children}` — appears on every page globally
+
+### Commits
+- `5f83101` — Add configurable AI models and global AI chatbot (21 files, +2640 lines)
+- `1d1c632` — Fix chatbot error handling: friendly messages and retry on rate limits
+
+### 🔜 Next Steps
+- Monitor chatbot usage and Gemini API costs
+- Consider upgrading to paid Gemini tier if rate limits are hit frequently
+- Add chatbot conversation persistence (save/load chat history)
+- Coverage Dashboard aggregation of social metrics
+- Client Report Builder with social media section
+
+---
+
+## February 13, 2026 - Apify Social Platform Scrapers + UI Polish
 
 ---
 
@@ -673,4 +766,4 @@ Identified and fixed critical issues for real data import:
 
 ---
 
-*Last Updated: February 13, 2026 - Tested and wired up all 5 Apify social platform scrapers (YouTube, Reddit, Twitter/X, TikTok, Instagram) with verified actors and platform-specific Source Management UI. Added clickable links in PDF exports, visible URLs in coverage feed, and clickable outlet domains. Next: End-to-end production testing of social scanners, coverage dashboard aggregation, client report builder with social section.*
+*Last Updated: February 24, 2026 - Made Gemini model configurable in Settings (Flash Lite/Flash/Pro) with separate selections for predictions vs chatbot. Built global AI chatbot with two-step query planning, SSE streaming, retry-with-backoff for rate limits, and friendly error messages. Chatbot accessible from every page via floating button. Next: Monitor chatbot usage, consider paid Gemini tier, add conversation persistence, coverage dashboard aggregation, client report builder with social section.*
