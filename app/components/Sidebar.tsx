@@ -3,16 +3,24 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { useAuth } from '@/lib/auth-context'
 import type { FeatureKey } from '@/lib/auth'
 import styles from './Sidebar.module.css'
 
 const STORAGE_KEY = 'gamedrive-sidebar-collapsed'
 
+interface PlatformData {
+  name: string
+  color_hex: string
+  cooldown_days: number
+}
+
 export function Sidebar() {
   const pathname = usePathname()
   const { profile, loading, isSuperAdmin, hasAccess, signOut } = useAuth()
   const [collapsed, setCollapsed] = useState(false)
+  const [platformsData, setPlatformsData] = useState<PlatformData[]>([])
 
   // Hydrate collapsed state from localStorage
   useEffect(() => {
@@ -20,6 +28,18 @@ export function Sidebar() {
       const stored = localStorage.getItem(STORAGE_KEY)
       if (stored === 'true') setCollapsed(true)
     } catch {}
+  }, [])
+
+  // Fetch platforms from database instead of hardcoding
+  useEffect(() => {
+    const supabase = createClientComponentClient()
+    supabase
+      .from('platforms')
+      .select('name, color_hex, cooldown_days')
+      .order('name')
+      .then(({ data }) => {
+        if (data) setPlatformsData(data)
+      })
   }, [])
 
   const toggleCollapse = () => {
@@ -98,13 +118,11 @@ export function Sidebar() {
 
   const isSettingsActive = pathname.startsWith('/settings')
 
-  const platforms = [
-    { name: 'Steam', color: '#1b2838', cooldown: '30d' },
-    { name: 'PlayStation', color: '#0070d1', cooldown: '42d' },
-    { name: 'Xbox', color: '#107c10', cooldown: '28d' },
-    { name: 'Nintendo', color: '#e60012', cooldown: '56d' },
-    { name: 'Epic', color: '#000000', cooldown: '14d' }
-  ]
+  const platforms = platformsData.map(p => ({
+    name: p.name,
+    color: p.color_hex,
+    cooldown: `${p.cooldown_days}d`
+  }))
 
   const userInitial = profile
     ? (profile.display_name || profile.email || '?').charAt(0).toUpperCase()
