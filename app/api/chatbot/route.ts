@@ -32,6 +32,55 @@ interface QueryPlan {
   queries: QuerySpec[]
 }
 
+// Extract a friendly error message from Gemini API errors
+function friendlyGeminiError(err: unknown): string {
+  const raw = err instanceof Error ? err.message : String(err)
+
+  // Rate limit (429)
+  if (raw.includes('429') || raw.toLowerCase().includes('rate limit') || raw.toLowerCase().includes('quota')) {
+    return 'The AI is temporarily rate-limited. Please wait a moment and try again.'
+  }
+  // Auth errors
+  if (raw.includes('401') || raw.includes('403') || raw.toLowerCase().includes('api key')) {
+    return 'The Gemini API key appears to be invalid. Check Settings > System Keys.'
+  }
+  // Model not found
+  if (raw.includes('404') || raw.toLowerCase().includes('not found')) {
+    return 'The selected AI model was not found. Try changing the model in Settings > System Keys.'
+  }
+  // Server errors
+  if (raw.includes('500') || raw.includes('503')) {
+    return 'The AI service is temporarily unavailable. Please try again in a moment.'
+  }
+  // Generic — strip JSON noise
+  const jsonMatch = raw.match(/"message"\s*:\s*"([^"]+)"/)
+  if (jsonMatch) return jsonMatch[1]
+
+  // Truncate very long messages
+  if (raw.length > 200) return raw.slice(0, 200) + '…'
+  return raw
+}
+
+// Retry a Gemini call with exponential backoff for rate limits
+async function withRetry<T>(fn: () => Promise<T>, maxRetries = 2): Promise<T> {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn()
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      const isRateLimit = msg.includes('429') || msg.toLowerCase().includes('rate limit') || msg.toLowerCase().includes('quota')
+
+      if (isRateLimit && attempt < maxRetries) {
+        // Wait 2s, then 4s
+        await new Promise(resolve => setTimeout(resolve, 2000 * (attempt + 1)))
+        continue
+      }
+      throw err
+    }
+  }
+  throw new Error('Max retries exceeded')
+}
+
 // POST /api/chatbot — Two-step AI chatbot with database context
 export async function POST(request: NextRequest) {
   try {
@@ -110,11 +159,22 @@ ${historyContext}
 
 USER QUESTION: ${message}`
 
-    const planResponse = await ai.models.generateContent({
-      model: modelId,
-      contents: plannerInput,
-      config: { responseMimeType: 'application/json' },
-    })
+    let planResponse
+    try {
+      planResponse = await withRetry(() =>
+        ai.models.generateContent({
+          model: modelId,
+          contents: plannerInput,
+          config: { responseMimeType: 'application/json' },
+        })
+      )
+    } catch (err) {
+      const friendly = friendlyGeminiError(err)
+      return new Response(JSON.stringify({ error: friendly }), {
+        status: 502,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
 
     let queryPlan: QueryPlan
     try {
@@ -194,10 +254,12 @@ USER QUESTION: ${message}`
     const stream = new ReadableStream({
       async start(controller) {
         try {
-          const response = await ai.models.generateContentStream({
-            model: modelId,
-            contents: answerPrompt,
-          })
+          const response = await withRetry(() =>
+            ai.models.generateContentStream({
+              model: modelId,
+              contents: answerPrompt,
+            })
+          )
 
           for await (const chunk of response) {
             const text = chunk.text || ''
@@ -210,8 +272,8 @@ USER QUESTION: ${message}`
           controller.enqueue(encoder.encode('data: [DONE]\n\n'))
           controller.close()
         } catch (err) {
-          const msg = err instanceof Error ? err.message : 'Stream error'
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: msg })}\n\n`))
+          const friendly = friendlyGeminiError(err)
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: friendly })}\n\n`))
           controller.enqueue(encoder.encode('data: [DONE]\n\n'))
           controller.close()
         }
@@ -226,8 +288,8 @@ USER QUESTION: ${message}`
       },
     })
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Unknown error'
-    return new Response(JSON.stringify({ error: message }), {
+    const friendly = friendlyGeminiError(err)
+    return new Response(JSON.stringify({ error: friendly }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
     })
