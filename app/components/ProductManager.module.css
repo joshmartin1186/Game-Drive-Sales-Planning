@@ -546,3 +546,44 @@
   color: #3b82f6;
   font-weight: 500;
 }
+
+/* PR tracking badge */
+.prBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  margin-left: 8px;
+}
+
+.prBadgeOn {
+  composes: prBadge;
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.prBadgeOff {
+  composes: prBadge;
+  background: #f3f4f6;
+  color: #9ca3af;
+}
+
+.prToggle {
+  background: none;
+  border: 1px solid #d1d5db;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.prToggle:hover {
+  border-color: #2563eb;
+  background: #eff6ff;
+  color: #2563eb;
+}

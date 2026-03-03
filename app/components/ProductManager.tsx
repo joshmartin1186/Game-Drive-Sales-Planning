@@ -120,7 +120,8 @@ export default function ProductManager({
       const createdGame = await onGameCreate({
         name: gameNameTrimmed,
         client_id: gameClientId,
-        steam_app_id: steamAppIdTrimmed
+        steam_app_id: steamAppIdTrimmed,
+        pr_tracking_enabled: false
       })
 
       // If auto-create base product is enabled and we got the game back
@@ -622,10 +623,24 @@ export default function ProductManager({
                               <strong>{game.name}</strong>
                               <span className={styles.meta}> ({game.client?.name})</span>
                               {game.steam_app_id && <span className={styles.meta}> - Steam: {game.steam_app_id}</span>}
+                              {game.pr_tracking_enabled ? (
+                                <span className={styles.prBadgeOn}>PR On</span>
+                              ) : (
+                                <span className={styles.prBadgeOff}>PR Off</span>
+                              )}
                             </div>
                             <div className={styles.itemActions}>
                               {onGameUpdate && (
-                                <button 
+                                <button
+                                  className={styles.prToggle}
+                                  onClick={() => onGameUpdate(game.id, { pr_tracking_enabled: !game.pr_tracking_enabled })}
+                                  title={game.pr_tracking_enabled ? 'Disable PR tracking' : 'Enable PR tracking'}
+                                >
+                                  {game.pr_tracking_enabled ? 'Disable PR' : 'Enable PR'}
+                                </button>
+                              )}
+                              {onGameUpdate && (
+                                <button
                                   className={styles.editBtn}
                                   onClick={() => startEditGame(game)}
                                   title="Edit game"
@@ -634,7 +649,7 @@ export default function ProductManager({
                                 </button>
                               )}
                               {onGameDelete && (
-                                <button 
+                                <button
                                   className={styles.deleteBtn}
                                   onClick={() => setDeleteConfirm({ type: 'game', id: game.id, name: game.name })}
                                   title="Delete game"

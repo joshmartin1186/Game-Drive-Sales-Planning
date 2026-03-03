@@ -484,6 +484,12 @@ export default function CoveragePage() {
             }}>
               Export
             </Link>
+            <Link href="/coverage/clients" style={{
+              padding: '10px 20px', fontSize: '14px', fontWeight: 500, cursor: 'pointer',
+              color: '#64748b', textDecoration: 'none', marginBottom: '-2px'
+            }}>
+              Clients &amp; Games
+            </Link>
           </div>
 
           {/* Stats summary */}

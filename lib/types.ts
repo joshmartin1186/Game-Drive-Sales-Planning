@@ -62,6 +62,7 @@ export interface Game {
   client_id: string
   name: string
   steam_app_id?: string
+  pr_tracking_enabled: boolean
   created_at: string
   client?: Client
 }
