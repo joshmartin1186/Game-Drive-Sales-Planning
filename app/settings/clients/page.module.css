@@ -1,0 +1,361 @@
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.topBar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 24px;
+}
+
+.addBtn {
+  padding: 10px 20px;
+  background: #2563eb;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 150ms;
+}
+
+.addBtn:hover { background: #1d4ed8; }
+.addBtn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Empty state */
+.emptyState {
+  text-align: center;
+  padding: 80px 40px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.emptyIcon {
+  width: 80px;
+  height: 80px;
+  background: #f1f5f9;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 24px;
+}
+
+.emptyState h3 {
+  font-size: 20px;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0 0 8px;
+}
+
+.emptyState p {
+  font-size: 14px;
+  color: #64748b;
+  margin: 0 0 24px;
+}
+
+/* Client list */
+.clientList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.clientCard {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  overflow: hidden;
+}
+
+.cardHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  cursor: pointer;
+  transition: background 100ms;
+}
+
+.cardHeader:hover { background: #f8fafc; }
+
+.cardTitle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.cardTitle h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0;
+}
+
+.expandIcon {
+  color: #94a3b8;
+  font-size: 14px;
+  width: 16px;
+}
+
+.email {
+  font-size: 13px;
+  color: #64748b;
+}
+
+.cardMeta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.countBadge {
+  font-size: 12px;
+  color: #64748b;
+  padding: 3px 8px;
+  background: #f1f5f9;
+  border-radius: 4px;
+}
+
+.statusGreen {
+  font-size: 12px;
+  font-weight: 500;
+  padding: 3px 8px;
+  background: #dcfce7;
+  color: #166534;
+  border-radius: 4px;
+}
+
+.statusYellow {
+  font-size: 12px;
+  font-weight: 500;
+  padding: 3px 8px;
+  background: #fef3c7;
+  color: #92400e;
+  border-radius: 4px;
+}
+
+.deleteBtn {
+  padding: 4px 8px;
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  font-size: 14px;
+  border-radius: 4px;
+  transition: all 150ms;
+}
+
+.deleteBtn:hover {
+  color: #dc2626;
+  background: #fef2f2;
+}
+
+/* Card body */
+.cardBody {
+  padding: 0 20px 16px;
+  border-top: 1px solid #f1f5f9;
+}
+
+.gameSection {
+  margin-top: 12px;
+}
+
+.gameHeader {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  flex-wrap: wrap;
+}
+
+.gameHeader strong {
+  font-size: 14px;
+  color: #334155;
+}
+
+.steamId {
+  font-size: 12px;
+  color: #94a3b8;
+  font-family: monospace;
+}
+
+.prToggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #475569;
+  cursor: pointer;
+  margin-left: auto;
+  user-select: none;
+}
+
+.prToggle input {
+  accent-color: #2563eb;
+  cursor: pointer;
+}
+
+.prBadge {
+  font-size: 11px;
+  padding: 2px 6px;
+  background: #eff6ff;
+  color: #2563eb;
+  border-radius: 3px;
+  font-weight: 500;
+  margin-left: auto;
+}
+
+.productList {
+  margin-left: 16px;
+  border-left: 2px solid #e2e8f0;
+  padding-left: 12px;
+}
+
+.productRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 0;
+  flex-wrap: wrap;
+}
+
+.productName {
+  font-size: 13px;
+  color: #1e293b;
+}
+
+.typeBadge {
+  font-size: 11px;
+  padding: 1px 6px;
+  background: #f1f5f9;
+  color: #64748b;
+  border-radius: 3px;
+}
+
+.aliasesBadge {
+  font-size: 11px;
+  padding: 1px 6px;
+  background: #fef3c7;
+  color: #92400e;
+  border-radius: 3px;
+  font-style: italic;
+}
+
+.platformDots {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.platformDot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.noPlatforms {
+  font-size: 11px;
+  color: #94a3b8;
+  font-style: italic;
+}
+
+.noItems {
+  font-size: 13px;
+  color: #94a3b8;
+  padding: 8px 0;
+  margin: 0;
+}
+
+/* Modal */
+.overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal {
+  background: white;
+  border-radius: 16px;
+  padding: 24px;
+  width: 100%;
+  max-width: 400px;
+}
+
+.modal h2 {
+  font-size: 20px;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0 0 20px;
+}
+
+.formField {
+  margin-bottom: 16px;
+}
+
+.formField label {
+  display: block;
+  font-size: 14px;
+  font-weight: 500;
+  color: #374151;
+  margin-bottom: 6px;
+}
+
+.formField input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 14px;
+  box-sizing: border-box;
+  font-family: inherit;
+}
+
+.formField input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
+.errorBanner {
+  padding: 10px 14px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  color: #991b1b;
+  font-size: 13px;
+  margin-bottom: 16px;
+}
+
+.modalActions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
+.cancelBtn {
+  padding: 10px 20px;
+  background: white;
+  color: #475569;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.cancelBtn:hover { background: #f8fafc; }

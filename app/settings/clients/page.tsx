@@ -3,6 +3,36 @@
 import { useState, useEffect } from 'react'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { useAuth } from '@/lib/auth-context'
+import styles from './page.module.css'
+
+interface Platform {
+  id: string
+  name: string
+  color_hex: string
+}
+
+interface ProductPlatform {
+  platform_id: string
+  platform?: Platform
+}
+
+interface Product {
+  id: string
+  name: string
+  product_type: string
+  steam_product_id?: string
+  launch_date?: string | null
+  product_aliases?: string[]
+  product_platforms?: ProductPlatform[]
+}
+
+interface Game {
+  id: string
+  name: string
+  steam_app_id?: string
+  pr_tracking_enabled: boolean
+  products?: Product[]
+}
 
 interface Client {
   id: string
@@ -10,6 +40,7 @@ interface Client {
   email: string | null
   steam_api_key: string | null
   created_at: string
+  games?: Game[]
 }
 
 export default function SettingsClientsPage() {
@@ -18,21 +49,37 @@ export default function SettingsClientsPage() {
   const canView = hasAccess('client_management', 'view')
   const canEdit = hasAccess('client_management', 'edit')
   const [clients, setClients] = useState<Client[]>([])
+  const [platforms, setPlatforms] = useState<Platform[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [showAddModal, setShowAddModal] = useState(false)
   const [newClient, setNewClient] = useState({ name: '', email: '' })
-  const [editingClient, setEditingClient] = useState<Client | null>(null)
   const [addError, setAddError] = useState<string | null>(null)
+  const [expandedClients, setExpandedClients] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     fetchClients()
+    fetchPlatforms()
   }, [])
+
+  const fetchPlatforms = async () => {
+    const { data } = await supabase.from('platforms').select('id, name, color_hex').order('name')
+    if (data) setPlatforms(data)
+  }
 
   const fetchClients = async () => {
     setIsLoading(true)
     const { data, error } = await supabase
       .from('clients')
-      .select('*')
+      .select(`
+        *,
+        games(
+          *,
+          products(
+            *,
+            product_platforms(platform_id, platform:platforms(id, name, color_hex))
+          )
+        )
+      `)
       .order('name')
 
     if (!error && data) {
@@ -65,7 +112,7 @@ export default function SettingsClientsPage() {
   }
 
   const handleDeleteClient = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this client?')) return
+    if (!confirm('Are you sure you want to delete this client? This will also delete all associated games and products.')) return
 
     const { error } = await supabase
       .from('clients')
@@ -77,10 +124,38 @@ export default function SettingsClientsPage() {
     }
   }
 
+  const handleTogglePR = async (gameId: string, currentValue: boolean) => {
+    const { error } = await supabase
+      .from('games')
+      .update({ pr_tracking_enabled: !currentValue })
+      .eq('id', gameId)
+
+    if (!error) {
+      setClients(prev => prev.map(c => ({
+        ...c,
+        games: c.games?.map(g =>
+          g.id === gameId ? { ...g, pr_tracking_enabled: !currentValue } : g
+        )
+      })))
+    }
+  }
+
+  const toggleExpanded = (clientId: string) => {
+    setExpandedClients(prev => {
+      const next = new Set(prev)
+      if (next.has(clientId)) next.delete(clientId)
+      else next.add(clientId)
+      return next
+    })
+  }
+
+  const totalProducts = (client: Client) =>
+    client.games?.reduce((sum, g) => sum + (g.products?.length || 0), 0) || 0
+
+  const totalGames = (client: Client) => client.games?.length || 0
+
   if (authLoading || isLoading) {
-    return (
-      <div style={{ textAlign: 'center', padding: '60px', color: '#64748b' }}>Loading...</div>
-    )
+    return <div style={{ textAlign: 'center', padding: '60px', color: '#64748b' }}>Loading...</div>
   }
 
   if (!canView) {
@@ -94,230 +169,149 @@ export default function SettingsClientsPage() {
 
   return (
     <>
-      <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
-        <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginBottom: '24px' }}>
-          {canEdit && <button
-            onClick={() => setShowAddModal(true)}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              padding: '10px 20px',
-              backgroundColor: '#2563eb',
-              color: 'white',
-              border: 'none',
-              borderRadius: '8px',
-              fontSize: '14px',
-              fontWeight: 500,
-              cursor: 'pointer'
-            }}
-          >
-            <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            Add Client
-          </button>}
+      <div className={styles.container}>
+        <div className={styles.topBar}>
+          {canEdit && (
+            <button className={styles.addBtn} onClick={() => setShowAddModal(true)}>
+              + Add Client
+            </button>
+          )}
         </div>
 
-        {isLoading ? (
-          <div style={{ textAlign: 'center', padding: '60px', color: '#64748b' }}>Loading clients...</div>
-        ) : clients.length === 0 ? (
-          <div style={{
-            textAlign: 'center',
-            padding: '80px 40px',
-            backgroundColor: 'white',
-            borderRadius: '12px',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
-          }}>
-            <div style={{
-              width: '80px',
-              height: '80px',
-              backgroundColor: '#f1f5f9',
-              borderRadius: '50%',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              margin: '0 auto 24px'
-            }}>
+        {clients.length === 0 ? (
+          <div className={styles.emptyState}>
+            <div className={styles.emptyIcon}>
               <svg width="40" height="40" fill="none" stroke="#94a3b8" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
               </svg>
             </div>
-            <h3 style={{ fontSize: '20px', fontWeight: 600, color: '#1e293b', margin: '0 0 8px 0' }}>No Clients Yet</h3>
-            <p style={{ fontSize: '14px', color: '#64748b', margin: '0 0 24px 0' }}>Add your first game publisher client to get started.</p>
-            <button
-              onClick={() => setShowAddModal(true)}
-              style={{
-                padding: '12px 24px',
-                backgroundColor: '#2563eb',
-                color: 'white',
-                border: 'none',
-                borderRadius: '8px',
-                fontSize: '14px',
-                fontWeight: 500,
-                cursor: 'pointer'
-              }}
-            >
-              Add Your First Client
-            </button>
+            <h3>No Clients Yet</h3>
+            <p>Add your first game publisher client to get started.</p>
+            <button className={styles.addBtn} onClick={() => setShowAddModal(true)}>Add Your First Client</button>
           </div>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '16px' }}>
-            {clients.map(client => (
-              <div
-                key={client.id}
-                style={{
-                  backgroundColor: 'white',
-                  borderRadius: '12px',
-                  padding: '24px',
-                  boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
-                  <div>
-                    <h3 style={{ fontSize: '18px', fontWeight: 600, color: '#1e293b', margin: 0 }}>{client.name}</h3>
-                    {client.email && <p style={{ fontSize: '14px', color: '#64748b', margin: '4px 0 0 0' }}>{client.email}</p>}
+          <div className={styles.clientList}>
+            {clients.map(client => {
+              const isExpanded = expandedClients.has(client.id)
+              return (
+                <div key={client.id} className={styles.clientCard}>
+                  <div className={styles.cardHeader} onClick={() => toggleExpanded(client.id)}>
+                    <div className={styles.cardTitle}>
+                      <span className={styles.expandIcon}>{isExpanded ? '▾' : '▸'}</span>
+                      <h3>{client.name}</h3>
+                      {client.email && <span className={styles.email}>{client.email}</span>}
+                    </div>
+                    <div className={styles.cardMeta}>
+                      <span className={styles.countBadge}>{totalGames(client)} game{totalGames(client) !== 1 ? 's' : ''}</span>
+                      <span className={styles.countBadge}>{totalProducts(client)} product{totalProducts(client) !== 1 ? 's' : ''}</span>
+                      <span className={client.steam_api_key ? styles.statusGreen : styles.statusYellow}>
+                        {client.steam_api_key ? '✓ API Key' : '⚠ No API Key'}
+                      </span>
+                      {canEdit && (
+                        <button
+                          className={styles.deleteBtn}
+                          onClick={(e) => { e.stopPropagation(); handleDeleteClient(client.id) }}
+                          title="Delete client"
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
                   </div>
-                  <button
-                    onClick={() => handleDeleteClient(client.id)}
-                    style={{
-                      padding: '6px',
-                      backgroundColor: 'transparent',
-                      border: 'none',
-                      cursor: 'pointer',
-                      color: '#94a3b8'
-                    }}
-                  >
-                    <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                  </button>
+
+                  {isExpanded && (
+                    <div className={styles.cardBody}>
+                      {(!client.games || client.games.length === 0) ? (
+                        <p className={styles.noItems}>No games added yet. Use Manage Products on the main page to add games.</p>
+                      ) : (
+                        client.games.map(game => (
+                          <div key={game.id} className={styles.gameSection}>
+                            <div className={styles.gameHeader}>
+                              <strong>{game.name}</strong>
+                              {game.steam_app_id && <span className={styles.steamId}>Steam: {game.steam_app_id}</span>}
+                              {canEdit && (
+                                <label className={styles.prToggle} onClick={(e) => e.stopPropagation()}>
+                                  <input
+                                    type="checkbox"
+                                    checked={game.pr_tracking_enabled}
+                                    onChange={() => handleTogglePR(game.id, game.pr_tracking_enabled)}
+                                  />
+                                  <span>PR Tracking</span>
+                                </label>
+                              )}
+                              {!canEdit && game.pr_tracking_enabled && (
+                                <span className={styles.prBadge}>PR Tracking</span>
+                              )}
+                            </div>
+
+                            {game.products && game.products.length > 0 ? (
+                              <div className={styles.productList}>
+                                {game.products.map(product => (
+                                  <div key={product.id} className={styles.productRow}>
+                                    <span className={styles.productName}>{product.name}</span>
+                                    <span className={styles.typeBadge}>{product.product_type}</span>
+                                    {product.product_aliases && product.product_aliases.length > 0 && (
+                                      <span className={styles.aliasesBadge} title={product.product_aliases.join(', ')}>
+                                        aka {product.product_aliases[0]}{product.product_aliases.length > 1 ? ` +${product.product_aliases.length - 1}` : ''}
+                                      </span>
+                                    )}
+                                    <div className={styles.platformDots}>
+                                      {product.product_platforms?.map(pp => (
+                                        <span
+                                          key={pp.platform_id}
+                                          className={styles.platformDot}
+                                          style={{ backgroundColor: pp.platform?.color_hex || '#94a3b8' }}
+                                          title={pp.platform?.name || 'Unknown'}
+                                        />
+                                      ))}
+                                      {(!product.product_platforms || product.product_platforms.length === 0) && (
+                                        <span className={styles.noPlatforms}>No platforms</span>
+                                      )}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <p className={styles.noItems}>No products yet</p>
+                            )}
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  )}
                 </div>
-                <div style={{ fontSize: '12px', color: '#94a3b8' }}>
-                  Added {new Date(client.created_at).toLocaleDateString()}
-                </div>
-                <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid #f1f5f9' }}>
-                  <span style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '4px',
-                    padding: '4px 8px',
-                    backgroundColor: client.steam_api_key ? '#dcfce7' : '#fef3c7',
-                    color: client.steam_api_key ? '#166534' : '#92400e',
-                    borderRadius: '4px',
-                    fontSize: '12px',
-                    fontWeight: 500
-                  }}>
-                    {client.steam_api_key ? '✓ API Key Set' : '⚠ No API Key'}
-                  </span>
-                </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </div>
 
       {showAddModal && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0,0,0,0.5)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1000
-        }}>
-          <div style={{
-            backgroundColor: 'white',
-            borderRadius: '16px',
-            padding: '24px',
-            width: '100%',
-            maxWidth: '400px'
-          }}>
-            <h2 style={{ fontSize: '20px', fontWeight: 600, color: '#1e293b', margin: '0 0 20px 0' }}>Add New Client</h2>
-            <div style={{ marginBottom: '16px' }}>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, color: '#374151', marginBottom: '6px' }}>Client Name *</label>
+        <div className={styles.overlay}>
+          <div className={styles.modal}>
+            <h2>Add New Client</h2>
+            <div className={styles.formField}>
+              <label>Client Name *</label>
               <input
                 type="text"
                 value={newClient.name}
                 onChange={(e) => setNewClient({ ...newClient, name: e.target.value })}
                 placeholder="e.g., tobspr Games"
-                style={{
-                  width: '100%',
-                  padding: '10px 12px',
-                  border: '1px solid #e2e8f0',
-                  borderRadius: '8px',
-                  fontSize: '14px',
-                  boxSizing: 'border-box'
-                }}
               />
             </div>
-            <div style={{ marginBottom: '24px' }}>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, color: '#374151', marginBottom: '6px' }}>Email (optional)</label>
+            <div className={styles.formField}>
+              <label>Email (optional)</label>
               <input
                 type="email"
                 value={newClient.email}
                 onChange={(e) => setNewClient({ ...newClient, email: e.target.value })}
                 placeholder="contact@example.com"
-                style={{
-                  width: '100%',
-                  padding: '10px 12px',
-                  border: '1px solid #e2e8f0',
-                  borderRadius: '8px',
-                  fontSize: '14px',
-                  boxSizing: 'border-box'
-                }}
               />
             </div>
-            {addError && (
-              <div style={{
-                padding: '10px 14px',
-                backgroundColor: '#fef2f2',
-                border: '1px solid #fecaca',
-                borderRadius: '8px',
-                color: '#991b1b',
-                fontSize: '13px',
-                marginBottom: '16px'
-              }}>
-                {addError}
-              </div>
-            )}
-            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
-              <button
-                onClick={() => setShowAddModal(false)}
-                style={{
-                  padding: '10px 20px',
-                  backgroundColor: 'white',
-                  color: '#475569',
-                  border: '1px solid #e2e8f0',
-                  borderRadius: '8px',
-                  fontSize: '14px',
-                  fontWeight: 500,
-                  cursor: 'pointer'
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleAddClient}
-                disabled={!newClient.name.trim()}
-                style={{
-                  padding: '10px 20px',
-                  backgroundColor: '#2563eb',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '8px',
-                  fontSize: '14px',
-                  fontWeight: 500,
-                  cursor: 'pointer',
-                  opacity: newClient.name.trim() ? 1 : 0.5
-                }}
-              >
-                Add Client
-              </button>
+            {addError && <div className={styles.errorBanner}>{addError}</div>}
+            <div className={styles.modalActions}>
+              <button className={styles.cancelBtn} onClick={() => { setShowAddModal(false); setAddError(null) }}>Cancel</button>
+              <button className={styles.addBtn} onClick={handleAddClient} disabled={!newClient.name.trim()}>Add Client</button>
             </div>
           </div>
         </div>

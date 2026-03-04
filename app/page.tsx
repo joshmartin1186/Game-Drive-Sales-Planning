@@ -181,6 +181,15 @@ export default function GameDriveDashboard() {
     } catch (err: unknown) { const errorMessage = err instanceof Error ? err.message : 'Failed to create sale'; console.error('Error creating sale:', err); setError(errorMessage); return null }
   }
 
+  async function handleSaleCreateAndContinue(sale: Omit<Sale, 'id' | 'created_at'>) {
+    try {
+      const { data, error } = await supabase.from('sales').insert([sale]).select(`*, product:products(*, game:games(*, client:clients(*))), platform:platforms(*)`).single()
+      if (error) throw error
+      if (data) { setSales(prev => [...prev, data].sort((a, b) => new Date(a.start_date).getTime() - new Date(b.start_date).getTime())); pushAction({ type: 'CREATE_SALE', saleId: data.id, saleData: sale as Record<string, unknown> }) }
+      return data
+    } catch (err: unknown) { const errorMessage = err instanceof Error ? err.message : 'Failed to create sale'; console.error('Error creating sale:', err); setError(errorMessage); throw err }
+  }
+
   const handleBulkEdit = useCallback((selectedSales: SaleWithDetails[]) => { setBulkEditSales(selectedSales) }, [])
 
   const handleBulkUpdate = useCallback(async (saleIds: string[], updates: Partial<{ discount_percentage: number | null; platform_id: string; sale_name: string | undefined; status: string; dateShiftDays: number }>) => {
@@ -723,7 +732,7 @@ export default function GameDriveDashboard() {
         <CoverageCorrelation coverageByDate={coverageByDate} sales={filteredSales} timelineStart={timelineStart} monthCount={monthCount} clientId={filterClientId || undefined} gameId={filterGameId || undefined} />
       )}
 
-      {showAddModal && (<AddSaleModal products={products} platforms={platforms} existingSales={activeVersionId ? [] : sales} onSave={handleSaleCreateWrapper} onClose={handleCloseAddModal} initialDate={salePrefill ? parseISO(salePrefill.startDate) : undefined} initialEndDate={salePrefill ? parseISO(salePrefill.endDate) : undefined} initialProductId={salePrefill?.productId} initialPlatformId={salePrefill?.platformId} initialSaleName={salePrefill?.saleName} initialDiscountPercentage={salePrefill?.discountPercentage} initialSaleType={salePrefill?.saleType} />)}
+      {showAddModal && (<AddSaleModal products={products} platforms={platforms} existingSales={activeVersionId ? [] : sales} onSave={handleSaleCreateWrapper} onSaveAndContinue={handleSaleCreateAndContinue} onClose={handleCloseAddModal} initialDate={salePrefill ? parseISO(salePrefill.startDate) : undefined} initialEndDate={salePrefill ? parseISO(salePrefill.endDate) : undefined} initialProductId={salePrefill?.productId} initialPlatformId={salePrefill?.platformId} initialSaleName={salePrefill?.saleName} initialDiscountPercentage={salePrefill?.discountPercentage} initialSaleType={salePrefill?.saleType} />)}
       {editingSale && (<EditSaleModal sale={editingSale} products={products} platforms={platforms} existingSales={activeVersionId ? [] : sales} onSave={handleSaleUpdateWrapper} onDelete={handleSaleDeleteWrapper} onDuplicate={handleSaleDuplicate} onClose={() => setEditingSale(null)} />)}
       {duplicatingSale && (<DuplicateSaleModal sale={duplicatingSale} products={products} platforms={platforms} existingSales={sales} onDuplicate={handleDuplicateSales} onClose={() => setDuplicatingSale(null)} />)}
       <BulkEditSalesModal isOpen={bulkEditSales.length > 0} onClose={() => setBulkEditSales([])} selectedSales={bulkEditSales} platforms={platforms} onBulkUpdate={handleBulkUpdate} onBulkDelete={handleBulkDelete} />

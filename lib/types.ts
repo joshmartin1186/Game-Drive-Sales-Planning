@@ -43,6 +43,7 @@ export interface Product {
   steam_product_id?: string
   launch_date?: string | null
   launch_sale_duration?: number | null  // Duration in days for launch sale (7-14 typical)
+  product_aliases?: string[]  // Alternate names for import matching
   created_at: string
   game?: Game
   // Per-product platform availability

@@ -12,6 +12,7 @@ interface AddSaleModalProps {
   platforms: Platform[]
   existingSales: SaleWithDetails[]
   onSave: (sale: Omit<Sale, 'id' | 'created_at'>) => Promise<void>
+  onSaveAndContinue?: (sale: Omit<Sale, 'id' | 'created_at'>) => Promise<void>
   onClose: () => void
   initialDate?: Date
   initialProductId?: string
@@ -30,6 +31,7 @@ export default function AddSaleModal({
   platforms,
   existingSales,
   onSave,
+  onSaveAndContinue,
   onClose,
   initialDate,
   initialProductId,
@@ -70,6 +72,8 @@ export default function AddSaleModal({
   const [validationError, setValidationError] = useState<string | null>(null)
   const [durationWarning, setDurationWarning] = useState<string | null>(null)
   const [discountWarning, setDiscountWarning] = useState<string | null>(null)
+  const [savedCount, setSavedCount] = useState(0)
+  const [successMessage, setSuccessMessage] = useState<string | null>(null)
 
   const selectedPlatform = platforms.find(p => p.id === platformId)
   const selectedProduct = products.find(p => p.id === productId)
@@ -186,32 +190,72 @@ export default function AddSaleModal({
     setValidationError(validation.valid ? null : validation.message || 'Conflicts with existing sale or cooldown')
   }, [productId, platformId, startDate, endDate, saleType, existingSales, platforms])
   
+  const buildSaleData = () => ({
+    product_id: productId,
+    platform_id: platformId,
+    start_date: startDate,
+    end_date: endDate,
+    discount_percentage: discountPercentage,
+    sale_name: saleName || 'Custom Sale',
+    sale_type: saleType,
+    status: 'planned' as const,
+    goal_type: goalType || undefined,
+    notes: notes || undefined,
+    is_campaign: isCampaign,
+    is_submitted: isSubmitted,
+    is_confirmed: isConfirmed,
+    comment: comment || undefined,
+    prev_sale_end_date: prevSaleEndDate || undefined
+  })
+
+  const resetFormForNext = () => {
+    // Keep product & platform selection for quick re-entry, reset the rest
+    const newStart = format(addDays(parseISO(endDate), selectedPlatform?.cooldown_days || 30), 'yyyy-MM-dd')
+    const newEnd = format(addDays(parseISO(newStart), 6), 'yyyy-MM-dd')
+    setStartDate(newStart)
+    setEndDate(newEnd)
+    setDuration(7)
+    setDiscountPercentage(50)
+    setSaleName('')
+    setSaleType('custom')
+    setGoalType('')
+    setNotes('')
+    setIsCampaign(false)
+    setIsSubmitted(false)
+    setIsConfirmed(false)
+    setComment('')
+    setValidationError(null)
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     if (validationError) return
     if (!productId || !platformId || !startDate) return
-    
+
     setSaving(true)
-    
+
     try {
-      await onSave({
-        product_id: productId,
-        platform_id: platformId,
-        start_date: startDate,
-        end_date: endDate,
-        discount_percentage: discountPercentage,
-        sale_name: saleName || 'Custom Sale',
-        sale_type: saleType,
-        status: 'planned',
-        goal_type: goalType || undefined,
-        notes: notes || undefined,
-        is_campaign: isCampaign,
-        is_submitted: isSubmitted,
-        is_confirmed: isConfirmed,
-        comment: comment || undefined,
-        prev_sale_end_date: prevSaleEndDate || undefined
-      })
+      await onSave(buildSaleData())
+    } catch (err) {
+      console.error('Error saving sale:', err)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleSaveAndContinue = async () => {
+    if (validationError || !productId || !platformId || !startDate) return
+    if (!onSaveAndContinue) return
+
+    setSaving(true)
+
+    try {
+      await onSaveAndContinue(buildSaleData())
+      setSavedCount(prev => prev + 1)
+      setSuccessMessage(`Sale saved! (${savedCount + 1} added)`)
+      setTimeout(() => setSuccessMessage(null), 3000)
+      resetFormForNext()
     } catch (err) {
       console.error('Error saving sale:', err)
     } finally {
@@ -233,7 +277,7 @@ export default function AddSaleModal({
     <div className={styles.overlay} onClick={onClose}>
       <div className={styles.modal} onClick={e => e.stopPropagation()}>
         <div className={styles.header}>
-          <h2>Add New Sale</h2>
+          <h2>Add New Sale{savedCount > 0 ? ` (${savedCount} added)` : ''}</h2>
           <button className={styles.closeBtn} onClick={onClose}>×</button>
         </div>
         
@@ -251,6 +295,12 @@ export default function AddSaleModal({
         )}
         
         <form onSubmit={handleSubmit} className={styles.form}>
+          {successMessage && (
+            <div className={styles.success}>
+              <span>{successMessage}</span>
+            </div>
+          )}
+
           {validationError && (
             <div className={styles.error}>
               <span>⚠️ {validationError}</span>
@@ -482,14 +532,24 @@ export default function AddSaleModal({
           
           <div className={styles.actions}>
             <button type="button" className={styles.cancelBtn} onClick={onClose}>
-              Cancel
+              {savedCount > 0 ? 'Done' : 'Cancel'}
             </button>
-            <button 
-              type="submit" 
+            {onSaveAndContinue && (
+              <button
+                type="button"
+                className={styles.saveAndContinueBtn}
+                disabled={saving || !!validationError || !productId || !platformId}
+                onClick={handleSaveAndContinue}
+              >
+                {saving ? 'Saving...' : 'Save & Add Another'}
+              </button>
+            )}
+            <button
+              type="submit"
               className={styles.saveBtn}
               disabled={saving || !!validationError || !productId || !platformId}
             >
-              {saving ? 'Saving...' : 'Add Sale'}
+              {saving ? 'Saving...' : savedCount > 0 ? 'Save & Close' : 'Add Sale'}
             </button>
           </div>
         </form>

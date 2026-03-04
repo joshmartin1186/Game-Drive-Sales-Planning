@@ -354,6 +354,12 @@ export default function ImportSalesModal({
         map.set(`${p.game.name} - ${p.name}`.toLowerCase(), p.id)
         map.set(`${p.game.name}`.toLowerCase(), p.id) // Just game name for base products
       }
+      // Match against product aliases
+      if (p.product_aliases && p.product_aliases.length > 0) {
+        p.product_aliases.forEach(alias => {
+          if (alias.trim()) map.set(alias.trim().toLowerCase(), p.id)
+        })
+      }
     })
     return map
   }, [filteredProducts, createdProductIds])

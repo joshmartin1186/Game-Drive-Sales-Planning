@@ -250,7 +250,8 @@ export default function ProductManager({
         game_id: product.game_id,
         product_type: product.product_type,
         steam_product_id: product.steam_product_id || '',
-        launch_date: product.launch_date || format(new Date(), 'yyyy-MM-dd')
+        launch_date: product.launch_date || format(new Date(), 'yyyy-MM-dd'),
+        product_aliases: (product.product_aliases || []).join(', ')
       }
     })
     // Fetch existing platform assignments
@@ -281,12 +282,16 @@ export default function ProductManager({
           steam_app_id: editing.data.steam_app_id.trim() || undefined
         })
       } else if (editing.type === 'product' && onProductUpdate) {
+        const aliases = editing.data.product_aliases
+          ? editing.data.product_aliases.split(',').map((a: string) => a.trim()).filter(Boolean)
+          : []
         await onProductUpdate(editing.id, {
           name: editing.data.name.trim(),
           game_id: editing.data.game_id,
           product_type: editing.data.product_type,
           steam_product_id: editing.data.steam_product_id.trim() || undefined,
-          launch_date: editing.data.launch_date
+          launch_date: editing.data.launch_date,
+          product_aliases: aliases
         }, editPlatformIds.length > 0 ? editPlatformIds : undefined)
       }
       setEditing(null)
@@ -851,6 +856,12 @@ export default function ProductManager({
                               onChange={(e) => updateEditData('steam_product_id', e.target.value)}
                               placeholder="Steam Product ID"
                             />
+                            <input
+                              type="text"
+                              value={editing.data.product_aliases}
+                              onChange={(e) => updateEditData('product_aliases', e.target.value)}
+                              placeholder="Import aliases (comma-separated, e.g. Tomorrow, WWH Tomorrow)"
+                            />
                             <div className={styles.platformCheckboxes}>
                               {platforms.map(platform => (
                                 <label key={platform.id} className={styles.platformCheckbox}>
@@ -885,6 +896,11 @@ export default function ProductManager({
                               {product.launch_date && (
                                 <span className={styles.launchBadge}>
                                   🚀 {format(new Date(product.launch_date), 'MMM d, yyyy')}
+                                </span>
+                              )}
+                              {product.product_aliases && product.product_aliases.length > 0 && (
+                                <span className={styles.meta} title={`Aliases: ${product.product_aliases.join(', ')}`}>
+                                  aka {product.product_aliases.join(', ')}
                                 </span>
                               )}
                               <span className={styles.meta}> - {product.game?.name} ({product.game?.client?.name})</span>
