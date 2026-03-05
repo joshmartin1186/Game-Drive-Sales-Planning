@@ -73,15 +73,19 @@ export async function GET(request: NextRequest) {
       ? reviewItems.reduce((sum: number, item: Record<string, unknown>) => sum + Number(item.review_score), 0) / reviewItems.length
       : null
 
-    // Tier breakdown
+    // Tier breakdown (count) + Reach by tier (MUV sum)
     const tierBreakdown: Record<string, number> = { A: 0, B: 0, C: 0, D: 0, untiered: 0 }
+    const reachByTier: Record<string, number> = { A: 0, B: 0, C: 0, D: 0, untiered: 0 }
     for (const item of items) {
-      const outlet = item.outlet as { tier?: string } | null
+      const outlet = item.outlet as { tier?: string; monthly_unique_visitors?: number | null } | null
       const tier = outlet?.tier
+      const muv = outlet?.monthly_unique_visitors || (item.monthly_unique_visitors as number) || 0
       if (tier && tier in tierBreakdown) {
         tierBreakdown[tier]++
+        reachByTier[tier] += muv
       } else {
         tierBreakdown.untiered++
+        reachByTier.untiered += muv
       }
     }
 
@@ -99,18 +103,110 @@ export async function GET(request: NextRequest) {
       territoryBreakdown[territory] = (territoryBreakdown[territory] || 0) + 1
     }
 
+    // Review score distribution
+    const reviewScores = items
+      .filter((i: Record<string, unknown>) => i.review_score != null)
+      .map((i: Record<string, unknown>) => Number(i.review_score))
+    const reviewDistribution = {
+      count: reviewScores.length,
+      avg: reviewScores.length > 0 ? reviewScores.reduce((a, b) => a + b, 0) / reviewScores.length : null,
+      min: reviewScores.length > 0 ? Math.min(...reviewScores) : null,
+      max: reviewScores.length > 0 ? Math.max(...reviewScores) : null,
+      ranges: {
+        '90-100': reviewScores.filter(s => s >= 90).length,
+        '80-89': reviewScores.filter(s => s >= 80 && s < 90).length,
+        '70-79': reviewScores.filter(s => s >= 70 && s < 80).length,
+        '60-69': reviewScores.filter(s => s >= 60 && s < 70).length,
+        'below_60': reviewScores.filter(s => s < 60).length
+      }
+    }
+
+    // AVE (Advertising Value Equivalent) — industry-standard PR metric
+    const AVE_CPM: Record<string, number> = { A: 50, B: 30, C: 15, D: 5, untiered: 3 }
+    const PR_MULTIPLIER = 3
+    let totalAVE = 0
+    const aveByTier: Record<string, number> = {}
+    for (const [tier, reach] of Object.entries(reachByTier)) {
+      const cpm = AVE_CPM[tier] || 3
+      const ave = (reach * cpm / 1000) * PR_MULTIPLIER
+      aveByTier[tier] = Math.round(ave)
+      totalAVE += ave
+    }
+
+    // YouTube / video metrics from source_metadata
+    let ytVideos = 0, ytViews = 0, ytLikes = 0, ytComments = 0
+    for (const item of items) {
+      const meta = item.source_metadata as Record<string, unknown> | null
+      if (meta?.platform === 'youtube' || (item.coverage_type as string) === 'video') {
+        ytVideos++
+        if (meta?.views) ytViews += Number(meta.views) || 0
+        if (meta?.likes) ytLikes += Number(meta.likes) || 0
+        if (meta?.comments) ytComments += Number(meta.comments) || 0
+      }
+    }
+
+    // Sentiment summary
+    const sentimentCounts: Record<string, number> = { positive: 0, neutral: 0, negative: 0, mixed: 0, unknown: 0 }
+    const topQuotes: Array<{ quote: string; outlet: string; sentiment: string }> = []
+    for (const item of items) {
+      const sentiment = ((item.sentiment as string) || 'unknown').toLowerCase()
+      if (sentiment in sentimentCounts) {
+        sentimentCounts[sentiment]++
+      } else {
+        sentimentCounts.unknown++
+      }
+      if (item.quotes && (item.quotes as string).trim()) {
+        const outletName = (item.outlet as { name?: string } | null)?.name || 'Unknown'
+        topQuotes.push({ quote: (item.quotes as string).trim().substring(0, 200), outlet: outletName, sentiment })
+      }
+    }
+    topQuotes.sort((a, b) => {
+      const order: Record<string, number> = { positive: 0, mixed: 1, neutral: 2, negative: 3, unknown: 4 }
+      return (order[a.sentiment] ?? 4) - (order[b.sentiment] ?? 4)
+    })
+
+    // Data quality flags
+    const missingOutlet = items.filter(i => !(i.outlet as Record<string, unknown> | null)).length
+    const missingTerritory = items.filter(i => !i.territory).length
+    const missingSentiment = items.filter(i => !i.sentiment || (i.sentiment as string).toLowerCase() === 'unknown').length
+    const missingDate = items.filter(i => !i.publish_date).length
+    const untieredOutlets = items.filter(i => {
+      const outlet = i.outlet as { tier?: string; id?: string } | null
+      return outlet?.id && !outlet?.tier
+    }).length
+    const noTrafficOutlets = items.filter(i => {
+      const outlet = i.outlet as { monthly_unique_visitors?: number | null; id?: string } | null
+      return outlet?.id && !outlet?.monthly_unique_visitors
+    }).length
+    const filledFields = (totalPieces * 4) - missingOutlet - missingTerritory - missingSentiment - missingDate
+
     return NextResponse.json({
       items,
       campaigns: campaigns || [],
       summary: {
         total_pieces: totalPieces,
         total_audience_reach: totalReach,
-        estimated_views: Math.round(totalReach * 0.02), // ~2% CTR estimate
+        estimated_views: Math.round(totalReach * 0.02),
         avg_review_score: avgReviewScore,
         review_count: reviewItems.length,
         tier_breakdown: tierBreakdown,
         type_breakdown: typeBreakdown,
-        territory_breakdown: territoryBreakdown
+        territory_breakdown: territoryBreakdown,
+        reach_by_tier: reachByTier,
+        review_distribution: reviewDistribution,
+        ave_estimate: { total: Math.round(totalAVE), by_tier: aveByTier },
+        youtube_metrics: { total_videos: ytVideos, total_views: ytViews, total_likes: ytLikes, total_comments: ytComments },
+        sentiment_summary: { counts: sentimentCounts, top_quotes: topQuotes.slice(0, 5) },
+        data_quality: {
+          missing_outlet: missingOutlet,
+          missing_territory: missingTerritory,
+          missing_sentiment: missingSentiment,
+          missing_publish_date: missingDate,
+          untiered_outlets: untieredOutlets,
+          outlets_without_traffic: noTrafficOutlets,
+          total_items: totalPieces,
+          completeness_pct: totalPieces > 0 ? Math.round((filledFields / (totalPieces * 4)) * 100) : 0
+        }
       }
     })
   } catch (err) {

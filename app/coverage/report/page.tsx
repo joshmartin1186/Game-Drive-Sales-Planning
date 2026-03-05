@@ -34,6 +34,27 @@ interface ExportSummary {
   tier_breakdown: Record<string, number>
   type_breakdown: Record<string, number>
   territory_breakdown: Record<string, number>
+  reach_by_tier: Record<string, number>
+  review_distribution: {
+    count: number
+    avg: number | null
+    min: number | null
+    max: number | null
+    ranges: Record<string, number>
+  }
+  ave_estimate: { total: number; by_tier: Record<string, number> }
+  youtube_metrics: { total_videos: number; total_views: number; total_likes: number; total_comments: number }
+  sentiment_summary: { counts: Record<string, number>; top_quotes: Array<{ quote: string; outlet: string; sentiment: string }> }
+  data_quality: {
+    missing_outlet: number
+    missing_territory: number
+    missing_sentiment: number
+    missing_publish_date: number
+    untiered_outlets: number
+    outlets_without_traffic: number
+    total_items: number
+    completeness_pct: number
+  }
 }
 
 interface Campaign {
@@ -234,6 +255,38 @@ export default function CoverageReportPage() {
         [],
         ['Coverage Type Breakdown'],
         ...Object.entries(summary?.type_breakdown || {}).map(([type, count]) => [type, count]),
+        [],
+        ['Reach by Tier'],
+        ...Object.entries(summary?.reach_by_tier || {}).filter(([, v]) => v > 0).map(([tier, reach]) => [
+          tier === 'untiered' ? 'Untiered' : `Tier ${tier}`,
+          reach,
+          summary?.total_audience_reach ? `${Math.round((reach as number / summary.total_audience_reach) * 100)}%` : ''
+        ]),
+        [],
+        ['Review Score Distribution'],
+        ['Reviews Count', summary?.review_distribution?.count || 0],
+        ['Average', summary?.review_distribution?.avg?.toFixed(1) || 'N/A'],
+        ['Highest', summary?.review_distribution?.max || 'N/A'],
+        ['Lowest', summary?.review_distribution?.min || 'N/A'],
+        ...Object.entries(summary?.review_distribution?.ranges || {}).filter(([, v]) => v > 0).map(([range, count]) => [
+          range === 'below_60' ? 'Below 60' : range, count
+        ]),
+        [],
+        ['Estimated Media Value (AVE)'],
+        ['Total AVE', `€${(summary?.ave_estimate?.total || 0).toLocaleString()}`],
+        ...Object.entries(summary?.ave_estimate?.by_tier || {}).filter(([, v]) => v > 0).map(([tier, ave]) => [
+          tier === 'untiered' ? 'Untiered' : `Tier ${tier}`, `€${(ave as number).toLocaleString()}`
+        ]),
+        [],
+        ['Sentiment Analysis'],
+        ...Object.entries(summary?.sentiment_summary?.counts || {}).filter(([, v]) => v > 0).map(([s, count]) => [s, count]),
+        [],
+        ['Data Quality'],
+        ['Completeness', `${summary?.data_quality?.completeness_pct || 0}%`],
+        ['Missing Outlet', summary?.data_quality?.missing_outlet || 0],
+        ['Missing Territory', summary?.data_quality?.missing_territory || 0],
+        ['Missing Sentiment', summary?.data_quality?.missing_sentiment || 0],
+        ['Missing Publish Date', summary?.data_quality?.missing_publish_date || 0],
       ]
       const summaryWs = XLSX.utils.aoa_to_sheet(summaryData)
       summaryWs['!cols'] = [{ wch: 30 }, { wch: 20 }]
@@ -426,6 +479,45 @@ export default function CoverageReportPage() {
       ).join('')}
     </div>
   </div>
+
+  <div class="breakdown-grid">
+    <div class="breakdown-card">
+      <div class="breakdown-title">Estimated Media Value (AVE)</div>
+      <div style="font-size:20px;font-weight:700;color:#16a34a;margin-bottom:8px">€${(summary?.ave_estimate?.total || 0).toLocaleString()}</div>
+      ${Object.entries(summary?.ave_estimate?.by_tier || {}).filter(([, v]) => v > 0).map(([tier, ave]) =>
+        `<div class="breakdown-item"><span>${tier === 'untiered' ? 'Untiered' : 'Tier ' + tier}</span><span class="breakdown-value">€${(ave as number).toLocaleString()}</span></div>`
+      ).join('')}
+    </div>
+    <div class="breakdown-card">
+      <div class="breakdown-title">Sentiment Analysis</div>
+      ${Object.entries(summary?.sentiment_summary?.counts || {}).filter(([, v]) => v > 0).map(([s, count]) =>
+        `<div class="breakdown-item"><span style="text-transform:capitalize">${s}</span><span class="breakdown-value">${count}</span></div>`
+      ).join('')}
+    </div>
+  </div>
+
+  ${summary?.review_distribution && summary.review_distribution.count > 0 ? `
+  <div class="breakdown-grid">
+    <div class="breakdown-card">
+      <div class="breakdown-title">Review Scores</div>
+      <div class="breakdown-item"><span>Count</span><span class="breakdown-value">${summary.review_distribution.count}</span></div>
+      <div class="breakdown-item"><span>Average</span><span class="breakdown-value">${summary.review_distribution.avg?.toFixed(1) ?? '—'}</span></div>
+      <div class="breakdown-item"><span>Highest</span><span class="breakdown-value">${summary.review_distribution.max ?? '—'}</span></div>
+      <div class="breakdown-item"><span>Lowest</span><span class="breakdown-value">${summary.review_distribution.min ?? '—'}</span></div>
+    </div>
+    <div class="breakdown-card">
+      <div class="breakdown-title">Data Quality — ${summary?.data_quality?.completeness_pct || 0}% Complete</div>
+      ${[
+        { label: 'Missing outlet', value: summary?.data_quality?.missing_outlet || 0 },
+        { label: 'Missing territory', value: summary?.data_quality?.missing_territory || 0 },
+        { label: 'Missing sentiment', value: summary?.data_quality?.missing_sentiment || 0 },
+        { label: 'Missing date', value: summary?.data_quality?.missing_publish_date || 0 },
+      ].filter(f => f.value > 0).map(f =>
+        `<div class="breakdown-item"><span>${f.label}</span><span class="breakdown-value">${f.value}</span></div>`
+      ).join('')}
+    </div>
+  </div>
+  ` : ''}
 
   ${groupedItems.map(group => `
     <div class="section-header">${group.section} (${group.items.length})</div>
@@ -936,6 +1028,201 @@ export default function CoverageReportPage() {
                       <span style={{ fontSize: '14px', fontWeight: 600, color: '#1e293b' }}>{count}</span>
                     </div>
                   ))}
+                </div>
+              </div>
+
+              {/* Reach by Tier + Review Scores */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '20px' }}>
+                {/* Reach by Tier */}
+                <div style={{ backgroundColor: 'white', borderRadius: '10px', padding: '16px', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
+                  <h4 style={{ fontSize: '13px', fontWeight: 600, color: '#475569', marginBottom: '10px' }}>Audience Reach by Tier</h4>
+                  {summary.reach_by_tier && Object.entries(summary.reach_by_tier).filter(([, v]) => v > 0).map(([tier, reach]) => {
+                    const pct = summary.total_audience_reach > 0 ? Math.round((reach / summary.total_audience_reach) * 100) : 0
+                    return (
+                      <div key={tier} style={{ marginBottom: '6px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2px' }}>
+                          <span style={{ fontSize: '13px', color: '#64748b' }}>
+                            {tier === 'untiered' ? 'Untiered' : (
+                              <span style={{
+                                padding: '1px 8px', borderRadius: '99px', fontSize: '11px', fontWeight: 600,
+                                backgroundColor: TIER_COLORS[tier]?.bg || '#f3f4f6',
+                                color: TIER_COLORS[tier]?.text || '#374151'
+                              }}>Tier {tier}</span>
+                            )}
+                          </span>
+                          <span style={{ fontSize: '13px', fontWeight: 600, color: '#1e293b' }}>{formatNumber(reach)} ({pct}%)</span>
+                        </div>
+                        <div style={{ height: '4px', backgroundColor: '#f1f5f9', borderRadius: '2px', overflow: 'hidden' }}>
+                          <div style={{ height: '100%', width: `${pct}%`, backgroundColor: TIER_COLORS[tier]?.text || '#94a3b8', borderRadius: '2px' }} />
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+
+                {/* Review Score Distribution */}
+                <div style={{ backgroundColor: 'white', borderRadius: '10px', padding: '16px', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
+                  <h4 style={{ fontSize: '13px', fontWeight: 600, color: '#475569', marginBottom: '10px' }}>Review Score Distribution</h4>
+                  {summary.review_distribution && summary.review_distribution.count > 0 ? (
+                    <>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', marginBottom: '12px' }}>
+                        <div style={{ textAlign: 'center', padding: '8px', backgroundColor: '#f8fafc', borderRadius: '6px' }}>
+                          <div style={{ fontSize: '18px', fontWeight: 700, color: '#1e293b' }}>{summary.review_distribution.count}</div>
+                          <div style={{ fontSize: '10px', color: '#64748b' }}>Reviews</div>
+                        </div>
+                        <div style={{ textAlign: 'center', padding: '8px', backgroundColor: '#f8fafc', borderRadius: '6px' }}>
+                          <div style={{ fontSize: '18px', fontWeight: 700, color: '#1e293b' }}>{summary.review_distribution.avg?.toFixed(1) ?? '—'}</div>
+                          <div style={{ fontSize: '10px', color: '#64748b' }}>Average</div>
+                        </div>
+                        <div style={{ textAlign: 'center', padding: '8px', backgroundColor: '#f8fafc', borderRadius: '6px' }}>
+                          <div style={{ fontSize: '18px', fontWeight: 700, color: '#16a34a' }}>{summary.review_distribution.max ?? '—'}</div>
+                          <div style={{ fontSize: '10px', color: '#64748b' }}>Highest</div>
+                        </div>
+                        <div style={{ textAlign: 'center', padding: '8px', backgroundColor: '#f8fafc', borderRadius: '6px' }}>
+                          <div style={{ fontSize: '18px', fontWeight: 700, color: '#dc2626' }}>{summary.review_distribution.min ?? '—'}</div>
+                          <div style={{ fontSize: '10px', color: '#64748b' }}>Lowest</div>
+                        </div>
+                      </div>
+                      {Object.entries(summary.review_distribution.ranges || {}).filter(([, v]) => v > 0).map(([range, count]) => (
+                        <div key={range} style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', fontSize: '13px' }}>
+                          <span style={{ color: '#64748b' }}>{range === 'below_60' ? 'Below 60' : range}</span>
+                          <span style={{ fontWeight: 600, color: '#1e293b' }}>{count}</span>
+                        </div>
+                      ))}
+                    </>
+                  ) : (
+                    <p style={{ fontSize: '13px', color: '#94a3b8' }}>No review scores available</p>
+                  )}
+                </div>
+              </div>
+
+              {/* AVE + YouTube Metrics */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '20px' }}>
+                {/* Media Value Estimation (AVE) */}
+                <div style={{ backgroundColor: 'white', borderRadius: '10px', padding: '16px', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
+                  <h4 style={{ fontSize: '13px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>Estimated Media Value (AVE)</h4>
+                  <p style={{ fontSize: '10px', color: '#94a3b8', marginBottom: '10px' }}>Based on tier CPM rates with 3x PR multiplier</p>
+                  {summary.ave_estimate && (
+                    <>
+                      <div style={{ fontSize: '28px', fontWeight: 700, color: '#16a34a', marginBottom: '12px' }}>
+                        &euro;{summary.ave_estimate.total.toLocaleString()}
+                      </div>
+                      {Object.entries(summary.ave_estimate.by_tier || {}).filter(([, v]) => v > 0).map(([tier, ave]) => (
+                        <div key={tier} style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', fontSize: '13px' }}>
+                          <span style={{ color: '#64748b' }}>{tier === 'untiered' ? 'Untiered' : `Tier ${tier}`}</span>
+                          <span style={{ fontWeight: 600, color: '#1e293b' }}>&euro;{ave.toLocaleString()}</span>
+                        </div>
+                      ))}
+                    </>
+                  )}
+                </div>
+
+                {/* YouTube / Video Metrics */}
+                <div style={{ backgroundColor: 'white', borderRadius: '10px', padding: '16px', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
+                  <h4 style={{ fontSize: '13px', fontWeight: 600, color: '#475569', marginBottom: '10px' }}>Video / YouTube Metrics</h4>
+                  {summary.youtube_metrics && summary.youtube_metrics.total_videos > 0 ? (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px' }}>
+                      <div style={{ textAlign: 'center', padding: '12px', backgroundColor: '#fef2f2', borderRadius: '8px' }}>
+                        <div style={{ fontSize: '22px', fontWeight: 700, color: '#dc2626' }}>{summary.youtube_metrics.total_videos}</div>
+                        <div style={{ fontSize: '10px', color: '#64748b' }}>Videos</div>
+                      </div>
+                      <div style={{ textAlign: 'center', padding: '12px', backgroundColor: '#fef2f2', borderRadius: '8px' }}>
+                        <div style={{ fontSize: '22px', fontWeight: 700, color: '#dc2626' }}>{formatNumber(summary.youtube_metrics.total_views)}</div>
+                        <div style={{ fontSize: '10px', color: '#64748b' }}>Total Views</div>
+                      </div>
+                      <div style={{ textAlign: 'center', padding: '12px', backgroundColor: '#f8fafc', borderRadius: '8px' }}>
+                        <div style={{ fontSize: '22px', fontWeight: 700, color: '#1e293b' }}>{formatNumber(summary.youtube_metrics.total_likes)}</div>
+                        <div style={{ fontSize: '10px', color: '#64748b' }}>Likes</div>
+                      </div>
+                      <div style={{ textAlign: 'center', padding: '12px', backgroundColor: '#f8fafc', borderRadius: '8px' }}>
+                        <div style={{ fontSize: '22px', fontWeight: 700, color: '#1e293b' }}>{formatNumber(summary.youtube_metrics.total_comments)}</div>
+                        <div style={{ fontSize: '10px', color: '#64748b' }}>Comments</div>
+                      </div>
+                    </div>
+                  ) : (
+                    <p style={{ fontSize: '13px', color: '#94a3b8' }}>No video coverage tracked yet</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Sentiment + Data Quality */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '20px' }}>
+                {/* Sentiment Analysis */}
+                <div style={{ backgroundColor: 'white', borderRadius: '10px', padding: '16px', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
+                  <h4 style={{ fontSize: '13px', fontWeight: 600, color: '#475569', marginBottom: '10px' }}>Sentiment Analysis</h4>
+                  {summary.sentiment_summary && (
+                    <>
+                      <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+                        {[
+                          { key: 'positive', label: 'Positive', color: '#16a34a', bg: '#dcfce7' },
+                          { key: 'neutral', label: 'Neutral', color: '#64748b', bg: '#f1f5f9' },
+                          { key: 'negative', label: 'Negative', color: '#dc2626', bg: '#fef2f2' },
+                          { key: 'mixed', label: 'Mixed', color: '#d97706', bg: '#fef9c3' },
+                        ].filter(s => (summary.sentiment_summary?.counts?.[s.key] || 0) > 0).map(s => (
+                          <div key={s.key} style={{ flex: 1, textAlign: 'center', padding: '8px', backgroundColor: s.bg, borderRadius: '6px' }}>
+                            <div style={{ fontSize: '18px', fontWeight: 700, color: s.color }}>{summary.sentiment_summary?.counts?.[s.key] || 0}</div>
+                            <div style={{ fontSize: '10px', color: s.color }}>{s.label}</div>
+                          </div>
+                        ))}
+                      </div>
+                      {summary.sentiment_summary.top_quotes?.length > 0 && (
+                        <div>
+                          <div style={{ fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Key Quotes</div>
+                          {summary.sentiment_summary.top_quotes.slice(0, 3).map((q, i) => (
+                            <div key={i} style={{
+                              padding: '8px 10px', backgroundColor: '#f8fafc', borderRadius: '6px',
+                              marginBottom: '6px', borderLeft: `3px solid ${q.sentiment === 'positive' ? '#16a34a' : q.sentiment === 'negative' ? '#dc2626' : '#94a3b8'}`
+                            }}>
+                              <div style={{ fontSize: '12px', color: '#1e293b', fontStyle: 'italic' }}>&ldquo;{q.quote}&rdquo;</div>
+                              <div style={{ fontSize: '10px', color: '#64748b', marginTop: '2px' }}>— {q.outlet}</div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+
+                {/* Data Quality */}
+                <div style={{ backgroundColor: 'white', borderRadius: '10px', padding: '16px', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
+                  <h4 style={{ fontSize: '13px', fontWeight: 600, color: '#475569', marginBottom: '10px' }}>Data Quality</h4>
+                  {summary.data_quality && (
+                    <>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
+                        <div style={{
+                          width: '56px', height: '56px', borderRadius: '50%',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          backgroundColor: summary.data_quality.completeness_pct >= 80 ? '#dcfce7' : summary.data_quality.completeness_pct >= 50 ? '#fef9c3' : '#fef2f2',
+                          fontSize: '18px', fontWeight: 700,
+                          color: summary.data_quality.completeness_pct >= 80 ? '#16a34a' : summary.data_quality.completeness_pct >= 50 ? '#d97706' : '#dc2626'
+                        }}>
+                          {summary.data_quality.completeness_pct}%
+                        </div>
+                        <div>
+                          <div style={{ fontSize: '14px', fontWeight: 600, color: '#1e293b' }}>Data Completeness</div>
+                          <div style={{ fontSize: '11px', color: '#64748b' }}>{summary.data_quality.total_items} items checked</div>
+                        </div>
+                      </div>
+                      {[
+                        { label: 'Missing outlet match', value: summary.data_quality.missing_outlet, warn: true },
+                        { label: 'Missing territory', value: summary.data_quality.missing_territory, warn: true },
+                        { label: 'Missing sentiment', value: summary.data_quality.missing_sentiment, warn: false },
+                        { label: 'Missing publish date', value: summary.data_quality.missing_publish_date, warn: true },
+                        { label: 'Untiered outlets', value: summary.data_quality.untiered_outlets, warn: false },
+                        { label: 'Outlets without traffic data', value: summary.data_quality.outlets_without_traffic, warn: false },
+                      ].filter(f => f.value > 0).map(f => (
+                        <div key={f.label} style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', fontSize: '13px' }}>
+                          <span style={{ color: '#64748b' }}>{f.label}</span>
+                          <span style={{ fontWeight: 600, color: f.warn && f.value > 5 ? '#d97706' : '#1e293b' }}>{f.value}</span>
+                        </div>
+                      ))}
+                      {summary.data_quality.completeness_pct >= 90 && (
+                        <div style={{ marginTop: '8px', padding: '6px 10px', backgroundColor: '#dcfce7', borderRadius: '6px', fontSize: '12px', color: '#166534' }}>
+                          Excellent data quality — report is reliable
+                        </div>
+                      )}
+                    </>
+                  )}
                 </div>
               </div>
 
