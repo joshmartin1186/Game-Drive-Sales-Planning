@@ -168,9 +168,36 @@ export async function POST(request: NextRequest) {
     }
 
     // Single item
-    const { title, url, ...rest } = body
+    const { title, url, outlet_name, ...rest } = body
     if (!title?.trim() || !url?.trim()) {
       return NextResponse.json({ error: 'title and url are required' }, { status: 400 })
+    }
+
+    // Resolve outlet by name if outlet_name provided and no outlet_id
+    if (outlet_name && !rest.outlet_id) {
+      // Try to find existing outlet by name (case-insensitive)
+      const { data: existingOutlet } = await supabase
+        .from('outlets')
+        .select('id')
+        .ilike('name', outlet_name.trim())
+        .limit(1)
+        .single()
+
+      if (existingOutlet) {
+        rest.outlet_id = existingOutlet.id
+      } else {
+        // Extract domain from URL for the new outlet
+        let domain: string | null = null
+        try { domain = new URL(url.trim()).hostname.replace(/^www\./, '') } catch { /* ignore */ }
+
+        const { data: newOutlet } = await supabase
+          .from('outlets')
+          .insert([{ name: outlet_name.trim(), domain, country: rest.territory || null }])
+          .select('id')
+          .single()
+
+        if (newOutlet) rest.outlet_id = newOutlet.id
+      }
     }
 
     const { data, error } = await supabase

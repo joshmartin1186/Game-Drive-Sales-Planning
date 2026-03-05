@@ -130,6 +130,25 @@ export default function CoverageFeedPage() {
   // Selection
   const [selected, setSelected] = useState<Set<string>>(new Set())
 
+  // Manual add modal
+  const [showAddModal, setShowAddModal] = useState(false)
+  const [addUrl, setAddUrl] = useState('')
+  const [addTitle, setAddTitle] = useState('')
+  const [addOutlet, setAddOutlet] = useState('')
+  const [addDate, setAddDate] = useState('')
+  const [addTerritory, setAddTerritory] = useState('')
+  const [addType, setAddType] = useState('')
+  const [addVisitors, setAddVisitors] = useState('')
+  const [addClientId, setAddClientId] = useState('')
+  const [addGameId, setAddGameId] = useState('')
+  const [addCampaignId, setAddCampaignId] = useState('')
+  const [addReviewScore, setAddReviewScore] = useState('')
+  const [addSentiment, setAddSentiment] = useState('')
+  const [addQuotes, setAddQuotes] = useState('')
+  const [addingItem, setAddingItem] = useState(false)
+  const [addError, setAddError] = useState<string | null>(null)
+  const [showMoreOptions, setShowMoreOptions] = useState(false)
+
   // Debounced search
   useEffect(() => {
     if (searchTimeout.current) clearTimeout(searchTimeout.current)
@@ -241,6 +260,59 @@ export default function CoverageFeedPage() {
     fetchItems()
   }
 
+  // Manual add item
+  const resetAddForm = () => {
+    setAddUrl(''); setAddTitle(''); setAddOutlet(''); setAddDate('')
+    setAddTerritory(''); setAddType(''); setAddVisitors('')
+    setAddClientId(''); setAddGameId(''); setAddCampaignId('')
+    setAddReviewScore(''); setAddSentiment(''); setAddQuotes('')
+    setAddError(null); setShowMoreOptions(false)
+  }
+
+  const handleAddItem = async () => {
+    if (!addUrl.trim() || !addTitle.trim()) {
+      setAddError('URL and Title are required.')
+      return
+    }
+    setAddingItem(true)
+    setAddError(null)
+    try {
+      const body: Record<string, unknown> = {
+        url: addUrl.trim(),
+        title: addTitle.trim(),
+        source_type: 'manual',
+        approval_status: 'manually_approved'
+      }
+      if (addOutlet.trim()) body.outlet_name = addOutlet.trim()
+      if (addDate) body.publish_date = addDate
+      if (addTerritory.trim()) body.territory = addTerritory.trim()
+      if (addType) body.coverage_type = addType
+      if (addVisitors) body.monthly_unique_visitors = Number(addVisitors)
+      if (addClientId) body.client_id = addClientId
+      if (addGameId) body.game_id = addGameId
+      if (addCampaignId) body.campaign_id = addCampaignId
+      if (addReviewScore) body.review_score = Number(addReviewScore)
+      if (addSentiment) body.sentiment = addSentiment
+      if (addQuotes.trim()) body.quotes = addQuotes.trim()
+
+      const res = await fetch('/api/coverage-items', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error || 'Failed to add item')
+      }
+      setShowAddModal(false)
+      resetAddForm()
+      fetchItems()
+    } catch (err) {
+      setAddError(err instanceof Error ? err.message : 'Failed to add item')
+    }
+    setAddingItem(false)
+  }
+
   const handleSort = (col: string) => {
     if (sortBy === col) {
       setSortDir(d => d === 'asc' ? 'desc' : 'asc')
@@ -322,6 +394,14 @@ export default function CoverageFeedPage() {
                 Review, approve, and manage incoming media coverage
               </p>
             </div>
+            {canEdit && (
+              <button
+                onClick={() => { resetAddForm(); setShowAddModal(true) }}
+                style={{ padding: '8px 18px', backgroundColor: '#2563eb', color: 'white', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+              >
+                + Add Item
+              </button>
+            )}
           </div>
 
           {/* Top nav */}
@@ -804,6 +884,223 @@ export default function CoverageFeedPage() {
           </div>
         </div>
       </div>
+
+      {/* Manual Add Item Modal */}
+      {showAddModal && (
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }}>
+          <div style={{ backgroundColor: 'white', borderRadius: '16px', padding: '32px', width: '560px', maxHeight: '90vh', overflow: 'auto', boxShadow: '0 25px 50px rgba(0,0,0,0.25)' }}>
+            {/* Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+              <h2 style={{ fontSize: '20px', fontWeight: 700, color: '#1e293b', margin: 0 }}>Add Coverage Item</h2>
+              <button onClick={() => setShowAddModal(false)} style={{ background: 'none', border: 'none', fontSize: '24px', color: '#94a3b8', cursor: 'pointer' }}>×</button>
+            </div>
+
+            {addError && (
+              <div style={{ padding: '10px 14px', backgroundColor: '#fee2e2', color: '#dc2626', borderRadius: '6px', marginBottom: '16px', fontSize: '13px' }}>{addError}</div>
+            )}
+
+            <div style={{ display: 'grid', gap: '16px' }}>
+              {/* URL — required */}
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, color: '#374151', marginBottom: '4px' }}>URL *</label>
+                <input
+                  type="url"
+                  value={addUrl}
+                  onChange={e => setAddUrl(e.target.value)}
+                  placeholder="https://www.ign.com/articles/..."
+                  style={{ width: '100%', padding: '8px 12px', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '14px', boxSizing: 'border-box' }}
+                />
+              </div>
+
+              {/* Title — required */}
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, color: '#374151', marginBottom: '4px' }}>Title *</label>
+                <input
+                  type="text"
+                  value={addTitle}
+                  onChange={e => setAddTitle(e.target.value)}
+                  placeholder="Article title"
+                  style={{ width: '100%', padding: '8px 12px', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '14px', boxSizing: 'border-box' }}
+                />
+              </div>
+
+              {/* Outlet + Type row */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, color: '#374151', marginBottom: '4px' }}>Outlet Name</label>
+                  <input
+                    type="text"
+                    value={addOutlet}
+                    onChange={e => setAddOutlet(e.target.value)}
+                    placeholder="e.g. IGN"
+                    style={{ width: '100%', padding: '8px 12px', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '14px', boxSizing: 'border-box' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, color: '#374151', marginBottom: '4px' }}>Type of Media</label>
+                  <select
+                    value={addType}
+                    onChange={e => setAddType(e.target.value)}
+                    style={{ width: '100%', padding: '8px 12px', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '14px', boxSizing: 'border-box', backgroundColor: 'white' }}
+                  >
+                    <option value="">Select type...</option>
+                    {COVERAGE_TYPES.map(t => (
+                      <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1).replace('_', ' ')}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Date + Territory row */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, color: '#374151', marginBottom: '4px' }}>Publish Date</label>
+                  <input
+                    type="date"
+                    value={addDate}
+                    onChange={e => setAddDate(e.target.value)}
+                    style={{ width: '100%', padding: '8px 12px', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '14px', boxSizing: 'border-box' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, color: '#374151', marginBottom: '4px' }}>Territory</label>
+                  <input
+                    type="text"
+                    value={addTerritory}
+                    onChange={e => setAddTerritory(e.target.value)}
+                    placeholder="e.g. United States"
+                    style={{ width: '100%', padding: '8px 12px', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '14px', boxSizing: 'border-box' }}
+                  />
+                </div>
+              </div>
+
+              {/* Monthly Visitors */}
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, color: '#374151', marginBottom: '4px' }}>Monthly Unique Visitors</label>
+                <input
+                  type="number"
+                  value={addVisitors}
+                  onChange={e => setAddVisitors(e.target.value)}
+                  placeholder="e.g. 65402710"
+                  style={{ width: '100%', padding: '8px 12px', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '14px', boxSizing: 'border-box' }}
+                />
+              </div>
+
+              {/* More Options toggle */}
+              <button
+                type="button"
+                onClick={() => setShowMoreOptions(!showMoreOptions)}
+                style={{ background: 'none', border: 'none', fontSize: '13px', color: '#2563eb', cursor: 'pointer', textAlign: 'left', padding: 0, fontWeight: 500 }}
+              >
+                {showMoreOptions ? '▾ Less options' : '▸ More options (client, game, review score...)'}
+              </button>
+
+              {showMoreOptions && (
+                <>
+                  {/* Client + Game row */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, color: '#374151', marginBottom: '4px' }}>Client</label>
+                      <select
+                        value={addClientId}
+                        onChange={e => { setAddClientId(e.target.value); setAddGameId(''); setAddCampaignId('') }}
+                        style={{ width: '100%', padding: '8px 12px', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '14px', boxSizing: 'border-box', backgroundColor: 'white' }}
+                      >
+                        <option value="">Select client...</option>
+                        {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, color: '#374151', marginBottom: '4px' }}>Game</label>
+                      <select
+                        value={addGameId}
+                        onChange={e => setAddGameId(e.target.value)}
+                        style={{ width: '100%', padding: '8px 12px', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '14px', boxSizing: 'border-box', backgroundColor: 'white' }}
+                      >
+                        <option value="">Select game...</option>
+                        {games.filter(g => !addClientId || g.client_id === addClientId).map(g => (
+                          <option key={g.id} value={g.id}>{g.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Campaign */}
+                  <div>
+                    <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, color: '#374151', marginBottom: '4px' }}>Campaign</label>
+                    <select
+                      value={addCampaignId}
+                      onChange={e => setAddCampaignId(e.target.value)}
+                      style={{ width: '100%', padding: '8px 12px', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '14px', boxSizing: 'border-box', backgroundColor: 'white' }}
+                    >
+                      <option value="">Select campaign...</option>
+                      {campaigns
+                        .filter(c => (!addClientId || c.client_id === addClientId) && (!addGameId || c.game_id === addGameId))
+                        .map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                  </div>
+
+                  {/* Review Score + Sentiment row */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, color: '#374151', marginBottom: '4px' }}>Review Score</label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        value={addReviewScore}
+                        onChange={e => setAddReviewScore(e.target.value)}
+                        placeholder="0-100"
+                        style={{ width: '100%', padding: '8px 12px', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '14px', boxSizing: 'border-box' }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, color: '#374151', marginBottom: '4px' }}>Sentiment</label>
+                      <select
+                        value={addSentiment}
+                        onChange={e => setAddSentiment(e.target.value)}
+                        style={{ width: '100%', padding: '8px 12px', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '14px', boxSizing: 'border-box', backgroundColor: 'white' }}
+                      >
+                        <option value="">Select...</option>
+                        {SENTIMENTS.map(s => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Quotes/Notes */}
+                  <div>
+                    <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, color: '#374151', marginBottom: '4px' }}>Quotes / Notes</label>
+                    <textarea
+                      value={addQuotes}
+                      onChange={e => setAddQuotes(e.target.value)}
+                      placeholder="Key quotes or notes..."
+                      rows={3}
+                      style={{ width: '100%', padding: '8px 12px', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '14px', boxSizing: 'border-box', resize: 'vertical' }}
+                    />
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '24px', paddingTop: '16px', borderTop: '1px solid #f1f5f9' }}>
+              <button
+                onClick={() => setShowAddModal(false)}
+                style={{ padding: '8px 20px', backgroundColor: 'white', color: '#475569', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '14px', cursor: 'pointer' }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleAddItem}
+                disabled={addingItem || !addUrl.trim() || !addTitle.trim()}
+                style={{ padding: '8px 24px', backgroundColor: '#2563eb', color: 'white', border: 'none', borderRadius: '6px', fontSize: '14px', fontWeight: 500, cursor: addingItem ? 'not-allowed' : 'pointer', opacity: (addingItem || !addUrl.trim() || !addTitle.trim()) ? 0.6 : 1 }}
+              >
+                {addingItem ? 'Adding...' : 'Add Item'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
