@@ -92,15 +92,22 @@ async function pageFunction(context) {
 
 // ─── Main Handler ───────────────────────────────────────────────────────────
 
-// GET /api/cron/sullygnome-scan — Scan SullyGnome for Twitch streamer analytics
+// POST /api/cron/sullygnome-scan — Manual trigger from Sources UI (no auth)
+export async function POST(request: NextRequest) {
+  return handleScan(request)
+}
+
+// GET /api/cron/sullygnome-scan — Cron trigger (auth required)
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get('authorization')
   const cronSecret = process.env.CRON_SECRET
   if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
+  return handleScan(request)
+}
 
-  // Allow forcing a specific source via query param
+async function handleScan(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const forceSourceId = searchParams.get('source_id')
 

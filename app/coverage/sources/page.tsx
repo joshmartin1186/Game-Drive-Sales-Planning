@@ -492,7 +492,7 @@ export default function SourcesPage() {
       const url = sourceId
         ? `/api/cron/sullygnome-scan?source_id=${sourceId}`
         : '/api/cron/sullygnome-scan'
-      const res = await fetch(url)
+      const res = await fetch(url, { method: 'POST' })
       const json = await res.json()
       if (res.ok) {
         setSullyGnomeScanResult(

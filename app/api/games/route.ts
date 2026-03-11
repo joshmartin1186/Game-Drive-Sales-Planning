@@ -52,6 +52,29 @@ export async function POST(request: Request) {
 
     if (error) throw error
 
+    // Auto-create SullyGnome coverage source for Twitch tracking
+    if (data?.id && data?.name) {
+      const sgSlug = data.name.replace(/\s+/g, '_')
+      await supabase
+        .from('coverage_sources')
+        .insert({
+          source_type: 'sullygnome',
+          name: `SullyGnome – ${data.name}`,
+          game_id: data.id,
+          scan_frequency: 'weekly',
+          is_active: true,
+          config: {
+            game_name: data.name,
+            sullygnome_slug: sgSlug,
+            default_time_range: '30d',
+            min_avg_viewers: 10,
+          },
+        })
+        .then(({ error: sgErr }) => {
+          if (sgErr) console.error('Auto-create SullyGnome source failed:', sgErr.message)
+        })
+    }
+
     return NextResponse.json(data)
   } catch (error) {
     console.error('Error creating game:', error)
