@@ -121,14 +121,30 @@ export async function POST(request: NextRequest) {
     const rawResults = await datasetRes.json()
 
     // 5. Flatten results — web scraper returns pageFunction results
+    // Apify web scraper can return data in multiple formats:
+    //   a) Array of arrays (direct pageFunction return): [[cells], [cells], ...]
+    //   b) Objects with numeric keys (Apify auto-converts arrays): {"0": "val", "1": "val", ...}
+    //   c) Nested arrays wrapped in pageFunction results
     let allRows: string[][] = []
     if (Array.isArray(rawResults)) {
       for (const item of rawResults) {
         if (Array.isArray(item)) {
+          // Direct array — could be a single row or nested rows
           if (item.length > 0 && Array.isArray(item[0])) {
             allRows = allRows.concat(item)
           } else if (item.length > 0 && typeof item[0] === 'string') {
             allRows.push(item)
+          }
+        } else if (item && typeof item === 'object' && !item['#error']) {
+          // Object with numeric keys — convert to array
+          // Apify web scraper auto-converts arrays to {"0": v, "1": v, ...}
+          const numericKeys = Object.keys(item)
+            .filter(k => !k.startsWith('#') && !k.startsWith('_'))
+            .filter(k => /^\d+$/.test(k))
+            .sort((a, b) => Number(a) - Number(b))
+          if (numericKeys.length >= 8) {
+            const cells = numericKeys.map(k => String(item[k] ?? ''))
+            allRows.push(cells)
           }
         }
       }
