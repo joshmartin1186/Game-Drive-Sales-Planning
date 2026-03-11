@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
   const gameId = searchParams.get('game_id')
   const dateFrom = searchParams.get('date_from')
   const dateTo = searchParams.get('date_to')
-  const section = searchParams.get('section') // 'summary' | 'sales' | 'pr_coverage'
+  const section = searchParams.get('section') // 'summary' | 'sales' | 'pr_coverage' | 'social' | 'twitch_analytics'
 
   if (!clientId) {
     return NextResponse.json({ error: 'client_id is required' }, { status: 400 })
@@ -299,6 +299,96 @@ export async function GET(request: NextRequest) {
           .map(([name, value]) => ({ name, value })),
         top_posts: allPosts.slice(0, 10),
         worst_posts: allPosts.slice(-5).reverse(),
+      }
+    }
+
+    // --- Twitch Analytics (SullyGnome enriched data) ---
+    if (!section || section === 'summary' || section === 'twitch_analytics') {
+      let twitchQuery = supabase
+        .from('coverage_items')
+        .select('id, title, url, source_type, source_metadata, monthly_unique_visitors, outlet:outlets(name, domain)')
+        .eq('client_id', clientId)
+        .eq('source_type', 'twitch')
+        .in('approval_status', ['auto_approved', 'manually_approved', 'pending_review'])
+        .order('discovered_at', { ascending: false })
+
+      if (gameId) twitchQuery = twitchQuery.eq('game_id', gameId)
+
+      const { data: twitchData, error: twitchError } = await twitchQuery.limit(5000)
+      if (twitchError) throw twitchError
+
+      const twitchItems = twitchData || []
+      let totalStreamers = 0
+      let enrichedCount = 0
+      let totalHoursWatched = 0
+      let totalStreamHours = 0
+      let totalAvgViewersSum = 0
+      let totalPeakViewersSum = 0
+      let peakViewersMax = 0
+
+      interface StreamerEntry {
+        channel: string
+        url: string
+        avg_viewers: number
+        peak_viewers: number
+        hours_watched: number
+        stream_hours: number
+        followers: number
+        time_range: string | null
+        outlet_name: string
+      }
+      const streamers: StreamerEntry[] = []
+
+      for (const item of twitchItems) {
+        const i = item as Record<string, unknown>
+        const meta = (i.source_metadata || {}) as Record<string, unknown>
+        const outlet = i.outlet as Record<string, unknown> | null
+
+        totalStreamers++
+
+        if (meta.sullygnome_enriched) {
+          enrichedCount++
+
+          const avgViewers = Number(meta.sullygnome_avg_viewers || 0)
+          const peakViewers = Number(meta.sullygnome_peak_viewers || 0)
+          const hoursWatched = Number(meta.sullygnome_hours_watched || 0)
+          const streamHours = Number(meta.sullygnome_stream_hours || 0)
+          const followers = Number(meta.followers || i.monthly_unique_visitors || 0)
+
+          totalHoursWatched += hoursWatched
+          totalStreamHours += streamHours
+          totalAvgViewersSum += avgViewers
+          totalPeakViewersSum += peakViewers
+          if (peakViewers > peakViewersMax) peakViewersMax = peakViewers
+
+          streamers.push({
+            channel: String(meta.user_name || i.title || 'Unknown'),
+            url: String(i.url || ''),
+            avg_viewers: avgViewers,
+            peak_viewers: peakViewers,
+            hours_watched: hoursWatched,
+            stream_hours: streamHours,
+            followers,
+            time_range: meta.sullygnome_time_range ? String(meta.sullygnome_time_range) : null,
+            outlet_name: String(outlet?.name || ''),
+          })
+        }
+      }
+
+      // Sort streamers by hours watched descending
+      streamers.sort((a, b) => b.hours_watched - a.hours_watched)
+
+      result.twitch_analytics = {
+        total_streamers: totalStreamers,
+        enriched_streamers: enrichedCount,
+        total_hours_watched: totalHoursWatched,
+        total_stream_hours: totalStreamHours,
+        avg_viewers_mean: enrichedCount > 0 ? Math.round(totalAvgViewersSum / enrichedCount) : 0,
+        avg_peak_viewers: enrichedCount > 0 ? Math.round(totalPeakViewersSum / enrichedCount) : 0,
+        max_peak_viewers: peakViewersMax,
+        top_streamers_by_hours: streamers.slice(0, 10),
+        top_streamers_by_avg_viewers: [...streamers].sort((a, b) => b.avg_viewers - a.avg_viewers).slice(0, 10),
+        top_streamers_by_peak: [...streamers].sort((a, b) => b.peak_viewers - a.peak_viewers).slice(0, 5),
       }
     }
 
