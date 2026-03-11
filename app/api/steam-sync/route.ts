@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { serverSupabase as supabase } from '@/lib/supabase';
+import { matchProducts, ExternalProduct } from '@/lib/product-matching';
 
 // Steam Partner API endpoint for financial data
 const STEAM_PARTNER_API = 'https://partner.steam-api.com';
@@ -191,6 +192,53 @@ export async function POST(request: Request) {
       }
     }
 
+    // Run product matching on synced data
+    let newUnmatched = 0;
+    try {
+      // Collect unique product names from performance_metrics that don't have a product_id yet
+      const { data: unmatchedRows } = await supabase
+        .from('performance_metrics')
+        .select('product_name, steam_package_id, steam_app_id')
+        .eq('client_id', client_id)
+        .is('product_id', null)
+        .not('product_name', 'eq', 'Unknown');
+
+      if (unmatchedRows && unmatchedRows.length > 0) {
+        // Deduplicate by product_name
+        const seen = new Set<string>();
+        const externalProducts: ExternalProduct[] = [];
+        for (const row of unmatchedRows) {
+          if (!seen.has(row.product_name)) {
+            seen.add(row.product_name);
+            externalProducts.push({
+              platform: 'steam',
+              external_product_name: row.product_name,
+              steam_package_id: row.steam_package_id || undefined,
+              steam_app_id: row.steam_app_id || undefined,
+              client_id,
+            });
+          }
+        }
+
+        const matchResults = await matchProducts(supabase, externalProducts);
+        newUnmatched = matchResults.filter(r => r.match_type === 'no_match' && r.is_new).length;
+
+        // For auto-confirmed matches, backfill the rows we just inserted
+        for (const result of matchResults) {
+          if (result.matched_product_id && result.match_type !== 'no_match') {
+            await supabase
+              .from('performance_metrics')
+              .update({ product_id: result.matched_product_id, game_id: result.matched_game_id })
+              .eq('client_id', client_id)
+              .eq('product_name', result.external_product.external_product_name)
+              .is('product_id', null);
+          }
+        }
+      }
+    } catch (matchError) {
+      console.error('[Steam Sync] Product matching error (non-fatal):', matchError);
+    }
+
     // Update highwatermark for next sync
     if (changedDates.highwatermark) {
       await supabase
@@ -226,6 +274,7 @@ export async function POST(request: Request) {
       datesProcessed: datesToSync.length,
       hasMoreDates,
       remainingDates: hasMoreDates ? totalDatesFromApi - datesToSync.length : 0,
+      newUnmatched,
       errors: errors.length > 0 ? errors : undefined,
       clientName: clientData?.name,
       debug: {

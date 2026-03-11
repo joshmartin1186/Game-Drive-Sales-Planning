@@ -18,6 +18,7 @@ const SETTINGS_TABS: SettingsTab[] = [
   { name: 'System API Keys', href: '/settings/system-keys', feature: 'api_settings' },
   { name: 'Clients', href: '/settings/clients', feature: 'client_management' },
   { name: 'Platforms', href: '/settings/platforms', feature: 'platform_settings' },
+  { name: 'Product Matching', href: '/settings/product-matching', feature: 'api_settings' },
   { name: 'Users', href: '/settings/users', feature: null, superadminOnly: true },
 ]
 

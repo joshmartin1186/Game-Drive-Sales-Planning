@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
 import styles from '../settings.module.css';
 
@@ -95,6 +96,7 @@ export default function ClientKeysPage() {
     message: string;
     rowsImported?: number;
     datesProcessed?: number;
+    newUnmatched?: number;
     debug?: SyncDebugInfo;
   } | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -120,7 +122,7 @@ export default function ClientKeysPage() {
   const [psTestResult, setPsTestResult] = useState<{valid: boolean; message: string} | null>(null);
   const [psSaveError, setPsSaveError] = useState<string | null>(null);
   const [syncingPS, setSyncingPS] = useState(false);
-  const [psSyncResult, setPsSyncResult] = useState<{success: boolean; message: string; rowsImported?: number} | null>(null);
+  const [psSyncResult, setPsSyncResult] = useState<{success: boolean; message: string; rowsImported?: number; newUnmatched?: number} | null>(null);
   const [showPSSyncModal, setShowPSSyncModal] = useState(false);
   const [selectedPSKey, setSelectedPSKey] = useState<PlayStationApiKey | null>(null);
   const [showPSAutoSyncModal, setShowPSAutoSyncModal] = useState(false);
@@ -298,7 +300,8 @@ export default function ClientKeysPage() {
               success: true,
               message: `Sync completed! Imported ${statusData.progress.rowsImported} rows from ${statusData.progress.datesProcessed} dates.`,
               rowsImported: statusData.progress.rowsImported,
-              datesProcessed: statusData.progress.datesProcessed
+              datesProcessed: statusData.progress.datesProcessed,
+              newUnmatched: statusData.progress.newUnmatched || 0,
             });
             setSyncing(false);
             fetchData();
@@ -516,7 +519,8 @@ export default function ClientKeysPage() {
       setPsSyncResult({
         success: data.success,
         message: data.message || data.error,
-        rowsImported: data.rowsImported
+        rowsImported: data.rowsImported,
+        newUnmatched: data.newUnmatched || 0,
       });
 
       if (data.success) {
@@ -1175,6 +1179,15 @@ export default function ClientKeysPage() {
                   </p>
                 )}
 
+                {syncResult.newUnmatched !== undefined && syncResult.newUnmatched > 0 && (
+                  <p style={{ margin: '8px 0 0 0', fontSize: '13px', padding: '8px 12px', background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: '6px', color: '#9a3412' }}>
+                    {syncResult.newUnmatched} new product(s) need matching.{' '}
+                    <Link href="/settings/product-matching" style={{ color: '#2563eb', textDecoration: 'underline', fontWeight: 500 }}>
+                      Review now
+                    </Link>
+                  </p>
+                )}
+
                 {/* Debug Information */}
                 {syncResult.debug && (
                   <details style={{ marginTop: '12px' }}>
@@ -1585,6 +1598,14 @@ export default function ClientKeysPage() {
                 {psSyncResult.rowsImported !== undefined && (
                   <p style={{ margin: '4px 0 0 0', fontSize: '13px', opacity: 0.8 }}>
                     {psSyncResult.rowsImported} rows imported
+                  </p>
+                )}
+                {psSyncResult.newUnmatched !== undefined && psSyncResult.newUnmatched > 0 && (
+                  <p style={{ margin: '8px 0 0 0', fontSize: '13px', padding: '8px 12px', background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: '6px', color: '#9a3412' }}>
+                    {psSyncResult.newUnmatched} new product(s) need matching.{' '}
+                    <Link href="/settings/product-matching" style={{ color: '#2563eb', textDecoration: 'underline', fontWeight: 500 }}>
+                      Review now
+                    </Link>
                   </p>
                 )}
               </div>

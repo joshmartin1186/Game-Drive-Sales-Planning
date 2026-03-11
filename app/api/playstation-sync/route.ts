@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { serverSupabase as supabase } from '@/lib/supabase';
+import { matchProducts, ExternalProduct } from '@/lib/product-matching';
 
 // Domo-powered analytics API endpoints (PlayStation Partners uses Domo under the hood)
 const PSN_AUTH_URL = 'https://api.domo.com/oauth/token';
@@ -147,6 +148,49 @@ export async function POST(request: Request) {
     // Step 4: Store the sales data
     const storeResult = await storeSalesData(client_id, salesData);
 
+    // Run product matching on synced data
+    let newUnmatched = 0;
+    try {
+      const { data: unmatchedRows } = await supabase
+        .from('performance_metrics')
+        .select('product_name')
+        .eq('client_id', client_id)
+        .eq('platform', 'PlayStation')
+        .is('product_id', null)
+        .not('product_name', 'eq', 'Unknown');
+
+      if (unmatchedRows && unmatchedRows.length > 0) {
+        const seen = new Set<string>();
+        const externalProducts: ExternalProduct[] = [];
+        for (const row of unmatchedRows) {
+          if (!seen.has(row.product_name)) {
+            seen.add(row.product_name);
+            externalProducts.push({
+              platform: 'playstation',
+              external_product_name: row.product_name,
+              client_id,
+            });
+          }
+        }
+
+        const matchResults = await matchProducts(supabase, externalProducts);
+        newUnmatched = matchResults.filter(r => r.match_type === 'no_match' && r.is_new).length;
+
+        for (const result of matchResults) {
+          if (result.matched_product_id && result.match_type !== 'no_match') {
+            await supabase
+              .from('performance_metrics')
+              .update({ product_id: result.matched_product_id, game_id: result.matched_game_id })
+              .eq('client_id', client_id)
+              .eq('product_name', result.external_product.external_product_name)
+              .is('product_id', null);
+          }
+        }
+      }
+    } catch (matchError) {
+      console.error('[PlayStation Sync] Product matching error (non-fatal):', matchError);
+    }
+
     // Update last sync date
     await supabase
       .from('playstation_api_keys')
@@ -174,6 +218,7 @@ export async function POST(request: Request) {
       message: `Synced ${salesData.length} records from PlayStation Analytics API.`,
       rowsImported: storeResult.imported,
       rowsSkipped: storeResult.skipped,
+      newUnmatched,
       datasetUsed: targetDatasetId,
       clientName: clientData?.name
     });

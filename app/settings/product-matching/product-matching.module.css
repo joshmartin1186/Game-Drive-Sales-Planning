@@ -1,0 +1,514 @@
+/* Filter bar */
+.filterBar {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.filterBar select {
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 14px;
+  background: white;
+  min-width: 160px;
+}
+
+.filterBar select:focus {
+  outline: none;
+  border-color: #1b2838;
+}
+
+/* Summary cards */
+.summaryCards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.summaryCard {
+  background: white;
+  border-radius: 8px;
+  padding: 16px;
+  border: 1px solid #e2e8f0;
+  text-align: center;
+}
+
+.summaryCard.pending {
+  border-color: #fbbf24;
+  background: #fffbeb;
+}
+
+.summaryNumber {
+  font-size: 28px;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0;
+}
+
+.summaryLabel {
+  font-size: 13px;
+  color: #64748b;
+  margin: 4px 0 0 0;
+}
+
+/* Pending item cards */
+.pendingList {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.pendingCard {
+  background: white;
+  border-radius: 10px;
+  padding: 20px;
+  border: 1px solid #e2e8f0;
+  border-left: 4px solid #fbbf24;
+}
+
+.pendingHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 12px;
+}
+
+.pendingName {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0 0 4px 0;
+}
+
+.pendingMeta {
+  display: flex;
+  gap: 12px;
+  font-size: 12px;
+  color: #94a3b8;
+  flex-wrap: wrap;
+}
+
+.pendingMeta span {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.platformBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.platformBadge.steam {
+  background: #1b2838;
+  color: #66c0f4;
+}
+
+.platformBadge.playstation {
+  background: #003087;
+  color: white;
+}
+
+.occurrenceCount {
+  font-size: 12px;
+  color: #64748b;
+  background: #f1f5f9;
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+/* Candidate selection */
+.candidatesSection {
+  margin: 16px 0;
+}
+
+.candidatesTitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: #475569;
+  margin: 0 0 8px 0;
+}
+
+.candidatesList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.candidateOption {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.candidateOption:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+}
+
+.candidateOption.selected {
+  background: #eff6ff;
+  border-color: #3b82f6;
+}
+
+.candidateOption input[type="radio"] {
+  accent-color: #1b2838;
+}
+
+.candidateInfo {
+  flex: 1;
+}
+
+.candidateProductName {
+  font-size: 14px;
+  font-weight: 500;
+  color: #1e293b;
+}
+
+.candidateGameName {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.confidenceBadge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+.confidenceBadge.high {
+  background: #dcfce7;
+  color: #16a34a;
+}
+
+.confidenceBadge.medium {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.confidenceBadge.low {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.noCandidates {
+  font-size: 13px;
+  color: #94a3b8;
+  font-style: italic;
+  padding: 8px 0;
+}
+
+/* Action buttons for pending cards */
+.pendingActions {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid #f1f5f9;
+}
+
+.confirmBtn {
+  padding: 8px 16px;
+  background: #1b2838;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.confirmBtn:hover {
+  background: #2d3f4f;
+}
+
+.confirmBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.createBtn {
+  padding: 8px 16px;
+  background: white;
+  color: #16a34a;
+  border: 1px solid #16a34a;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.createBtn:hover {
+  background: #f0fdf4;
+}
+
+.ignoreBtn {
+  padding: 8px 16px;
+  background: white;
+  color: #94a3b8;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.ignoreBtn:hover {
+  background: #f8fafc;
+  color: #64748b;
+}
+
+/* Confirmed items table */
+.confirmedTable {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.confirmedTable th {
+  text-align: left;
+  padding: 10px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 2px solid #e2e8f0;
+}
+
+.confirmedTable td {
+  padding: 10px 12px;
+  font-size: 14px;
+  color: #1e293b;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.confirmedTable tr:hover td {
+  background: #f8fafc;
+}
+
+.matchTypeBadge {
+  display: inline-flex;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.matchTypeBadge.autoId {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.matchTypeBadge.autoName {
+  background: #dcfce7;
+  color: #16a34a;
+}
+
+.matchTypeBadge.manual {
+  background: #f3e8ff;
+  color: #7c3aed;
+}
+
+.matchTypeBadge.createNew {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.unlinkBtn {
+  padding: 4px 10px;
+  background: white;
+  color: #dc2626;
+  border: 1px solid #fecaca;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.unlinkBtn:hover {
+  background: #fef2f2;
+}
+
+/* Create product modal */
+.createModal {
+  max-width: 560px;
+}
+
+.createModalInfo {
+  background: #f0f9ff;
+  border: 1px solid #bae6fd;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 16px;
+  font-size: 13px;
+  color: #0369a1;
+}
+
+.checkboxGroup {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.checkboxGroup input[type="checkbox"] {
+  accent-color: #1b2838;
+}
+
+.checkboxGroup label {
+  font-size: 13px;
+  color: #475569;
+  margin: 0;
+}
+
+.platformCheckboxes {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.platformCheckbox {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.platformCheckbox.checked {
+  background: #eff6ff;
+  border-color: #3b82f6;
+}
+
+/* Alert banner for sync notifications */
+.alertBanner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: #fffbeb;
+  border: 1px solid #fbbf24;
+  border-radius: 8px;
+  margin-bottom: 20px;
+}
+
+.alertBanner p {
+  flex: 1;
+  margin: 0;
+  font-size: 14px;
+  color: #92400e;
+}
+
+.alertBanner a {
+  color: #1b2838;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.alertBanner a:hover {
+  text-decoration: underline;
+}
+
+/* Loading state */
+.loadingState {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 48px;
+  color: #64748b;
+  gap: 12px;
+}
+
+/* Section tabs within the page */
+.statusTabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.statusTab {
+  padding: 10px 16px;
+  font-size: 14px;
+  color: #64748b;
+  cursor: pointer;
+  border: none;
+  background: none;
+  border-bottom: 2px solid transparent;
+  transition: all 0.15s;
+}
+
+.statusTab:hover {
+  color: #1e293b;
+}
+
+.statusTab.active {
+  color: #1b2838;
+  font-weight: 600;
+  border-bottom-color: #1b2838;
+}
+
+.tabCount {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  margin-left: 6px;
+}
+
+.tabCount.pendingCount {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.tabCount.confirmedCount {
+  background: #dcfce7;
+  color: #16a34a;
+}
+
+/* Backfill button */
+.backfillBtn {
+  padding: 8px 16px;
+  background: #0284c7;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.backfillBtn:hover {
+  background: #0369a1;
+}
+
+.backfillBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
