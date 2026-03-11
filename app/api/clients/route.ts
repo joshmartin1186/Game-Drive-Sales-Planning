@@ -9,7 +9,7 @@ export async function GET(request: Request) {
 
     let selectQuery = 'id, name, email, contact_person, steam_api_key, sales_planning_enabled, pr_tracking_enabled, created_at';
     if (include === 'nested') {
-      selectQuery = '*, games(*, products(*, product_platforms(platform_id, platform:platforms(id, name, color_hex))))';
+      selectQuery = '*, games(*, products(*))';
     }
 
     const { data, error } = await supabase
