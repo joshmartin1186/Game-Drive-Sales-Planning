@@ -149,6 +149,11 @@ export default function SourcesPage() {
   const [scanResult, setScanResult] = useState<string | null>(null)
   const [scanningTavily, setScanningTavily] = useState(false)
   const [tavilyScanResult, setTavilyScanResult] = useState<string | null>(null)
+  const [scanningSullyGnome, setScanningSullyGnome] = useState(false)
+  const [sullyGnomeScanResult, setSullyGnomeScanResult] = useState<string | null>(null)
+  const [showSullyGnomeUpload, setShowSullyGnomeUpload] = useState(false)
+  const [sullyGnomeUploading, setSullyGnomeUploading] = useState(false)
+  const [sullyGnomeUploadResult, setSullyGnomeUploadResult] = useState<string | null>(null)
 
   // ─── Data fetching ────────────────────────────────────────────────────────
 
@@ -303,7 +308,9 @@ export default function SourcesPage() {
         break
       case 'sullygnome':
         if (formConfig.game_name) cfg.game_name = formConfig.game_name.trim()
-        if (formConfig.actor_id) cfg.actor_id = formConfig.actor_id.trim()
+        if (formConfig.sullygnome_slug) cfg.sullygnome_slug = formConfig.sullygnome_slug.trim()
+        if (formConfig.default_time_range) cfg.default_time_range = formConfig.default_time_range
+        cfg.min_avg_viewers = parseInt(formConfig.min_avg_viewers) || 10
         break
       case 'semrush':
         if (formConfig.domain) cfg.domain = formConfig.domain.trim()
@@ -478,6 +485,76 @@ export default function SourcesPage() {
     setScanningTavily(false)
   }
 
+  const handleRunSullyGnomeScan = async (sourceId?: string) => {
+    setScanningSullyGnome(true)
+    setSullyGnomeScanResult(null)
+    try {
+      const url = sourceId
+        ? `/api/cron/sullygnome-scan?source_id=${sourceId}`
+        : '/api/cron/sullygnome-scan'
+      const res = await fetch(url)
+      const json = await res.json()
+      if (res.ok) {
+        setSullyGnomeScanResult(
+          `${json.sources_processed || 0} sources scanned: ${json.new_items || 0} new, ${json.enriched || 0} enriched`
+        )
+        fetchSources()
+      } else {
+        setSullyGnomeScanResult(`Error: ${json.error || 'Scan failed'}`)
+      }
+    } catch {
+      setSullyGnomeScanResult('Network error during scan')
+    }
+    setScanningSullyGnome(false)
+  }
+
+  const handleSullyGnomeUpload = async (file: File, sourceId?: string) => {
+    setSullyGnomeUploading(true)
+    setSullyGnomeUploadResult(null)
+
+    // Find the source to get config
+    const source = sources.find(s => s.id === sourceId)
+    if (!source?.game_id || !source?.config) {
+      setSullyGnomeUploadResult('Error: Source must be linked to a game')
+      setSullyGnomeUploading(false)
+      return
+    }
+
+    // Look up client_id from game
+    const game = games.find(g => g.id === source.game_id)
+    if (!game?.client_id) {
+      setSullyGnomeUploadResult('Error: Could not determine client from game')
+      setSullyGnomeUploading(false)
+      return
+    }
+
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('game_id', source.game_id)
+    formData.append('client_id', game.client_id)
+    formData.append('game_slug', String(source.config.sullygnome_slug || ''))
+    formData.append('time_range', String(source.config.default_time_range || '30d'))
+    formData.append('min_avg_viewers', String(source.config.min_avg_viewers || '10'))
+    if (sourceId) formData.append('source_id', sourceId)
+
+    try {
+      const res = await fetch('/api/sullygnome-import', { method: 'POST', body: formData })
+      const json = await res.json()
+      if (res.ok) {
+        setSullyGnomeUploadResult(
+          `Imported ${json.total_rows} rows: ${json.new_items} new, ${json.enriched} enriched, ${json.skipped} skipped`
+        )
+        fetchSources()
+      } else {
+        setSullyGnomeUploadResult(`Error: ${json.error || 'Import failed'}`)
+      }
+    } catch {
+      setSullyGnomeUploadResult('Network error during import')
+    }
+    setSullyGnomeUploading(false)
+    setShowSullyGnomeUpload(false)
+  }
+
   // ─── Config form fields per source type ───────────────────────────────────
 
   const renderConfigFields = () => {
@@ -557,8 +634,27 @@ export default function SourcesPage() {
       case 'sullygnome':
         return (
           <>
-            {field('game_name', 'Game Name', 'My Awesome Game')}
-            {field('actor_id', 'Apify Actor ID', 'actor-name/slug')}
+            {field('game_name', 'Game Name (on SullyGnome)', 'Stardew Valley')}
+            {field('sullygnome_slug', 'SullyGnome URL Slug', 'Stardew_Valley')}
+            <div>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, color: '#374151', marginBottom: '4px' }}>
+                Time Range
+              </label>
+              <select
+                value={formConfig.default_time_range || '30d'}
+                onChange={(e) => setFormConfig({ ...formConfig, default_time_range: e.target.value })}
+                style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #d1d5db', fontSize: '13px', backgroundColor: 'white' }}
+              >
+                <option value="3d">3 Days</option>
+                <option value="7d">7 Days</option>
+                <option value="14d">14 Days</option>
+                <option value="30d">30 Days</option>
+                <option value="90d">90 Days</option>
+                <option value="180d">180 Days</option>
+                <option value="365d">365 Days</option>
+              </select>
+            </div>
+            {field('min_avg_viewers', 'Min Average Viewers', '10', 'number')}
           </>
         )
       case 'semrush':
@@ -643,6 +739,21 @@ export default function SourcesPage() {
           ) : null}
           {source.source_type === 'twitch' && source.config?.game_name ? (
             <span>Game: <strong>{String(source.config.game_name)}</strong></span>
+          ) : null}
+          {source.source_type === 'sullygnome' && source.config?.sullygnome_slug ? (
+            <span>
+              Slug: <strong>{String(source.config.sullygnome_slug)}</strong>
+              {source.config?.default_time_range ? ` · ${String(source.config.default_time_range)}` : ' · 30d'}
+              {source.config?.min_avg_viewers ? ` · Min ${String(source.config.min_avg_viewers)} avg` : ''}
+              <a
+                href={`https://sullygnome.com/game/${String(source.config.sullygnome_slug)}/30/watched`}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ marginLeft: '6px', fontSize: '11px', color: '#6366f1', textDecoration: 'none' }}
+              >
+                ↗ View on SullyGnome
+              </a>
+            </span>
           ) : null}
           {source.source_type === 'reddit' && (source.config?.subreddits || source.config?.subreddit) ? (
             <span>{Array.isArray(source.config.subreddits)
@@ -923,7 +1034,132 @@ export default function SourcesPage() {
         {renderSection('twitter', 'Twitter/X', 'Keyword/hashtag monitoring via Apify actors', twSources)}
         {renderSection('tiktok', 'TikTok', 'Hashtag & keyword monitoring — min 1,000 followers default', tkSources)}
         {renderSection('instagram', 'Instagram', 'Hashtag & keyword monitoring — min 1,000 followers default', igSources)}
-        {renderSection('sullygnome', 'SullyGnome (Twitch Enrichment)', 'Historical Twitch data — peak viewers, avg viewers, hours watched', sgSources)}
+        {/* SullyGnome — custom section with scan + upload */}
+        <div style={{ marginBottom: '24px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+            <div>
+              <h3 style={{ fontSize: '16px', fontWeight: 600, color: '#1e293b', margin: 0 }}>
+                📊 SullyGnome (Twitch Enrichment)
+              </h3>
+              <p style={{ fontSize: '12px', color: '#94a3b8', margin: '2px 0 0 0' }}>
+                Historical Twitch data — avg viewers, peak viewers, hours watched per streamer
+              </p>
+            </div>
+            {canEdit && (
+              <div style={{ display: 'flex', gap: '6px' }}>
+                <button
+                  onClick={() => handleRunSullyGnomeScan()}
+                  disabled={scanningSullyGnome || sgSources.length === 0}
+                  style={{
+                    padding: '6px 12px', backgroundColor: scanningSullyGnome ? '#f1f5f9' : '#7c3aed',
+                    color: scanningSullyGnome ? '#64748b' : 'white', border: 'none', borderRadius: '6px',
+                    fontSize: '12px', cursor: scanningSullyGnome || sgSources.length === 0 ? 'not-allowed' : 'pointer',
+                    fontWeight: 500, opacity: scanningSullyGnome || sgSources.length === 0 ? 0.7 : 1
+                  }}
+                >
+                  {scanningSullyGnome ? 'Scanning...' : '🔍 Scan Now'}
+                </button>
+                <button
+                  onClick={() => { setShowSullyGnomeUpload(true); setSullyGnomeUploadResult(null) }}
+                  disabled={sgSources.length === 0}
+                  style={{
+                    padding: '6px 12px', backgroundColor: 'white', color: '#475569',
+                    border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '12px',
+                    cursor: sgSources.length === 0 ? 'not-allowed' : 'pointer',
+                    opacity: sgSources.length === 0 ? 0.7 : 1
+                  }}
+                >
+                  📤 Upload CSV
+                </button>
+                <button
+                  onClick={() => openAddForm('sullygnome')}
+                  style={{ padding: '6px 12px', backgroundColor: '#2563eb', color: 'white', border: 'none', borderRadius: '6px', fontSize: '12px', cursor: 'pointer', fontWeight: 500 }}
+                >
+                  + Add
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Scan result */}
+          {sullyGnomeScanResult && (
+            <div style={{
+              padding: '8px 12px', borderRadius: '6px', fontSize: '12px', marginBottom: '10px',
+              backgroundColor: sullyGnomeScanResult.startsWith('Error') ? '#fee2e2' : '#f0fdf4',
+              color: sullyGnomeScanResult.startsWith('Error') ? '#991b1b' : '#166534'
+            }}>
+              {sullyGnomeScanResult}
+            </div>
+          )}
+
+          {/* Upload result */}
+          {sullyGnomeUploadResult && (
+            <div style={{
+              padding: '8px 12px', borderRadius: '6px', fontSize: '12px', marginBottom: '10px',
+              backgroundColor: sullyGnomeUploadResult.startsWith('Error') ? '#fee2e2' : '#f0fdf4',
+              color: sullyGnomeUploadResult.startsWith('Error') ? '#991b1b' : '#166534'
+            }}>
+              {sullyGnomeUploadResult}
+            </div>
+          )}
+
+          {/* Upload modal */}
+          {showSullyGnomeUpload && (
+            <div style={{
+              padding: '16px', borderRadius: '10px', marginBottom: '10px',
+              backgroundColor: '#faf5ff', border: '1px solid #e9d5ff'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                <strong style={{ fontSize: '14px', color: '#5b21b6' }}>Upload SullyGnome CSV</strong>
+                <button onClick={() => setShowSullyGnomeUpload(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px' }}>×</button>
+              </div>
+              <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 10px 0' }}>
+                Download the CSV from SullyGnome (game page → Most Watched → Export), then upload it here.
+                The CSV will be processed using the linked source&apos;s config (slug, time range, min viewers).
+              </p>
+              {sgSources.map(s => (
+                <div key={s.id} style={{
+                  display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 12px',
+                  backgroundColor: 'white', borderRadius: '6px', border: '1px solid #e2e8f0', marginBottom: '6px'
+                }}>
+                  <span style={{ fontSize: '13px', fontWeight: 500, flex: 1 }}>
+                    {s.name}
+                    {s.config?.sullygnome_slug ? ` (${String(s.config.sullygnome_slug)})` : ''}
+                  </span>
+                  <label style={{
+                    padding: '4px 12px', backgroundColor: sullyGnomeUploading ? '#f1f5f9' : '#7c3aed',
+                    color: sullyGnomeUploading ? '#64748b' : 'white', borderRadius: '4px',
+                    fontSize: '12px', cursor: sullyGnomeUploading ? 'not-allowed' : 'pointer', fontWeight: 500
+                  }}>
+                    {sullyGnomeUploading ? 'Importing...' : 'Choose CSV'}
+                    <input
+                      type="file"
+                      accept=".csv"
+                      style={{ display: 'none' }}
+                      disabled={sullyGnomeUploading}
+                      onChange={(e) => {
+                        const file = e.target.files?.[0]
+                        if (file) handleSullyGnomeUpload(file, s.id)
+                        e.target.value = ''
+                      }}
+                    />
+                  </label>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {sgSources.length === 0 ? (
+            <div style={{ padding: '20px', textAlign: 'center', color: '#94a3b8', backgroundColor: 'white', borderRadius: '10px', fontSize: '13px' }}>
+              No SullyGnome sources configured
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(400px, 1fr))', gap: '10px' }}>
+              {sgSources.map(renderSourceCard)}
+            </div>
+          )}
+        </div>
+
         {renderSection('semrush', 'SEMRush', 'Domain SEO/traffic analysis — supplements outlet traffic data', smSources)}
       </div>
     )

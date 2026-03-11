@@ -28,6 +28,7 @@ interface CoverageItem {
   is_ai_generated: boolean | null
   approval_status: string
   source_type: string
+  source_metadata?: Record<string, unknown> | null
   campaign_section: string | null
   duplicate_group_id: string | null
   is_original: boolean
@@ -747,6 +748,11 @@ export default function CoverageFeedPage() {
                           </td>
                           <td style={{ padding: '8px 12px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: '#1e293b' }}>
                             {formatNumber(item.monthly_unique_visitors || item.outlet?.monthly_unique_visitors)}
+                            {item.source_metadata?.sullygnome_hours_watched != null && (
+                              <div style={{ fontSize: '10px', color: '#7c3aed', marginTop: '1px' }}>
+                                {Number(item.source_metadata.sullygnome_hours_watched).toLocaleString()} hrs watched
+                              </div>
+                            )}
                           </td>
                           <td style={{ padding: '8px 12px', textAlign: 'center' }}>
                             {tier && tierColor ? (
@@ -792,6 +798,23 @@ export default function CoverageFeedPage() {
                             <span style={{ fontSize: '11px', color: '#64748b' }}>
                               {item.source_type}
                             </span>
+                            {item.source_type === 'twitch' && !!item.source_metadata?.sullygnome_enriched && (
+                              <span style={{
+                                display: 'inline-block', marginLeft: '4px', padding: '1px 5px',
+                                backgroundColor: '#ede9fe', color: '#6d28d9', borderRadius: '4px',
+                                fontSize: '9px', fontWeight: 600, verticalAlign: 'middle'
+                              }}>
+                                SG
+                              </span>
+                            )}
+                            {item.source_type === 'twitch' && item.source_metadata?.sullygnome_avg_viewers != null && (
+                              <div style={{ fontSize: '10px', color: '#7c3aed', marginTop: '2px', lineHeight: '1.4' }}>
+                                Avg: {Number(item.source_metadata.sullygnome_avg_viewers).toLocaleString()}
+                                {item.source_metadata.sullygnome_peak_viewers != null && (
+                                  <> · Peak: {Number(item.source_metadata.sullygnome_peak_viewers).toLocaleString()}</>
+                                )}
+                              </div>
+                            )}
                           </td>
                           {canEdit && (
                             <td style={{ padding: '8px 12px', textAlign: 'right', whiteSpace: 'nowrap' }}>
