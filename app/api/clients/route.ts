@@ -1,12 +1,20 @@
 import { NextResponse } from 'next/server';
 import { serverSupabase as supabase } from '@/lib/supabase';
 
-// GET - Fetch all clients
-export async function GET() {
+// GET - Fetch all clients (with optional nested games/products)
+export async function GET(request: Request) {
   try {
+    const { searchParams } = new URL(request.url);
+    const include = searchParams.get('include');
+
+    let selectQuery = 'id, name, email, contact_person, steam_api_key, sales_planning_enabled, pr_tracking_enabled, created_at';
+    if (include === 'nested') {
+      selectQuery = '*, games(*, products(*, product_platforms(platform_id, platform:platforms(id, name, color_hex))))';
+    }
+
     const { data, error } = await supabase
       .from('clients')
-      .select('id, name, email, contact_person, steam_api_key, sales_planning_enabled, pr_tracking_enabled, created_at')
+      .select(selectQuery)
       .order('name', { ascending: true });
 
     if (error) throw error;

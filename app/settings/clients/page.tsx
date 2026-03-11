@@ -82,42 +82,34 @@ export default function SettingsClientsPage() {
   const [productForm, setProductForm] = useState({ name: '', game_id: '', product_type: 'base' as string, steam_product_id: '', launch_date: format(new Date(), 'yyyy-MM-dd'), product_aliases: '', auto_calendar: true })
   const [productPlatformIds, setProductPlatformIds] = useState<string[]>([])
 
-  // Fetch all data
+  // Fetch all data via API routes (bypasses RLS)
   const fetchData = useCallback(async () => {
     setIsLoading(true)
-    const [clientsRes, platformsRes, kwRes] = await Promise.all([
-      supabase
-        .from('clients')
-        .select(`
-          *,
-          games(
-            *,
-            products(
-              *,
-              product_platforms(platform_id, platform:platforms(id, name, color_hex))
-            )
-          )
-        `)
-        .order('name'),
-      supabase.from('platforms').select('id, name, color_hex').order('name'),
-      supabase.from('coverage_keywords').select('game_id')
-    ])
+    try {
+      const [clientsRes, platformsRes, kwRes] = await Promise.all([
+        fetch('/api/clients?include=nested').then(r => r.json()),
+        supabase.from('platforms').select('id, name, color_hex').order('name'),
+        supabase.from('coverage_keywords').select('game_id')
+      ])
 
-    if (platformsRes.data) setPlatforms(platformsRes.data)
+      if (platformsRes.data) setPlatforms(platformsRes.data)
 
-    // Build keyword counts
-    const kwCounts: Record<string, number> = {}
-    if (kwRes.data) {
-      for (const kw of kwRes.data) {
-        kwCounts[kw.game_id] = (kwCounts[kw.game_id] || 0) + 1
+      // Build keyword counts
+      const kwCounts: Record<string, number> = {}
+      if (kwRes.data) {
+        for (const kw of kwRes.data) {
+          kwCounts[kw.game_id] = (kwCounts[kw.game_id] || 0) + 1
+        }
       }
-    }
 
-    if (clientsRes.data) {
-      setClients(clientsRes.data.map((c: Client) => ({
-        ...c,
-        games: c.games?.map(g => ({ ...g, keyword_count: kwCounts[g.id] || 0 }))
-      })))
+      if (Array.isArray(clientsRes)) {
+        setClients(clientsRes.map((c: Client) => ({
+          ...c,
+          games: c.games?.map(g => ({ ...g, keyword_count: kwCounts[g.id] || 0 }))
+        })))
+      }
+    } catch (err) {
+      console.error('Failed to fetch clients:', err)
     }
     setIsLoading(false)
   }, [supabase])
