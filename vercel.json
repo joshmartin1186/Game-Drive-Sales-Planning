@@ -43,6 +43,10 @@
     {
       "path": "/api/cron/coverage-dedup",
       "schedule": "45 * * * *"
+    },
+    {
+      "path": "/api/cron/sullygnome-scan",
+      "schedule": "0 4 * * 1"
     }
   ],
   "buildCommand": "next build"

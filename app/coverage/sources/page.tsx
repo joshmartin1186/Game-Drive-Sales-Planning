@@ -495,8 +495,11 @@ export default function SourcesPage() {
       const res = await fetch(url, { method: 'POST' })
       const json = await res.json()
       if (res.ok) {
+        const started = json.sources_started || 0
         setSullyGnomeScanResult(
-          `${json.sources_processed || 0} sources scanned: ${json.new_items || 0} new, ${json.enriched || 0} enriched`
+          started > 0
+            ? `✅ ${started} Apify run${started > 1 ? 's' : ''} started — results will appear in the feed within a few minutes`
+            : json.message || 'No sources to scan'
         )
         fetchSources()
       } else {

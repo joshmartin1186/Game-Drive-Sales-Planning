@@ -1,15 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSupabase } from '@/lib/supabase'
-import {
-  parseApifyRow,
-  processSullyGnomeRows,
-  buildSullyGnomeUrl,
-  type ProcessingResult,
-} from '@/lib/sullygnome'
+import { buildSullyGnomeUrl } from '@/lib/sullygnome'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
-export const maxDuration = 120 // SullyGnome scrapes take longer (JS render + residential proxy)
+export const maxDuration = 60
 
 // Apify generic web scraper — headless Chrome, works with Cloudflare
 const APIFY_ACTOR = 'apify~web-scraper'
@@ -48,7 +43,7 @@ function shouldScanNow(source: CoverageSource): boolean {
     case 'every_6h': return hoursSince >= 5.5
     case 'daily': return hoursSince >= 23
     case 'weekly': return hoursSince >= 167
-    default: return hoursSince >= 167 // Default weekly for SullyGnome
+    default: return hoursSince >= 167
   }
 }
 
@@ -92,12 +87,12 @@ async function pageFunction(context) {
 
 // ─── Main Handler ───────────────────────────────────────────────────────────
 
-// POST /api/cron/sullygnome-scan — Manual trigger from Sources UI (no auth)
+// POST — Manual trigger from Sources UI (no auth)
 export async function POST(request: NextRequest) {
   return handleScan(request)
 }
 
-// GET /api/cron/sullygnome-scan — Cron trigger (auth required)
+// GET — Cron trigger (auth required)
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get('authorization')
   const cronSecret = process.env.CRON_SECRET
@@ -107,6 +102,15 @@ export async function GET(request: NextRequest) {
   return handleScan(request)
 }
 
+/**
+ * Async 2-step approach to avoid Vercel function timeout:
+ * 1. This handler kicks off Apify actor runs (fast, <5s per source)
+ * 2. Each run is started with a webhookUrl pointing to /api/sullygnome-collect
+ *    which Apify calls when the actor finishes — that endpoint processes results
+ *
+ * If no webhook URL is available (local dev), falls back to marking sources
+ * as "running" so the collect endpoint can poll for them.
+ */
 async function handleScan(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const forceSourceId = searchParams.get('source_id')
@@ -150,12 +154,17 @@ async function handleScan(request: NextRequest) {
       return NextResponse.json({ message: 'No active SullyGnome sources configured' })
     }
 
-    // 3. Process each source
+    // Build the webhook URL for Apify to call when done
+    const origin = request.headers.get('host')
+    const proto = request.headers.get('x-forwarded-proto') || 'https'
+    const baseUrl = `${proto}://${origin}`
+
+    // 3. Kick off Apify runs for each due source
     const results: Array<{
       source_id: string
       name: string
       status: string
-      result?: ProcessingResult
+      run_id?: string
       error?: string
     }> = []
 
@@ -166,24 +175,19 @@ async function handleScan(request: NextRequest) {
         continue
       }
 
-      // Validate config
       const slug = source.config?.sullygnome_slug
-      const gameName = source.config?.game_name || source.game?.name || source.name
       const timeRange = source.config?.default_time_range || '30d'
-      const minAvgViewers = source.config?.min_avg_viewers || 10
 
       if (!slug) {
-        // Mark as error — missing slug
         await supabase
           .from('coverage_sources')
           .update({
             last_run_at: new Date().toISOString(),
             last_run_status: 'error',
-            last_run_error: 'Missing sullygnome_slug in config',
+            last_run_message: 'Missing sullygnome_slug in config',
             consecutive_failures: (source.consecutive_failures || 0) + 1,
           })
           .eq('id', source.id)
-
         results.push({ source_id: source.id, name: source.name, status: 'error', error: 'Missing slug' })
         continue
       }
@@ -194,21 +198,24 @@ async function handleScan(request: NextRequest) {
           .update({
             last_run_at: new Date().toISOString(),
             last_run_status: 'error',
-            last_run_error: 'Source must be linked to a game (with client)',
+            last_run_message: 'Source must be linked to a game (with client)',
             consecutive_failures: (source.consecutive_failures || 0) + 1,
           })
           .eq('id', source.id)
-
         results.push({ source_id: source.id, name: source.name, status: 'error', error: 'No linked game' })
         continue
       }
 
       try {
-        // 4. Build SullyGnome URL and run Apify web scraper
+        // Build SullyGnome URL
         const targetUrl = buildSullyGnomeUrl(slug, timeRange)
 
+        // Webhook URL includes source_id so the collect endpoint knows which source it's for
+        const webhookUrl = `${baseUrl}/api/sullygnome-collect?source_id=${source.id}`
+
+        // Start Apify actor run ASYNC (returns immediately with run ID)
         const actorRes = await fetch(
-          `https://api.apify.com/v2/acts/${APIFY_ACTOR}/run-sync-get-dataset-items?token=${apifyKey}`,
+          `https://api.apify.com/v2/acts/${APIFY_ACTOR}/runs?token=${apifyKey}`,
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -220,7 +227,6 @@ async function handleScan(request: NextRequest) {
                 useApifyProxy: true,
                 apifyProxyGroups: ['RESIDENTIAL'],
               },
-              // Increase timeouts for JS rendering
               pageFunctionTimeoutSecs: 60,
               maxConcurrency: 1,
             }),
@@ -229,69 +235,57 @@ async function handleScan(request: NextRequest) {
 
         if (!actorRes.ok) {
           const errText = await actorRes.text().catch(() => 'Unknown error')
-          throw new Error(`Apify actor returned ${actorRes.status}: ${errText.slice(0, 200)}`)
+          throw new Error(`Apify returned ${actorRes.status}: ${errText.slice(0, 200)}`)
         }
 
-        const rawResults = await actorRes.json()
+        const runData = await actorRes.json() as { data?: { id?: string; defaultDatasetId?: string } }
+        const runId = runData?.data?.id
+        const datasetId = runData?.data?.defaultDatasetId
 
-        // The web scraper returns pageFunction results — each item is the return value
-        // Our pageFunction returns an array of cell arrays per page
-        // Flatten: results may be [[row1, row2, ...]] or [row1, row2, ...]
-        let allRows: string[][] = []
-        if (Array.isArray(rawResults)) {
-          for (const item of rawResults) {
-            if (Array.isArray(item)) {
-              // Could be [[cells], [cells], ...] or [cells]
-              if (item.length > 0 && Array.isArray(item[0])) {
-                allRows = allRows.concat(item)
-              } else if (item.length > 0 && typeof item[0] === 'string') {
-                allRows.push(item)
-              }
+        // Register webhook for this run so Apify calls us when done
+        if (runId) {
+          await fetch(
+            `https://api.apify.com/v2/webhooks?token=${apifyKey}`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                requestUrl: webhookUrl,
+                eventTypes: ['ACTOR.RUN.SUCCEEDED', 'ACTOR.RUN.FAILED', 'ACTOR.RUN.ABORTED', 'ACTOR.RUN.TIMED_OUT'],
+                condition: { actorRunId: runId },
+                isAdHoc: true,
+              }),
             }
-          }
+          ).catch(err => console.error('Webhook registration failed:', err))
         }
 
-        // Parse rows into SullyGnomeRow objects
-        const parsedRows = allRows
-          .map(cells => parseApifyRow(cells))
-          .filter((r): r is NonNullable<typeof r> => r !== null)
-
-        // 5. Process through shared pipeline
-        const result = await processSullyGnomeRows(supabase, parsedRows, {
-          clientId: source.game.client_id,
-          gameId: source.game.id,
-          gameName,
-          gameSlug: slug,
-          timeRange,
-          minAvgViewers,
-        })
-
-        // 6. Update source tracking
+        // Mark source as running
         await supabase
           .from('coverage_sources')
           .update({
             last_run_at: new Date().toISOString(),
-            last_run_status: 'success',
-            last_run_error: null,
-            items_found_last_run: result.new_items + result.enriched,
-            total_items_found: (source.total_items_found || 0) + result.new_items,
-            consecutive_failures: 0,
+            last_run_status: 'running',
+            last_run_message: `Apify run started: ${runId || 'unknown'}`,
+            config: {
+              ...source.config,
+              _apify_run_id: runId,
+              _apify_dataset_id: datasetId,
+            },
           })
           .eq('id', source.id)
 
-        results.push({ source_id: source.id, name: source.name, status: 'success', result })
+        results.push({ source_id: source.id, name: source.name, status: 'started', run_id: runId })
       } catch (err) {
         const errMsg = err instanceof Error ? err.message : 'Unknown error'
         console.error(`SullyGnome scan error for "${source.name}":`, errMsg)
 
-        const newFailures = (source.consecutive_failures || 0) + 1
         await supabase
           .from('coverage_sources')
           .update({
             last_run_at: new Date().toISOString(),
-            last_run_status: newFailures >= 5 ? 'error' : 'failed',
-            last_run_error: errMsg.slice(0, 500),
-            consecutive_failures: newFailures,
+            last_run_status: 'failed',
+            last_run_message: errMsg.slice(0, 500),
+            consecutive_failures: (source.consecutive_failures || 0) + 1,
           })
           .eq('id', source.id)
 
@@ -299,17 +293,12 @@ async function handleScan(request: NextRequest) {
       }
     }
 
-    // 7. Summarize
-    const successCount = results.filter(r => r.status === 'success').length
-    const totalNew = results.reduce((sum, r) => sum + (r.result?.new_items || 0), 0)
-    const totalEnriched = results.reduce((sum, r) => sum + (r.result?.enriched || 0), 0)
+    const startedCount = results.filter(r => r.status === 'started').length
 
     return NextResponse.json({
-      message: `SullyGnome scan complete: ${successCount}/${results.length} sources processed, ${totalNew} new items, ${totalEnriched} enriched`,
-      sources_processed: successCount,
+      message: `SullyGnome: ${startedCount} Apify runs started (results arrive via webhook)`,
+      sources_started: startedCount,
       sources_total: results.length,
-      new_items: totalNew,
-      enriched: totalEnriched,
       details: results,
     })
   } catch (err: unknown) {
