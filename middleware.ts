@@ -31,6 +31,11 @@ export async function middleware(req: NextRequest) {
     return res
   }
 
+  // Allow SullyGnome collect webhook (called by Apify, no auth)
+  if (pathname.startsWith('/api/sullygnome-collect')) {
+    return res
+  }
+
   // If no session and not on login page, redirect to login
   if (!session && pathname !== '/login') {
     const loginUrl = req.nextUrl.clone()
