@@ -1147,25 +1147,39 @@ ${social && social.total_posts > 0 ? `
                           <tr>
                             <th style={thStyle}>Platform</th>
                             <th style={thStyle}>Posts</th>
-                            <th style={{ ...thStyle, textAlign: 'right' }}>Followers</th>
-                            <th style={{ ...thStyle, textAlign: 'right' }}>Views</th>
-                            <th style={{ ...thStyle, textAlign: 'right' }}>Likes</th>
+                            <th style={{ ...thStyle, textAlign: 'right' }}>Followers / Subs</th>
+                            <th style={{ ...thStyle, textAlign: 'right' }}>Views / Plays</th>
+                            <th style={{ ...thStyle, textAlign: 'right' }}>Likes / Upvotes</th>
                             <th style={{ ...thStyle, textAlign: 'right' }}>Comments</th>
-                            <th style={{ ...thStyle, textAlign: 'right' }}>Shares</th>
+                            <th style={{ ...thStyle, textAlign: 'right' }}>Shares / RTs</th>
                           </tr>
                         </thead>
                         <tbody>
-                          {reportData.social.platform_breakdown.map(ps => (
-                            <tr key={ps.platform}>
-                              <td style={{ ...tdStyle, fontWeight: 500, textTransform: 'capitalize' }}>{ps.platform}</td>
-                              <td style={tdStyle}>{ps.count}</td>
-                              <td style={{ ...tdStyle, textAlign: 'right' }}>{formatNumber(ps.total_followers)}</td>
-                              <td style={{ ...tdStyle, textAlign: 'right' }}>{formatNumber(ps.total_views)}</td>
-                              <td style={{ ...tdStyle, textAlign: 'right' }}>{formatNumber(ps.total_likes)}</td>
-                              <td style={{ ...tdStyle, textAlign: 'right' }}>{formatNumber(ps.total_comments)}</td>
-                              <td style={{ ...tdStyle, textAlign: 'right' }}>{formatNumber(ps.total_shares)}</td>
-                            </tr>
-                          ))}
+                          {reportData.social.platform_breakdown.map(ps => {
+                            // Platforms where follower data isn't available from our scraper
+                            const noFollowers = ps.platform === 'instagram' || ps.platform === 'reddit'
+                            // Platforms where view data isn't available
+                            const noViews = ps.platform === 'instagram' || ps.platform === 'reddit'
+                            // Platforms where shares aren't applicable
+                            const noShares = ps.platform === 'youtube' || ps.platform === 'twitch' || ps.platform === 'reddit' || ps.platform === 'instagram'
+                            return (
+                              <tr key={ps.platform}>
+                                <td style={{ ...tdStyle, fontWeight: 500, textTransform: 'capitalize' }}>{ps.platform}</td>
+                                <td style={tdStyle}>{ps.count}</td>
+                                <td style={{ ...tdStyle, textAlign: 'right', color: noFollowers ? '#94a3b8' : undefined }}>
+                                  {noFollowers ? '—' : formatNumber(ps.total_followers)}
+                                </td>
+                                <td style={{ ...tdStyle, textAlign: 'right', color: noViews ? '#94a3b8' : undefined }}>
+                                  {noViews ? '—' : formatNumber(ps.total_views)}
+                                </td>
+                                <td style={{ ...tdStyle, textAlign: 'right' }}>{formatNumber(ps.total_likes)}</td>
+                                <td style={{ ...tdStyle, textAlign: 'right' }}>{formatNumber(ps.total_comments)}</td>
+                                <td style={{ ...tdStyle, textAlign: 'right', color: noShares && ps.total_shares === 0 ? '#94a3b8' : undefined }}>
+                                  {noShares && ps.total_shares === 0 ? '—' : formatNumber(ps.total_shares)}
+                                </td>
+                              </tr>
+                            )
+                          })}
                         </tbody>
                       </table>
                     </div>

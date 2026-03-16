@@ -188,11 +188,10 @@ export async function GET(request: NextRequest) {
               name: String(outlet.name || outlet.domain || 'Unknown'),
               count: 0,
               tier: String(outlet.tier || 'untiered'),
-              visitors: reach,
+              // Outlet audience size: subscribers for social, monthly visitors for news
+              // This is context for how large the outlet is, not the sum of view counts
+              visitors: Number(outlet.monthly_unique_visitors || 0),
             }
-          } else {
-            // For outlets with multiple items, sum their reach values
-            topOutlets[outletId].visitors += reach
           }
           topOutlets[outletId].count++
         }
@@ -259,11 +258,50 @@ export async function GET(request: NextRequest) {
 
         const ps = platformStats[sourceType]
         ps.count++
-        const followers = Number(meta.followers || i.monthly_unique_visitors || 0)
-        const views = Number(meta.views || meta.impressions || 0)
-        const likes = Number(meta.likes || meta.digg_count || 0)
-        const comments = Number(meta.comments || meta.replies || 0)
-        const shares = Number(meta.shares || meta.retweets || 0)
+        // Platform-specific field mapping — each scraper uses different field names
+        let followers = 0, views = 0, likes = 0, comments = 0, shares = 0
+        switch (sourceType) {
+          case 'youtube':
+            followers = Number(meta.subscribers || 0)
+            views     = Number(meta.views || 0)
+            likes     = Number(meta.likes || 0)
+            comments  = Number(meta.comments || 0)
+            break
+          case 'twitter':
+            followers = Number(meta.followers || 0)
+            views     = Number(meta.views || 0)          // tweet impressions
+            likes     = Number(meta.likes || 0)
+            comments  = Number(meta.replies || 0)
+            shares    = Number(meta.retweets || 0)
+            break
+          case 'tiktok':
+            followers = Number(meta.followers || 0)
+            views     = Number(meta.views || 0)          // play count
+            likes     = Number(meta.likes || 0)
+            comments  = Number(meta.comments || 0)
+            shares    = Number(meta.shares || 0)
+            break
+          case 'twitch':
+            followers = Number(meta.followers || 0)
+            views     = Number(meta.view_count || 0)     // VOD views
+            break
+          case 'reddit':
+            // Reddit has no reach/follower data from hashtag scraper
+            likes     = Number(meta.score || 0)          // upvotes
+            comments  = Number(meta.num_comments || 0)
+            break
+          case 'instagram':
+            // Instagram hashtag scraper doesn't return follower counts
+            likes     = Number(meta.likes || 0)
+            comments  = Number(meta.comments || 0)
+            break
+          default:
+            followers = Number(meta.followers || 0)
+            views     = Number(meta.views || 0)
+            likes     = Number(meta.likes || 0)
+            comments  = Number(meta.comments || 0)
+            shares    = Number(meta.shares || 0)
+        }
 
         ps.total_followers += followers
         ps.total_views += views
@@ -291,16 +329,17 @@ export async function GET(request: NextRequest) {
       const allPosts = socialItems.map(item => {
         const i = item as Record<string, unknown>
         const meta = (i.source_metadata || {}) as Record<string, unknown>
-        const likes = Number(meta.likes || 0)
-        const comments = Number(meta.comments || meta.replies || 0)
-        const shares = Number(meta.shares || meta.retweets || 0)
+        const st = String(i.source_type || '')
+        const followers = st === 'youtube' ? Number(meta.subscribers || 0) : Number(meta.followers || 0)
+        const views = st === 'twitch' ? Number(meta.view_count || 0) : Number(meta.views || 0)
+        const likes = st === 'reddit' ? Number(meta.score || 0) : Number(meta.likes || 0)
+        const comments = st === 'reddit' ? Number(meta.num_comments || 0) : st === 'twitter' ? Number(meta.replies || 0) : Number(meta.comments || 0)
+        const shares = st === 'twitter' ? Number(meta.retweets || 0) : Number(meta.shares || 0)
         return {
           id: String(i.id), title: String(i.title || ''), url: String(i.url || ''),
-          source_type: String(i.source_type), publish_date: String(i.publish_date || ''),
+          source_type: st, publish_date: String(i.publish_date || ''),
           outlet_name: ((i.outlet as Record<string, unknown> | null)?.name as string) || '',
-          followers: Number(meta.followers || i.monthly_unique_visitors || 0),
-          views: Number(meta.views || meta.impressions || 0),
-          likes, comments, shares,
+          followers, views, likes, comments, shares,
           engagement: likes + comments + shares,
         }
       }).sort((a, b) => b.engagement - a.engagement)
