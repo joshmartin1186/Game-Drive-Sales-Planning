@@ -26,7 +26,7 @@ export interface CoverageDayData {
   count: number
   topTier: string  // 'A' | 'B' | 'C' | 'D' | ''
   totalReach: number
-  items: { title: string; outlet: string; tier: string; type: string }[]
+  items: { title: string; outlet: string; tier: string; type: string; url?: string }[]
 }
 
 interface GanttChartProps {
@@ -178,6 +178,13 @@ export default function GanttChart(props: GanttChartProps) {
     platformId: '',
     dayIndex: 0
   })
+
+  // Coverage popover state
+  const [coveragePopover, setCoveragePopover] = useState<{
+    dateKey: string
+    x: number
+    y: number
+  } | null>(null)
   
   const dayWidth = useMemo(() => {
     const monthsVisible = ZOOM_LEVELS[zoomIndex].monthsVisible
@@ -198,6 +205,21 @@ export default function GanttChart(props: GanttChartProps) {
   const [isLoadingMore, setIsLoadingMore] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
+
+  // Close coverage popover on outside click or scroll
+  useEffect(() => {
+    if (!coveragePopover) return
+    const handleClose = () => setCoveragePopover(null)
+    const handleKeyDown = (e: KeyboardEvent) => { if (e.key === 'Escape') handleClose() }
+    document.addEventListener('click', handleClose)
+    document.addEventListener('keydown', handleKeyDown)
+    scrollContainerRef.current?.addEventListener('scroll', handleClose)
+    return () => {
+      document.removeEventListener('click', handleClose)
+      document.removeEventListener('keydown', handleKeyDown)
+      scrollContainerRef.current?.removeEventListener('scroll', handleClose)
+    }
+  }, [coveragePopover])
   const scrollTrackRef = useRef<HTMLDivElement>(null)
   
   const selectionRef = useRef<{
@@ -1732,35 +1754,131 @@ export default function GanttChart(props: GanttChartProps) {
                 const isFirstOfMonth = day.getDate() === 1
                 const isTodayDate = idx === todayIndex
                 const showDayNumber = dayWidth >= 14
-                const dateKey = format(day, 'yyyy-MM-dd')
-                const covData = showCoverage && coverageByDate ? coverageByDate[dateKey] : undefined
                 return (
                   <div
                     key={idx}
                     className={`${styles.dayHeader} ${isWeekend ? styles.weekend : ''} ${isFirstOfMonth ? styles.monthStart : ''} ${isTodayDate ? styles.todayHeader : ''}`}
                     style={{ width: dayWidth }}
-                    title={covData ? `${covData.count} article${covData.count !== 1 ? 's' : ''} on ${format(day, 'MMM d')}\nTop tier: ${covData.topTier || 'N/A'}\nReach: ${covData.totalReach.toLocaleString()}\n${covData.items.slice(0, 3).map(i => `• ${i.outlet}: ${i.title}`).join('\n')}${covData.items.length > 3 ? `\n+${covData.items.length - 3} more` : ''}` : undefined}
                   >
                     {showDayNumber ? day.getDate() : ''}
-                    {covData && (
-                      <div className={styles.coverageDot} style={{
-                        backgroundColor: covData.topTier === 'A' ? '#ef4444' : covData.topTier === 'B' ? '#f59e0b' : covData.topTier === 'C' ? '#3b82f6' : '#94a3b8',
-                        width: Math.min(6 + covData.count * 2, 12),
-                        height: Math.min(6 + covData.count * 2, 12),
-                      }} />
-                    )}
                   </div>
                 )
               })}
             </div>
             
+            {/* Coverage Lane */}
+            {showCoverage && coverageByDate && Object.keys(coverageByDate).length > 0 && (
+              <div className={styles.coverageLane}>
+                <div className={styles.coverageLaneLabel}>
+                  <span>📰</span> PR Coverage
+                </div>
+                <div className={styles.coverageLaneDays}>
+                  {days.map((day, idx) => {
+                    const isWeekend = day.getDay() === 0 || day.getDay() === 6
+                    const dateKey = format(day, 'yyyy-MM-dd')
+                    const covData = coverageByDate[dateKey]
+                    return (
+                      <div
+                        key={idx}
+                        className={`${styles.coverageLaneDay} ${isWeekend ? styles.weekend : ''}`}
+                        style={{ width: dayWidth }}
+                      >
+                        {covData && (
+                          <div
+                            className={`${styles.coverageMarker} ${
+                              covData.topTier === 'A' ? styles.coverageMarkerTierA :
+                              covData.topTier === 'B' ? styles.coverageMarkerTierB :
+                              covData.topTier === 'C' ? styles.coverageMarkerTierC :
+                              styles.coverageMarkerTierD
+                            } ${covData.count > 1 ? styles.coverageMarkerMulti : ''}`}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              const rect = (e.target as HTMLElement).getBoundingClientRect()
+                              setCoveragePopover(prev =>
+                                prev?.dateKey === dateKey ? null : {
+                                  dateKey,
+                                  x: Math.min(rect.left, window.innerWidth - 360),
+                                  y: rect.bottom + 6
+                                }
+                              )
+                            }}
+                            title={`${covData.count} article${covData.count !== 1 ? 's' : ''} — Click to view`}
+                          >
+                            {covData.count}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Coverage Popover */}
+            {coveragePopover && coverageByDate && coverageByDate[coveragePopover.dateKey] && (
+              <div
+                className={styles.coveragePopover}
+                style={{
+                  left: coveragePopover.x,
+                  top: coveragePopover.y,
+                }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className={styles.coveragePopoverHeader}>
+                  <div>
+                    <div className={styles.coveragePopoverDate}>
+                      {format(new Date(coveragePopover.dateKey + 'T12:00:00'), 'EEEE, MMM d, yyyy')}
+                    </div>
+                    <div className={styles.coveragePopoverStats}>
+                      <div className={styles.coveragePopoverStat}>
+                        <span className={styles.coveragePopoverStatValue}>{coverageByDate[coveragePopover.dateKey].count}</span> article{coverageByDate[coveragePopover.dateKey].count !== 1 ? 's' : ''}
+                      </div>
+                      <div className={styles.coveragePopoverStat}>
+                        <span className={styles.coveragePopoverStatValue}>{(coverageByDate[coveragePopover.dateKey].totalReach / 1000).toFixed(0)}K</span> reach
+                      </div>
+                    </div>
+                  </div>
+                  <button className={styles.coveragePopoverClose} onClick={() => setCoveragePopover(null)}>✕</button>
+                </div>
+                <div className={styles.coveragePopoverBody}>
+                  {coverageByDate[coveragePopover.dateKey].items.map((item, i) => (
+                    <div key={i} className={styles.coveragePopoverItem}>
+                      <div
+                        className={styles.coveragePopoverTierBadge}
+                        style={{
+                          backgroundColor: item.tier === 'A' ? '#dc2626' : item.tier === 'B' ? '#d97706' : item.tier === 'C' ? '#2563eb' : '#64748b'
+                        }}
+                      >
+                        {item.tier}
+                      </div>
+                      <div className={styles.coveragePopoverItemContent}>
+                        <div className={styles.coveragePopoverItemTitle}>
+                          {item.url ? (
+                            <a href={item.url} target="_blank" rel="noopener noreferrer">{item.title || 'Untitled'}</a>
+                          ) : (
+                            item.title || 'Untitled'
+                          )}
+                        </div>
+                        <div className={styles.coveragePopoverItemMeta}>
+                          <span>{item.outlet}</span>
+                          {item.type && (
+                            <span className={styles.coveragePopoverItemType}>{item.type}</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {todayIndex !== -1 && (
-              <div 
-                className={styles.todayIndicator}
+              <div
+                className={`${styles.todayIndicator} ${showCoverage && coverageByDate && Object.keys(coverageByDate).length > 0 ? styles.todayIndicatorWithCoverage : ''}`}
                 style={{ left: todayIndex * dayWidth + dayWidth / 2 + SIDEBAR_WIDTH }}
               />
             )}
-            
+
             <div className={styles.productRows}>
               {groupedProducts.map(({ game, products: gameProducts }) => (
                 <div key={game.id} className={styles.gameGroup}>

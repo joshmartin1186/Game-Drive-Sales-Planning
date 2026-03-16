@@ -143,7 +143,7 @@ export default function GameDriveDashboard() {
         const tierRank = { A: 4, B: 3, C: 2, D: 1 } as Record<string, number>
         if ((tierRank[tier] || 0) > (tierRank[byDate[dateKey].topTier] || 0)) byDate[dateKey].topTier = tier
         byDate[dateKey].totalReach += item.outlet?.monthly_unique_visitors || item.monthly_unique_visitors || 0
-        byDate[dateKey].items.push({ title: item.title || '', outlet: item.outlet?.name || 'Unknown', tier, type: item.coverage_type || '' })
+        byDate[dateKey].items.push({ title: item.title || '', outlet: item.outlet?.name || 'Unknown', tier, type: item.coverage_type || '', url: item.url || '' })
       }
       setCoverageByDate(byDate)
     } catch (err) { console.error('Error fetching coverage data:', err) }

@@ -540,7 +540,7 @@
   font-weight: 700 !important;
 }
 
-/* Coverage indicator dot on day headers */
+/* Coverage indicator dot on day headers (legacy, hidden when lane is active) */
 .coverageDot {
   border-radius: 50%;
   margin: 1px auto 0;
@@ -556,6 +556,258 @@
   opacity: 1;
 }
 
+/* ── Coverage Lane ─────────────────────────────────── */
+.coverageLane {
+  display: flex;
+  position: sticky;
+  top: 56px; /* below month + day headers */
+  z-index: 19;
+  padding-left: 220px;
+  margin: 0;
+  background: #fefce8;
+  border-bottom: 2px solid #e2e8f0;
+  height: 36px;
+  min-height: 36px;
+}
+
+.coverageLaneLabel {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 220px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #92400e;
+  background: #fefce8;
+  border-bottom: 2px solid #e2e8f0;
+  border-right: 1px solid #e2e8f0;
+  gap: 6px;
+  z-index: 2;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.coverageLaneLabel span {
+  opacity: 0.7;
+}
+
+.coverageLaneDays {
+  display: flex;
+  position: relative;
+  height: 36px;
+}
+
+.coverageLaneDay {
+  position: relative;
+  height: 36px;
+  border-right: 1px solid rgba(250, 204, 21, 0.15);
+  flex-shrink: 0;
+}
+
+.coverageLaneDay.weekend {
+  background: rgba(250, 204, 21, 0.06);
+}
+
+/* Coverage marker in lane */
+.coverageMarker {
+  position: absolute;
+  top: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  min-width: 20px;
+  height: 28px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: #fff;
+  transition: transform 0.12s, box-shadow 0.12s;
+  z-index: 2;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+  white-space: nowrap;
+  padding: 0 5px;
+}
+
+.coverageMarker:hover {
+  transform: translateX(-50%) scale(1.15);
+  box-shadow: 0 3px 8px rgba(0,0,0,0.25);
+  z-index: 5;
+}
+
+.coverageMarkerTierA { background: #dc2626; }
+.coverageMarkerTierB { background: #d97706; }
+.coverageMarkerTierC { background: #2563eb; }
+.coverageMarkerTierD { background: #64748b; }
+
+.coverageMarkerMulti {
+  min-width: 26px;
+}
+
+/* Coverage popover */
+.coveragePopover {
+  position: fixed;
+  z-index: 1000;
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.18), 0 0 0 1px rgba(0,0,0,0.06);
+  min-width: 320px;
+  max-width: 420px;
+  max-height: 400px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  animation: coveragePopoverIn 0.15s ease-out;
+}
+
+@keyframes coveragePopoverIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.coveragePopoverHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: #fefce8;
+  border-bottom: 1px solid #fde68a;
+  flex-shrink: 0;
+}
+
+.coveragePopoverDate {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #92400e;
+}
+
+.coveragePopoverStats {
+  display: flex;
+  gap: 10px;
+  font-size: 0.7rem;
+  color: #78716c;
+}
+
+.coveragePopoverStat {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.coveragePopoverStatValue {
+  font-weight: 700;
+  color: #44403c;
+}
+
+.coveragePopoverClose {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1rem;
+  color: #a8a29e;
+  padding: 0 2px;
+  line-height: 1;
+}
+
+.coveragePopoverClose:hover {
+  color: #44403c;
+}
+
+.coveragePopoverBody {
+  overflow-y: auto;
+  padding: 6px 0;
+  flex: 1;
+}
+
+.coveragePopoverItem {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 14px;
+  border-bottom: 1px solid #f5f5f4;
+  transition: background 0.1s;
+}
+
+.coveragePopoverItem:last-child {
+  border-bottom: none;
+}
+
+.coveragePopoverItem:hover {
+  background: #fafaf9;
+}
+
+.coveragePopoverTierBadge {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.65rem;
+  font-weight: 800;
+  color: #fff;
+  margin-top: 1px;
+}
+
+.coveragePopoverItemContent {
+  flex: 1;
+  min-width: 0;
+}
+
+.coveragePopoverItemTitle {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #1c1917;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.coveragePopoverItemTitle a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.coveragePopoverItemTitle a:hover {
+  color: #2563eb;
+  text-decoration: underline;
+}
+
+.coveragePopoverItemMeta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+  font-size: 0.68rem;
+  color: #78716c;
+}
+
+.coveragePopoverItemType {
+  background: #f5f5f4;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 0.62rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: #57534e;
+}
+
+.coveragePopoverEmpty {
+  padding: 20px;
+  text-align: center;
+  color: #a8a29e;
+  font-size: 0.8rem;
+}
+
 /* Today Indicator Line */
 .todayIndicator {
   position: absolute;
@@ -565,6 +817,11 @@
   background: #ef4444;
   z-index: 15;
   pointer-events: none;
+}
+
+/* Shift today indicator down when coverage lane is visible */
+.todayIndicatorWithCoverage {
+  top: 102px; /* 66px + 36px coverage lane */
 }
 
 .todayIndicator::before {
