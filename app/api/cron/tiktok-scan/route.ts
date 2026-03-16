@@ -331,7 +331,7 @@ async function processTikTokPosts(
       url: videoUrl,
       publish_date: publishDate,
       coverage_type: 'video',
-      monthly_unique_visitors: followers,
+      monthly_unique_visitors: video.playCount || 0,
       territory: inferTerritory(null, null, video.textLanguage) || 'International',
       source_type: 'tiktok',
       source_metadata: {

@@ -7,6 +7,10 @@ import { useAuth } from '@/lib/auth-context'
 import { CoverageNav } from '../components/CoverageNav'
 import * as XLSX from 'xlsx'
 
+const SOCIAL_SOURCE_TYPES = new Set(['youtube', 'twitter', 'tiktok', 'twitch', 'instagram', 'reddit'])
+
+interface DisplayMetric { label: string; value: number; is_primary_reach: boolean }
+
 interface CoverageItem {
   id: string
   title: string
@@ -19,6 +23,9 @@ interface CoverageItem {
   quotes: string | null
   sentiment: string | null
   campaign_section: string | null
+  source_type: string | null
+  display_visitors: number | null        // primary reach metric (computed server-side)
+  display_metrics: DisplayMetric[] | null // platform-specific engagement metrics
   outlet: { id: string; name: string; domain: string | null; tier: string | null; monthly_unique_visitors: number | null; country: string | null } | null
   game: { id: string; name: string } | null
   client: { id: string; name: string } | null
@@ -220,9 +227,22 @@ export default function CoverageReportPage() {
     return `${day}.${month}.${year}`
   }
 
-  // Get visitors value for an item (prefer outlet, fallback to item)
   function getVisitors(item: CoverageItem): number {
-    return item.outlet?.monthly_unique_visitors || item.monthly_unique_visitors || 0
+    return item.display_visitors ?? item.monthly_unique_visitors ?? 0
+  }
+
+  // Format a metrics array as compact text for exports/print
+  // e.g. "Views: 125,432 · Likes: 3,421 · Comments: 89"
+  function formatMetricsText(item: CoverageItem): string {
+    const metrics = item.display_metrics
+    const isSocial = item.source_type && SOCIAL_SOURCE_TYPES.has(item.source_type)
+    if (metrics && metrics.length > 0) {
+      return metrics.map(m => `${m.label}: ${m.value.toLocaleString()}`).join(' · ')
+    }
+    // News/media: show outlet reach
+    const reach = item.display_visitors ?? item.outlet?.monthly_unique_visitors ?? null
+    if (!isSocial && reach) return `${reach.toLocaleString()} monthly visitors`
+    return ''
   }
 
   // Excel export — Full report with summary + grouped coverage
@@ -542,7 +562,7 @@ export default function CoverageReportPage() {
           <th style="width:40px">Tier</th>
           <th style="width:60px">Type</th>
           <th>Title</th>
-          <th style="width:90px">Monthly Visitors</th>
+          <th style="width:130px">Metrics</th>
           ${group.items.some(i => i.review_score) ? '<th style="width:50px">Score</th>' : ''}
         </tr>
       </thead>
@@ -555,7 +575,7 @@ export default function CoverageReportPage() {
             <td>${item.outlet?.tier ? `<span class="tier-badge tier-${item.outlet.tier}">${item.outlet.tier}</span>` : '—'}</td>
             <td>${item.coverage_type || '—'}</td>
             <td>${item.url ? `<a href="${item.url}" target="_blank" rel="noopener noreferrer" style="color:#2563eb;text-decoration:none">${item.title}</a>` : item.title}</td>
-            <td style="text-align:right">${formatFullNumber(item.outlet?.monthly_unique_visitors || item.monthly_unique_visitors)}</td>
+            <td style="font-size:11px;color:#475569">${formatMetricsText(item)}</td>
             ${group.items.some(i => i.review_score) ? `<td style="text-align:center">${item.review_score || '—'}</td>` : ''}
           </tr>
         `).join('')}
@@ -1215,7 +1235,7 @@ export default function CoverageReportPage() {
                           <th style={{ textAlign: 'center', padding: '8px 12px', fontWeight: 600, color: '#475569', width: '40px' }}>Tier</th>
                           <th style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 600, color: '#475569', width: '70px' }}>Type</th>
                           <th style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 600, color: '#475569' }}>Title</th>
-                          <th style={{ textAlign: 'right', padding: '8px 12px', fontWeight: 600, color: '#475569', width: '90px' }}>Visitors</th>
+                          <th style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 600, color: '#475569', width: '160px' }}>Metrics</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1240,8 +1260,33 @@ export default function CoverageReportPage() {
                                   {item.title}
                                 </a>
                               </td>
-                              <td style={{ padding: '6px 12px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-                                {formatNumber(item.outlet?.monthly_unique_visitors || item.monthly_unique_visitors)}
+                              <td style={{ padding: '6px 12px' }}>
+                                {item.display_metrics && item.display_metrics.length > 0 ? (
+                                  <div>
+                                    {/* Primary metric: large */}
+                                    <div style={{ fontWeight: 600, color: '#1e293b', fontVariantNumeric: 'tabular-nums', fontSize: '13px' }}>
+                                      {item.display_metrics[0].value.toLocaleString()}
+                                      <span style={{ fontWeight: 400, color: '#64748b', fontSize: '11px', marginLeft: '3px' }}>
+                                        {item.display_metrics[0].label.toLowerCase()}
+                                      </span>
+                                    </div>
+                                    {/* Secondary metrics: small, inline */}
+                                    {item.display_metrics.length > 1 && (
+                                      <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '1px' }}>
+                                        {item.display_metrics.slice(1).map(m => `${m.value.toLocaleString()} ${m.label.toLowerCase()}`).join(' · ')}
+                                      </div>
+                                    )}
+                                  </div>
+                                ) : item.display_visitors ? (
+                                  <div>
+                                    <div style={{ fontWeight: 600, color: '#1e293b', fontVariantNumeric: 'tabular-nums', fontSize: '13px' }}>
+                                      {formatNumber(item.display_visitors)}
+                                    </div>
+                                    <div style={{ fontSize: '11px', color: '#94a3b8' }}>monthly visitors</div>
+                                  </div>
+                                ) : (
+                                  <span style={{ color: '#cbd5e1', fontSize: '12px' }}>—</span>
+                                )}
                               </td>
                             </tr>
                           )

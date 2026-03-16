@@ -130,7 +130,7 @@ export async function GET(request: NextRequest) {
             url,
             publish_date: publishDate,
             coverage_type: 'stream',
-            monthly_unique_visitors: followers,
+            monthly_unique_visitors: viewCount,
             territory: inferTerritory(null, null, vod.language) || 'International',
             source_type: 'twitch',
             source_metadata: {

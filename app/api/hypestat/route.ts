@@ -175,6 +175,21 @@ export async function POST(request: Request) {
     // Clean the domain
     targetDomain = targetDomain.replace(/^(https?:\/\/)?(www\.)?/, '').replace(/\/.*$/, '').trim()
 
+    // Block Hypestat enrichment for social platforms — their global traffic stats
+    // (e.g. Facebook 3B, Reddit 4B) are meaningless as per-post audience reach
+    const SOCIAL_PLATFORM_DOMAINS = ['youtube.com', 'twitter.com', 'x.com', 'tiktok.com', 'twitch.tv', 'reddit.com', 'facebook.com', 'instagram.com', 'linkedin.com']
+    const isSocialPlatform = SOCIAL_PLATFORM_DOMAINS.some(d => targetDomain!.endsWith(d))
+    if (isSocialPlatform) {
+      return NextResponse.json({
+        domain: targetDomain,
+        monthly_unique_visitors: null,
+        suggested_tier: null,
+        method: 'skipped',
+        error: 'Social platform domains are not enriched via Hypestat — platform-wide traffic is not meaningful for individual posts',
+        updated_outlet: false
+      })
+    }
+
     // Fetch traffic data
     const result = await fetchHypestatTraffic(targetDomain)
 

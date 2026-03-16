@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { getOutletDisplayName, extractDomain } from '@/lib/outlet-utils'
+import { getDisplayMetrics, getPrimaryReach } from '@/lib/coverage-metrics'
 
 function getSupabase() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -62,11 +63,15 @@ export async function GET(request: NextRequest) {
 
     const { data: campaigns } = await campaignQuery
 
+    const SOCIAL_SOURCE_TYPES = new Set(['youtube', 'twitter', 'tiktok', 'twitch', 'instagram', 'reddit'])
+
     // Enrich items with computed display fields
     const rawItems = data || []
     const items: Record<string, unknown>[] = rawItems.map((item: Record<string, unknown>) => {
       const outlet = item.outlet as { id?: string; name?: string; domain?: string | null; tier?: string; monthly_unique_visitors?: number | null; country?: string | null } | null
       const url = item.url as string | null
+      const sourceType = item.source_type as string | null
+      const meta = item.source_metadata as Record<string, unknown> | null
 
       // Compute display outlet name: outlet.name → domain lookup → URL extraction
       const outlet_display_name = getOutletDisplayName(outlet, url)
@@ -82,8 +87,14 @@ export async function GET(request: NextRequest) {
         }
       }
 
-      // Compute display visitors: outlet.monthly_unique_visitors → item.monthly_unique_visitors
-      const display_visitors = outlet?.monthly_unique_visitors || (item.monthly_unique_visitors as number | null) || null
+      // Platform-specific metrics for display (social content only)
+      const display_metrics = getDisplayMetrics(sourceType, meta)
+
+      // Primary reach number used for aggregation:
+      // - Social: actual content views (video views, tweet impressions, TikTok plays)
+      // - News/media: outlet monthly unique visitors (Hypestat traffic proxy)
+      // - Reddit/Instagram: null — only engagement data available, not true reach
+      const display_visitors = getPrimaryReach(sourceType, meta, outlet?.monthly_unique_visitors ?? null)
 
       // Compute display domain
       const display_domain = outlet?.domain || (url ? extractDomain(url) : null)
@@ -93,34 +104,42 @@ export async function GET(request: NextRequest) {
         outlet_display_name,
         display_date,
         display_visitors,
+        display_metrics,
         display_domain,
       }
     })
 
     // Compute summary stats
     const totalPieces = items.length
+    // Use pre-computed display_visitors (primary reach per item) for all aggregations
     const totalReach = items.reduce((sum: number, item: Record<string, unknown>) => {
-      const outlet = item.outlet as { monthly_unique_visitors?: number | null } | null
-      return sum + (outlet?.monthly_unique_visitors || (item.monthly_unique_visitors as number) || 0)
+      return sum + ((item.display_visitors as number | null) || 0)
+    }, 0)
+    // Estimated views: social items have known view counts; news items get 2% of outlet traffic
+    const estimatedViews = items.reduce((sum: number, item: Record<string, unknown>) => {
+      const sourceType = item.source_type as string | null
+      const isSocial = sourceType && SOCIAL_SOURCE_TYPES.has(sourceType)
+      const reach = (item.display_visitors as number | null) || 0
+      return sum + (isSocial ? reach : Math.round(reach * 0.02))
     }, 0)
     const reviewItems = items.filter((item: Record<string, unknown>) => item.coverage_type === 'review' && item.review_score)
     const avgReviewScore = reviewItems.length > 0
       ? reviewItems.reduce((sum: number, item: Record<string, unknown>) => sum + Number(item.review_score), 0) / reviewItems.length
       : null
 
-    // Tier breakdown (count) + Reach by tier (MUV sum)
+    // Tier breakdown (count) + Reach by tier
     const tierBreakdown: Record<string, number> = { A: 0, B: 0, C: 0, D: 0, untiered: 0 }
     const reachByTier: Record<string, number> = { A: 0, B: 0, C: 0, D: 0, untiered: 0 }
     for (const item of items) {
-      const outlet = item.outlet as { tier?: string; monthly_unique_visitors?: number | null } | null
+      const outlet = item.outlet as { tier?: string } | null
       const tier = outlet?.tier
-      const muv = outlet?.monthly_unique_visitors || (item.monthly_unique_visitors as number) || 0
+      const reach = (item.display_visitors as number | null) || 0
       if (tier && tier in tierBreakdown) {
         tierBreakdown[tier]++
-        reachByTier[tier] += muv
+        reachByTier[tier] += reach
       } else {
         tierBreakdown.untiered++
-        reachByTier.untiered += muv
+        reachByTier.untiered += reach
       }
     }
 
@@ -210,8 +229,11 @@ export async function GET(request: NextRequest) {
       return outlet?.id && !outlet?.tier
     }).length
     const noTrafficOutlets = items.filter(i => {
-      const outlet = i.outlet as { monthly_unique_visitors?: number | null; id?: string } | null
-      return outlet?.id && !outlet?.monthly_unique_visitors
+      const outlet = i.outlet as { id?: string } | null
+      const sourceType = i.source_type as string | null
+      // Only flag news/media outlets missing traffic — social platforms use content-level metrics
+      const isSocial = sourceType && SOCIAL_SOURCE_TYPES.has(sourceType)
+      return !isSocial && outlet?.id && !i.display_visitors
     }).length
     const filledFields = (totalPieces * 4) - missingOutlet - missingTerritory - missingSentiment - missingDate
 
@@ -221,7 +243,7 @@ export async function GET(request: NextRequest) {
       summary: {
         total_pieces: totalPieces,
         total_audience_reach: totalReach,
-        estimated_views: Math.round(totalReach * 0.02),
+        estimated_views: estimatedViews,
         avg_review_score: avgReviewScore,
         review_count: reviewItems.length,
         tier_breakdown: tierBreakdown,

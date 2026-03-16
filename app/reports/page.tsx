@@ -9,7 +9,8 @@ import { Sidebar } from '../components/Sidebar'
 interface NameValue { name: string; value: number }
 interface OutletSummary { name: string; count: number; tier: string; visitors: number }
 interface Annotation { id: string; report_section: string; period_key: string; annotation_text: string; custom_fields: Record<string, unknown> }
-interface CoverageItem { id: string; title: string; url: string; publish_date: string; territory: string; coverage_type: string; monthly_unique_visitors: number; review_score: number | null; quotes: string | null; outlet: { name: string; tier: string } | null; game: { name: string } | null; campaign: { name: string } | null; campaign_section: string | null }
+interface DisplayMetric { label: string; value: number; is_primary_reach: boolean }
+interface CoverageItem { id: string; title: string; url: string; publish_date: string; territory: string; coverage_type: string; source_type: string | null; monthly_unique_visitors: number; display_visitors: number | null; display_metrics: DisplayMetric[] | null; review_score: number | null; quotes: string | null; outlet: { name: string; tier: string } | null; game: { name: string } | null; campaign: { name: string } | null; campaign_section: string | null }
 
 interface SalesData {
   total_rows: number; total_gross_revenue: number; total_net_revenue: number
@@ -393,7 +394,7 @@ ${cov ? `
     <div class="breakdown-card"><h4>By Territory</h4>${cov.territory_breakdown.slice(0, 8).map(t => `<div class="breakdown-item"><span class="name">${t.name}</span><span class="val">${t.value}</span></div>`).join('')}</div>
   </div>
 
-  ${cov.top_outlets.length > 0 ? `<h3>Top Outlets</h3><table><thead><tr><th>Outlet</th><th>Tier</th><th>Pieces</th><th>Monthly Visitors</th></tr></thead><tbody>
+  ${cov.top_outlets.length > 0 ? `<h3>Top Outlets</h3><table><thead><tr><th>Outlet</th><th>Tier</th><th>Pieces</th><th>Monthly Visitors / Views</th></tr></thead><tbody>
     ${cov.top_outlets.map(o => `<tr><td>${o.name}</td><td><span class="tier-badge tier-${o.tier}">${o.tier}</span></td><td>${o.count}</td><td>${formatNumber(o.visitors)}</td></tr>`).join('')}
   </tbody></table>` : ''}
 
@@ -546,7 +547,7 @@ ${social && social.total_posts > 0 ? `
               { text: 'Outlet', options: { bold: true, fontSize: 10, color: WHITE, fill: { color: '475569' } } },
               { text: 'Tier', options: { bold: true, fontSize: 10, color: WHITE, fill: { color: '475569' }, align: 'center' } },
               { text: 'Pieces', options: { bold: true, fontSize: 10, color: WHITE, fill: { color: '475569' }, align: 'center' } },
-              { text: 'Monthly Visitors', options: { bold: true, fontSize: 10, color: WHITE, fill: { color: '475569' }, align: 'right' } },
+              { text: 'Monthly Visitors / Views', options: { bold: true, fontSize: 10, color: WHITE, fill: { color: '475569' }, align: 'right' } },
             ],
           ]
           for (const o of c.top_outlets.slice(0, 10)) {
@@ -1012,7 +1013,7 @@ ${social && social.total_posts > 0 ? `
                         <th style={thStyle}>Outlet</th>
                         <th style={thStyle}>Tier</th>
                         <th style={thStyle}>Pieces</th>
-                        <th style={thStyle}>Monthly Visitors</th>
+                        <th style={thStyle}>Monthly Visitors / Views</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1043,6 +1044,7 @@ ${social && social.total_posts > 0 ? `
                           <th style={thStyle}>Title</th>
                           <th style={thStyle}>Territory</th>
                           <th style={thStyle}>Type</th>
+                          <th style={thStyle}>Metrics</th>
                           <th style={thStyle}>Score</th>
                         </tr>
                       </thead>
@@ -1061,6 +1063,26 @@ ${social && social.total_posts > 0 ? `
                             </td>
                             <td style={tdStyle}>{item.territory || '-'}</td>
                             <td style={tdStyle}>{item.coverage_type || '-'}</td>
+                            <td style={{ ...tdStyle, minWidth: '140px' }}>
+                              {item.display_metrics && item.display_metrics.length > 0 ? (
+                                <div>
+                                  <div style={{ fontWeight: 600, fontSize: '12px' }}>
+                                    {item.display_metrics[0].value.toLocaleString()}
+                                    <span style={{ fontWeight: 400, color: '#64748b', marginLeft: '3px' }}>{item.display_metrics[0].label.toLowerCase()}</span>
+                                  </div>
+                                  {item.display_metrics.length > 1 && (
+                                    <div style={{ fontSize: '11px', color: '#94a3b8' }}>
+                                      {item.display_metrics.slice(1).map(m => `${m.value.toLocaleString()} ${m.label.toLowerCase()}`).join(' · ')}
+                                    </div>
+                                  )}
+                                </div>
+                              ) : item.display_visitors ? (
+                                <div>
+                                  <div style={{ fontWeight: 600, fontSize: '12px' }}>{item.display_visitors.toLocaleString()}</div>
+                                  <div style={{ fontSize: '11px', color: '#94a3b8' }}>monthly visitors</div>
+                                </div>
+                              ) : '-'}
+                            </td>
                             <td style={tdStyle}>{item.review_score ?? '-'}</td>
                           </tr>
                         ))}

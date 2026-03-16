@@ -279,7 +279,7 @@ async function processTwitterPosts(
       url: tweetUrl,
       publish_date: publishDate,
       coverage_type: 'mention',
-      monthly_unique_visitors: followers,
+      monthly_unique_visitors: tweet.viewCount || 0,
       territory: inferTerritory(null, null, tweet.lang) || 'International',
       source_type: 'twitter',
       source_metadata: {

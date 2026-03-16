@@ -156,7 +156,7 @@ export async function GET(request: NextRequest) {
             url: cleanUrl,
             publish_date: publishDate,
             coverage_type: 'video',
-            monthly_unique_visitors: subscribers,
+            monthly_unique_visitors: video.viewCount || 0,
             territory,
             source_type: 'youtube',
             source_metadata: {

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSupabase } from '@/lib/supabase'
+import { getDisplayMetrics, getPrimaryReach } from '@/lib/coverage-metrics'
 
 function getSupabase() {
   return getServerSupabase()
@@ -120,7 +121,7 @@ export async function GET(request: NextRequest) {
         .select(`
           id, title, url, publish_date, territory, coverage_type,
           monthly_unique_visitors, review_score, quotes, sentiment,
-          approval_status, campaign_section, discovered_at,
+          approval_status, campaign_section, discovered_at, source_type, source_metadata,
           outlet:outlets(id, name, domain, tier, monthly_unique_visitors),
           game:games(id, name),
           campaign:coverage_campaigns(id, name)
@@ -136,8 +137,11 @@ export async function GET(request: NextRequest) {
       const { data: covData, error: covError } = await covQuery.limit(5000)
       if (covError) throw covError
 
+      const SOCIAL_SOURCE_TYPES = new Set(['youtube', 'twitter', 'tiktok', 'twitch', 'instagram', 'reddit'])
+
       const items = covData || []
       let totalReach = 0
+      let estimatedViews = 0
       let totalScoreSum = 0
       let scoredCount = 0
       const tierBreakdown: Record<string, number> = {}
@@ -145,24 +149,36 @@ export async function GET(request: NextRequest) {
       const territoryBreakdown: Record<string, number> = {}
       const topOutlets: Record<string, { name: string; count: number; tier: string; visitors: number }> = {}
 
-      for (const item of items) {
+      // Enrich items with display_metrics before returning
+      const enrichedItems: Record<string, unknown>[] = items.map((item) => {
         const i = item as Record<string, unknown>
         const outlet = i.outlet as Record<string, unknown> | null
-        const visitors = Number(outlet?.monthly_unique_visitors || i.monthly_unique_visitors || 0)
-        totalReach += visitors
+        const sourceType = (i.source_type as string | null) || null
+        const meta = (i.source_metadata as Record<string, unknown> | null) || null
+        const display_metrics = getDisplayMetrics(sourceType, meta)
+        const display_visitors = getPrimaryReach(sourceType, meta, outlet?.monthly_unique_visitors as number | null)
+        return { ...i, display_metrics, display_visitors } as Record<string, unknown>
+      })
 
-        if (i.review_score) {
-          totalScoreSum += Number(i.review_score)
+      for (const item of enrichedItems) {
+        const outlet = item.outlet as Record<string, unknown> | null
+        const sourceType = (item.source_type as string | null) || ''
+        const reach = (item.display_visitors as number | null) || 0
+        totalReach += reach
+        estimatedViews += SOCIAL_SOURCE_TYPES.has(sourceType) ? reach : Math.round(reach * 0.02)
+
+        if (item.review_score) {
+          totalScoreSum += Number(item.review_score)
           scoredCount++
         }
 
         const tier = String(outlet?.tier || 'untiered')
         tierBreakdown[tier] = (tierBreakdown[tier] || 0) + 1
 
-        const covType = String(i.coverage_type || 'article')
+        const covType = String(item.coverage_type || 'article')
         typeBreakdown[covType] = (typeBreakdown[covType] || 0) + 1
 
-        const territory = String(i.territory || 'Unknown')
+        const territory = String(item.territory || 'Unknown')
         territoryBreakdown[territory] = (territoryBreakdown[territory] || 0) + 1
 
         if (outlet) {
@@ -172,8 +188,11 @@ export async function GET(request: NextRequest) {
               name: String(outlet.name || outlet.domain || 'Unknown'),
               count: 0,
               tier: String(outlet.tier || 'untiered'),
-              visitors: Number(outlet.monthly_unique_visitors || 0),
+              visitors: reach,
             }
+          } else {
+            // For outlets with multiple items, sum their reach values
+            topOutlets[outletId].visitors += reach
           }
           topOutlets[outletId].count++
         }
@@ -182,13 +201,13 @@ export async function GET(request: NextRequest) {
       result.coverage = {
         total_pieces: items.length,
         total_audience_reach: totalReach,
-        estimated_views: Math.round(totalReach * 0.02),
+        estimated_views: estimatedViews,
         avg_review_score: scoredCount > 0 ? Math.round((totalScoreSum / scoredCount) * 10) / 10 : null,
         tier_breakdown: Object.entries(tierBreakdown).sort((a, b) => b[1] - a[1]).map(([name, value]) => ({ name, value })),
         type_breakdown: Object.entries(typeBreakdown).sort((a, b) => b[1] - a[1]).map(([name, value]) => ({ name, value })),
         territory_breakdown: Object.entries(territoryBreakdown).sort((a, b) => b[1] - a[1]).map(([name, value]) => ({ name, value })),
         top_outlets: Object.values(topOutlets).sort((a, b) => b.count - a.count).slice(0, 15),
-        items: section === 'pr_coverage' ? items : items.slice(0, 50),
+        items: section === 'pr_coverage' ? enrichedItems : enrichedItems.slice(0, 50),
       }
     }
 
