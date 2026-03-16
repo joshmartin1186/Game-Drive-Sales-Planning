@@ -144,6 +144,9 @@ export default function SourcesPage() {
   // API key status
   const [apiKeyStatus, setApiKeyStatus] = useState<Record<string, { configured: boolean; credits?: number }>>({})
 
+  // Global keyword scan stats (platforms that run via cron off keywords, not coverage_sources)
+  const [platformStats, setPlatformStats] = useState<Record<string, { total: number; lastSeen: string | null }>>({})
+
   // Scan state
   const [scanning, setScanning] = useState(false)
   const [scanResult, setScanResult] = useState<string | null>(null)
@@ -189,6 +192,29 @@ export default function SourcesPage() {
     }
   }, [supabase])
 
+  const fetchPlatformStats = useCallback(async () => {
+    try {
+      const { data } = await supabase
+        .from('coverage_items')
+        .select('source_type, discovered_at')
+        .in('source_type', ['youtube', 'twitch', 'reddit', 'twitter', 'tiktok', 'instagram'])
+      if (data) {
+        const stats: Record<string, { total: number; lastSeen: string | null }> = {}
+        for (const row of data) {
+          const t = row.source_type as string
+          if (!stats[t]) stats[t] = { total: 0, lastSeen: null }
+          stats[t].total++
+          if (!stats[t].lastSeen || row.discovered_at > stats[t].lastSeen!) {
+            stats[t].lastSeen = row.discovered_at
+          }
+        }
+        setPlatformStats(stats)
+      }
+    } catch (err) {
+      console.error('Failed to fetch platform stats:', err)
+    }
+  }, [supabase])
+
   const fetchApiKeyStatus = useCallback(async () => {
     try {
       const res = await fetch('/api/service-api-keys')
@@ -213,8 +239,9 @@ export default function SourcesPage() {
       fetchSources()
       fetchReferenceData()
       fetchApiKeyStatus()
+      fetchPlatformStats()
     }
-  }, [canView, fetchSources, fetchReferenceData, fetchApiKeyStatus])
+  }, [canView, fetchSources, fetchReferenceData, fetchApiKeyStatus, fetchPlatformStats])
 
   // ─── Filtered sources ─────────────────────────────────────────────────────
 
@@ -970,35 +997,54 @@ export default function SourcesPage() {
     const apifyCredits = apiKeyStatus.apify?.credits
     const hasApifyKey = apiKeyStatus.apify?.configured
 
-    const renderSection = (type: SourceType, label: string, description: string, items: CoverageSource[]) => (
-      <div style={{ marginBottom: '24px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-          <div>
-            <h3 style={{ fontSize: '16px', fontWeight: 600, color: '#1e293b', margin: 0 }}>
-              {SOURCE_ICONS[type]} {label}
-            </h3>
-            <p style={{ fontSize: '12px', color: '#94a3b8', margin: '2px 0 0 0' }}>{description}</p>
+    const renderSection = (type: SourceType, label: string, description: string, items: CoverageSource[]) => {
+      const stats = platformStats[type]
+      const isGlobalKeywordPlatform = ['youtube', 'twitch', 'reddit', 'twitter', 'tiktok', 'instagram'].includes(type)
+      return (
+        <div style={{ marginBottom: '24px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+            <div>
+              <h3 style={{ fontSize: '16px', fontWeight: 600, color: '#1e293b', margin: 0 }}>
+                {SOURCE_ICONS[type]} {label}
+              </h3>
+              <p style={{ fontSize: '12px', color: '#94a3b8', margin: '2px 0 0 0' }}>{description}</p>
+            </div>
+            {canEdit && (
+              <button
+                onClick={() => openAddForm(type)}
+                style={{ padding: '6px 12px', backgroundColor: '#2563eb', color: 'white', border: 'none', borderRadius: '6px', fontSize: '12px', cursor: 'pointer', fontWeight: 500 }}
+              >
+                + Add
+              </button>
+            )}
           </div>
-          {canEdit && (
-            <button
-              onClick={() => openAddForm(type)}
-              style={{ padding: '6px 12px', backgroundColor: '#2563eb', color: 'white', border: 'none', borderRadius: '6px', fontSize: '12px', cursor: 'pointer', fontWeight: 500 }}
-            >
-              + Add
-            </button>
+          {isGlobalKeywordPlatform && stats && stats.total > 0 && (
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: '10px',
+              padding: '10px 14px', marginBottom: '8px', borderRadius: '8px',
+              backgroundColor: '#f0fdf4', border: '1px solid #86efac', fontSize: '13px'
+            }}>
+              <span style={{ color: '#16a34a', fontWeight: 600 }}>● Active</span>
+              <span style={{ color: '#15803d' }}>
+                Scanning via global keywords — <strong>{stats.total.toLocaleString()} items</strong> collected
+                {stats.lastSeen && <span style={{ color: '#86efac', marginLeft: '6px' }}>· last {timeAgo(stats.lastSeen)}</span>}
+              </span>
+            </div>
+          )}
+          {items.length === 0 ? (
+            <div style={{ padding: '20px', textAlign: 'center', color: '#94a3b8', backgroundColor: 'white', borderRadius: '10px', fontSize: '13px' }}>
+              {isGlobalKeywordPlatform && stats && stats.total > 0
+                ? `No targeted ${label.toLowerCase()} sources — running on global keyword scan`
+                : `No ${label.toLowerCase()} sources configured`}
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(400px, 1fr))', gap: '10px' }}>
+              {items.map(renderSourceCard)}
+            </div>
           )}
         </div>
-        {items.length === 0 ? (
-          <div style={{ padding: '20px', textAlign: 'center', color: '#94a3b8', backgroundColor: 'white', borderRadius: '10px', fontSize: '13px' }}>
-            No {label.toLowerCase()} sources configured
-          </div>
-        ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(400px, 1fr))', gap: '10px' }}>
-            {items.map(renderSourceCard)}
-          </div>
-        )}
-      </div>
-    )
+      )
+    }
 
     return (
       <div>
