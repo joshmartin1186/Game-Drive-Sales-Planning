@@ -123,6 +123,22 @@ export default function TimelinePage() {
   const [annotationPrefill, setAnnotationPrefill] = useState<AnnotationPrefill | undefined>()
   const [showAnnotations, setShowAnnotations] = useState(true)
 
+  // Inline annotation popover
+  const [inlineAnnotation, setInlineAnnotation] = useState<{
+    day: string
+    x: number
+    y: number
+  } | null>(null)
+  const [inlineForm, setInlineForm] = useState({
+    event_type: 'pr_mention',
+    outlet_or_source: '',
+    observed_effect: 'unknown',
+    confidence: 'suspected',
+    notes: '',
+  })
+  const [inlineSaving, setInlineSaving] = useState(false)
+  const [editingAnnotation, setEditingAnnotation] = useState<string | null>(null)
+
   // Load reference data
   useEffect(() => {
     if (!canView) return
@@ -182,6 +198,113 @@ export default function TimelinePage() {
   useEffect(() => {
     if (canView) fetchAnnotations()
   }, [canView, fetchAnnotations])
+
+  // Handle right-click on a day cell to open inline annotation popover
+  const handleDayContextMenu = useCallback((e: React.MouseEvent, day: string) => {
+    e.preventDefault()
+    setInlineAnnotation({ day, x: e.clientX, y: e.clientY })
+    setInlineForm({ event_type: 'pr_mention', outlet_or_source: '', observed_effect: 'unknown', confidence: 'suspected', notes: '' })
+    setEditingAnnotation(null)
+  }, [])
+
+  // Open popover to edit an existing annotation
+  const handleEditAnnotation = useCallback((e: React.MouseEvent, annotation: typeof annotations[0]) => {
+    e.stopPropagation()
+    setInlineAnnotation({ day: annotation.event_date, x: e.clientX, y: e.clientY })
+    setInlineForm({
+      event_type: annotation.event_type,
+      outlet_or_source: annotation.outlet_or_source || '',
+      observed_effect: annotation.observed_effect,
+      confidence: annotation.confidence,
+      notes: annotation.notes || '',
+    })
+    setEditingAnnotation(annotation.id)
+  }, [])
+
+  // Save inline annotation
+  const handleInlineSave = useCallback(async () => {
+    if (!inlineAnnotation) return
+    setInlineSaving(true)
+    try {
+      const payload = {
+        game_id: gameFilter || null,
+        client_id: clientFilter || null,
+        event_type: inlineForm.event_type,
+        event_date: inlineAnnotation.day,
+        outlet_or_source: inlineForm.outlet_or_source || null,
+        observed_effect: inlineForm.observed_effect,
+        direction: 'pr_to_sales',
+        confidence: inlineForm.confidence,
+        notes: inlineForm.notes || null,
+        is_auto_detected: false,
+        updated_at: new Date().toISOString(),
+      }
+
+      if (editingAnnotation) {
+        await fetch('/api/pr-annotations', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: editingAnnotation, ...payload }),
+        })
+      } else {
+        await fetch('/api/pr-annotations', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        })
+      }
+      setInlineAnnotation(null)
+      setEditingAnnotation(null)
+      fetchAnnotations()
+    } catch (err) {
+      console.error('Save inline annotation failed:', err)
+    } finally {
+      setInlineSaving(false)
+    }
+  }, [inlineAnnotation, inlineForm, editingAnnotation, gameFilter, clientFilter, fetchAnnotations])
+
+  // Delete an annotation
+  const handleDeleteAnnotation = useCallback(async (id: string) => {
+    try {
+      await fetch('/api/pr-annotations', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id }),
+      })
+      setInlineAnnotation(null)
+      setEditingAnnotation(null)
+      fetchAnnotations()
+    } catch (err) {
+      console.error('Delete annotation failed:', err)
+    }
+  }, [fetchAnnotations])
+
+  // Close popover on outside click
+  useEffect(() => {
+    if (!inlineAnnotation) return
+    const handleClick = (e: MouseEvent) => {
+      const popover = document.getElementById('annotation-popover')
+      if (popover && !popover.contains(e.target as Node)) {
+        setInlineAnnotation(null)
+        setEditingAnnotation(null)
+      }
+    }
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setInlineAnnotation(null)
+        setEditingAnnotation(null)
+      }
+    }
+    // Delay to avoid the context menu click from immediately closing
+    setTimeout(() => {
+      document.addEventListener('mousedown', handleClick)
+      document.addEventListener('keydown', handleEsc)
+    }, 50)
+    return () => {
+      document.removeEventListener('mousedown', handleClick)
+      document.removeEventListener('keydown', handleEsc)
+    }
+  }, [inlineAnnotation])
 
   const filteredGames = clientFilter ? games.filter(g => g.client_id === clientFilter) : games
 
@@ -681,11 +804,15 @@ export default function TimelinePage() {
                               // Check if any sale is active on this day
                               const hasSale = showSales && visibleSales.some(s => s.start_date <= day && s.end_date >= day)
 
+                              const dayAnnotations = annotationsByDate[day] || []
+                              const hasAnnotations = showAnnotations && dayAnnotations.length > 0
+
                               return (
                                 <div
                                   key={di}
                                   onClick={() => { setSelectedDay(day); setSelectedItem(null) }}
-                                  title={`${day}: ${count} item${count !== 1 ? 's' : ''}`}
+                                  onContextMenu={(e) => handleDayContextMenu(e, day)}
+                                  title={`${day}: ${count} item${count !== 1 ? 's' : ''}${hasAnnotations ? ` · ${dayAnnotations.length} annotation(s) — right-click to add` : ' — right-click to add annotation'}`}
                                   style={{
                                     aspectRatio: '1',
                                     borderRadius: '4px',
@@ -698,7 +825,9 @@ export default function TimelinePage() {
                                       ? '2px solid #2563eb'
                                       : isToday
                                         ? '2px solid #f97316'
-                                        : '1px solid #e2e8f0',
+                                        : hasAnnotations
+                                          ? '2px solid #f59e0b'
+                                          : '1px solid #e2e8f0',
                                     display: 'flex',
                                     flexDirection: 'column',
                                     alignItems: 'center',
@@ -716,17 +845,30 @@ export default function TimelinePage() {
                                   {count > 0 && (
                                     <div style={{ fontSize: '9px', fontWeight: 700, color: '#1e293b' }}>{count}</div>
                                   )}
-                                  {hasSale && (
+                                  {hasSale && !hasAnnotations && (
                                     <div style={{
                                       position: 'absolute', bottom: '1px', left: '50%', transform: 'translateX(-50%)',
                                       width: '4px', height: '4px', borderRadius: '50%', backgroundColor: '#3b82f6',
                                     }} />
                                   )}
-                                  {showAnnotations && annotationsByDate[day] && annotationsByDate[day].length > 0 && (
-                                    <div style={{
-                                      position: 'absolute', top: '1px', right: '1px',
-                                      width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#f59e0b',
-                                    }} title={`${annotationsByDate[day].length} annotation(s)`} />
+                                  {hasAnnotations && (
+                                    <div
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        if (dayAnnotations.length === 1) {
+                                          handleEditAnnotation(e, dayAnnotations[0])
+                                        } else {
+                                          setSelectedDay(day)
+                                          setSelectedItem(null)
+                                        }
+                                      }}
+                                      style={{
+                                        position: 'absolute', bottom: '0px', left: '0px', right: '0px',
+                                        height: '4px', borderRadius: '0 0 3px 3px',
+                                        backgroundColor: '#f59e0b',
+                                      }}
+                                      title={`${dayAnnotations.length} annotation(s) — click to edit`}
+                                    />
                                   )}
                                 </div>
                               )
@@ -779,6 +921,15 @@ export default function TimelinePage() {
                         <span>Sale active</span>
                       </div>
                     )}
+                    {showAnnotations && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <div style={{ width: '12px', height: '4px', borderRadius: '2px', backgroundColor: '#f59e0b' }} />
+                        <span>Has annotation</span>
+                      </div>
+                    )}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#94a3b8', fontStyle: 'italic' }}>
+                      <span>Right-click any day to add annotation</span>
+                    </div>
                   </div>
                 </div>
               )}
@@ -919,24 +1070,66 @@ export default function TimelinePage() {
                     {/* Annotations for this day */}
                     {showAnnotations && selectedDay && annotationsByDate[selectedDay] && annotationsByDate[selectedDay].length > 0 && (
                       <div style={{ padding: '8px 12px', backgroundColor: '#fffbeb', borderRadius: '8px', border: '1px solid #fde68a', marginBottom: '4px' }}>
-                        <div style={{ fontSize: '11px', fontWeight: 600, color: '#92400e', marginBottom: '4px' }}>PR Annotations</div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                          <div style={{ fontSize: '11px', fontWeight: 600, color: '#92400e' }}>PR Annotations</div>
+                          <button
+                            onClick={(e) => handleDayContextMenu(e as unknown as React.MouseEvent, selectedDay)}
+                            style={{
+                              fontSize: '11px', padding: '2px 8px', borderRadius: '4px', cursor: 'pointer',
+                              backgroundColor: '#fef3c7', color: '#92400e', border: '1px solid #fde68a', fontWeight: 500,
+                            }}
+                          >
+                            + Add
+                          </button>
+                        </div>
                         {annotationsByDate[selectedDay].map(a => (
-                          <div key={a.id} style={{ fontSize: '12px', color: '#78350f', marginBottom: '2px' }}>
-                            <span style={{ fontWeight: 500 }}>{a.event_type.replace(/_/g, ' ')}</span>
-                            {a.outlet_or_source && <span> — {a.outlet_or_source}</span>}
-                            <span style={{
-                              marginLeft: '6px', fontSize: '10px', padding: '1px 6px', borderRadius: '4px',
-                              backgroundColor: a.confidence === 'confirmed' ? '#dcfce7' : a.confidence === 'suspected' ? '#fef9c3' : '#fee2e2',
-                              color: a.confidence === 'confirmed' ? '#166534' : a.confidence === 'suspected' ? '#854d0e' : '#991b1b',
-                            }}>
-                              {a.confidence}
-                            </span>
+                          <div
+                            key={a.id}
+                            onClick={(e) => handleEditAnnotation(e, a)}
+                            style={{
+                              fontSize: '12px', color: '#78350f', marginBottom: '4px', padding: '4px 6px',
+                              borderRadius: '4px', cursor: 'pointer', transition: 'background 0.1s',
+                            }}
+                            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#fef3c7' }}
+                            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent' }}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                              <span style={{ fontWeight: 500 }}>{a.event_type.replace(/_/g, ' ')}</span>
+                              {a.outlet_or_source && <span style={{ color: '#a16207' }}> — {a.outlet_or_source}</span>}
+                              <span style={{
+                                marginLeft: '4px', fontSize: '10px', padding: '1px 6px', borderRadius: '4px',
+                                backgroundColor: a.confidence === 'confirmed' ? '#dcfce7' : a.confidence === 'suspected' ? '#fef9c3' : '#fee2e2',
+                                color: a.confidence === 'confirmed' ? '#166534' : a.confidence === 'suspected' ? '#854d0e' : '#991b1b',
+                              }}>
+                                {a.confidence}
+                              </span>
+                            </div>
                             {a.observed_effect !== 'unknown' && (
-                              <span style={{ marginLeft: '4px', fontSize: '10px', color: '#64748b' }}>→ {a.observed_effect.replace(/_/g, ' ')}</span>
+                              <div style={{ fontSize: '10px', color: '#92400e', marginTop: '2px' }}>→ {a.observed_effect.replace(/_/g, ' ')}</div>
                             )}
+                            {a.notes && (
+                              <div style={{ fontSize: '10px', color: '#a16207', marginTop: '2px', fontStyle: 'italic' }}>
+                                {a.notes.length > 80 ? a.notes.slice(0, 80) + '...' : a.notes}
+                              </div>
+                            )}
+                            <div style={{ fontSize: '9px', color: '#b45309', marginTop: '2px' }}>Click to edit</div>
                           </div>
                         ))}
                       </div>
+                    )}
+
+                    {/* Add annotation button when no annotations exist */}
+                    {showAnnotations && selectedDay && (!annotationsByDate[selectedDay] || annotationsByDate[selectedDay].length === 0) && (
+                      <button
+                        onClick={(e) => handleDayContextMenu(e as unknown as React.MouseEvent, selectedDay)}
+                        style={{
+                          width: '100%', padding: '10px', borderRadius: '8px', cursor: 'pointer',
+                          backgroundColor: '#fffbeb', color: '#92400e', border: '1px dashed #fde68a',
+                          fontSize: '12px', fontWeight: 500, marginBottom: '4px', textAlign: 'center',
+                        }}
+                      >
+                        + Add PR Annotation for this day
+                      </button>
                     )}
 
                     {dayItems.length === 0 ? (
@@ -1051,7 +1244,186 @@ export default function TimelinePage() {
           )}
         </div>
 
-        {/* Annotation Sidebar */}
+        {/* Inline Annotation Popover */}
+        {inlineAnnotation && (
+          <div
+            id="annotation-popover"
+            style={{
+              position: 'fixed',
+              left: Math.min(inlineAnnotation.x, window.innerWidth - 340),
+              top: Math.min(inlineAnnotation.y, window.innerHeight - 420),
+              width: '320px',
+              backgroundColor: 'white',
+              borderRadius: '12px',
+              boxShadow: '0 20px 60px rgba(0,0,0,0.2), 0 0 0 1px rgba(0,0,0,0.05)',
+              zIndex: 1000,
+              overflow: 'hidden',
+            }}
+          >
+            {/* Header */}
+            <div style={{
+              padding: '12px 16px', backgroundColor: '#fffbeb', borderBottom: '1px solid #fde68a',
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            }}>
+              <div>
+                <div style={{ fontSize: '13px', fontWeight: 600, color: '#92400e' }}>
+                  {editingAnnotation ? 'Edit Annotation' : 'Add Annotation'}
+                </div>
+                <div style={{ fontSize: '11px', color: '#b45309' }}>
+                  {new Date(inlineAnnotation.day + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                </div>
+              </div>
+              <button
+                onClick={() => { setInlineAnnotation(null); setEditingAnnotation(null) }}
+                style={{ background: 'none', border: 'none', fontSize: '18px', color: '#92400e', cursor: 'pointer', padding: '0 4px' }}
+              >
+                &times;
+              </button>
+            </div>
+
+            {/* Body */}
+            <div style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {/* Event Type */}
+              <div>
+                <label style={{ fontSize: '11px', fontWeight: 600, color: '#64748b', display: 'block', marginBottom: '3px' }}>Event Type</label>
+                <select
+                  value={inlineForm.event_type}
+                  onChange={e => setInlineForm(f => ({ ...f, event_type: e.target.value }))}
+                  style={{ width: '100%', padding: '6px 8px', borderRadius: '6px', border: '1px solid #e2e8f0', fontSize: '12px', backgroundColor: 'white' }}
+                >
+                  <option value="pr_mention">PR Mention</option>
+                  <option value="influencer_play">Influencer Play</option>
+                  <option value="steam_sale">Steam Sale</option>
+                  <option value="steam_event">Steam Event</option>
+                  <option value="bundle">Bundle</option>
+                  <option value="epic_free">Epic Free</option>
+                  <option value="press_interview">Press Interview</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+
+              {/* Outlet */}
+              <div>
+                <label style={{ fontSize: '11px', fontWeight: 600, color: '#64748b', display: 'block', marginBottom: '3px' }}>Outlet / Source</label>
+                <input
+                  type="text"
+                  value={inlineForm.outlet_or_source}
+                  onChange={e => setInlineForm(f => ({ ...f, outlet_or_source: e.target.value }))}
+                  placeholder='e.g. "IGN", "Steam Puzzle Fest"'
+                  style={{ width: '100%', padding: '6px 8px', borderRadius: '6px', border: '1px solid #e2e8f0', fontSize: '12px', boxSizing: 'border-box' }}
+                />
+              </div>
+
+              {/* Observed Effect */}
+              <div>
+                <label style={{ fontSize: '11px', fontWeight: 600, color: '#64748b', display: 'block', marginBottom: '3px' }}>Observed Effect</label>
+                <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                  {[
+                    { value: 'sales_spike', label: 'Sales Spike', color: '#16a34a', bg: '#dcfce7' },
+                    { value: 'wishlist_spike', label: 'Wishlists', color: '#2563eb', bg: '#dbeafe' },
+                    { value: 'pr_pickup', label: 'PR Pickup', color: '#7c3aed', bg: '#ede9fe' },
+                    { value: 'none', label: 'No Effect', color: '#64748b', bg: '#f1f5f9' },
+                    { value: 'unknown', label: 'Unknown', color: '#94a3b8', bg: '#f8fafc' },
+                  ].map(eff => (
+                    <button
+                      key={eff.value}
+                      onClick={() => setInlineForm(f => ({ ...f, observed_effect: eff.value }))}
+                      style={{
+                        padding: '3px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 500, cursor: 'pointer',
+                        backgroundColor: inlineForm.observed_effect === eff.value ? eff.bg : 'white',
+                        color: inlineForm.observed_effect === eff.value ? eff.color : '#94a3b8',
+                        border: inlineForm.observed_effect === eff.value ? `1px solid ${eff.color}40` : '1px solid #e2e8f0',
+                      }}
+                    >
+                      {eff.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Confidence */}
+              <div>
+                <label style={{ fontSize: '11px', fontWeight: 600, color: '#64748b', display: 'block', marginBottom: '3px' }}>Confidence</label>
+                <div style={{ display: 'flex', gap: '4px' }}>
+                  {[
+                    { value: 'confirmed', label: 'Confirmed', color: '#166534', bg: '#dcfce7' },
+                    { value: 'suspected', label: 'Suspected', color: '#854d0e', bg: '#fef9c3' },
+                    { value: 'ruled_out', label: 'Ruled Out', color: '#991b1b', bg: '#fee2e2' },
+                  ].map(conf => (
+                    <button
+                      key={conf.value}
+                      onClick={() => setInlineForm(f => ({ ...f, confidence: conf.value }))}
+                      style={{
+                        flex: 1, padding: '4px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: 500, cursor: 'pointer',
+                        backgroundColor: inlineForm.confidence === conf.value ? conf.bg : 'white',
+                        color: inlineForm.confidence === conf.value ? conf.color : '#94a3b8',
+                        border: inlineForm.confidence === conf.value ? `1px solid ${conf.color}40` : '1px solid #e2e8f0',
+                      }}
+                    >
+                      {conf.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Notes */}
+              <div>
+                <label style={{ fontSize: '11px', fontWeight: 600, color: '#64748b', display: 'block', marginBottom: '3px' }}>Notes (optional)</label>
+                <textarea
+                  value={inlineForm.notes}
+                  onChange={e => setInlineForm(f => ({ ...f, notes: e.target.value }))}
+                  placeholder="Quick note about this insight..."
+                  rows={2}
+                  style={{ width: '100%', padding: '6px 8px', borderRadius: '6px', border: '1px solid #e2e8f0', fontSize: '12px', resize: 'vertical', boxSizing: 'border-box', fontFamily: 'inherit' }}
+                />
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div style={{
+              padding: '10px 16px', borderTop: '1px solid #f1f5f9',
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px',
+            }}>
+              {editingAnnotation ? (
+                <button
+                  onClick={() => handleDeleteAnnotation(editingAnnotation)}
+                  style={{
+                    padding: '6px 12px', borderRadius: '6px', fontSize: '12px', fontWeight: 500, cursor: 'pointer',
+                    backgroundColor: '#fee2e2', color: '#991b1b', border: '1px solid #fecaca',
+                  }}
+                >
+                  Delete
+                </button>
+              ) : (
+                <div />
+              )}
+              <div style={{ display: 'flex', gap: '6px' }}>
+                <button
+                  onClick={() => { setInlineAnnotation(null); setEditingAnnotation(null) }}
+                  style={{
+                    padding: '6px 12px', borderRadius: '6px', fontSize: '12px', fontWeight: 500, cursor: 'pointer',
+                    backgroundColor: 'white', color: '#64748b', border: '1px solid #e2e8f0',
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleInlineSave}
+                  disabled={inlineSaving}
+                  style={{
+                    padding: '6px 16px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: 'pointer',
+                    backgroundColor: '#f59e0b', color: 'white', border: '1px solid #f59e0b',
+                    opacity: inlineSaving ? 0.6 : 1,
+                  }}
+                >
+                  {inlineSaving ? 'Saving...' : editingAnnotation ? 'Update' : 'Save'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Annotation Sidebar (kept for full editing via button) */}
         <AnnotationSidebar
           isOpen={showAnnotationSidebar}
           onClose={() => setShowAnnotationSidebar(false)}
