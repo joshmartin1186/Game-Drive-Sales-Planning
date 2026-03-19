@@ -6,6 +6,35 @@ import { useAuth } from '@/lib/auth-context'
 import { CoverageNav } from '../components/CoverageNav'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 
+function getOutletDisplayName(item: CoverageItem): string {
+  if (item.outlet?.name && item.outlet.name !== 'Unknown') return item.outlet.name
+  // Fallback: extract from source_metadata (e.g. YouTube channel_name)
+  const meta = item.source_metadata as Record<string, unknown> | null
+  if (meta?.channel_name) return String(meta.channel_name)
+  if (meta?.user_name) return String(meta.user_name)
+  if (meta?.author_name) return String(meta.author_name)
+  // Fallback: extract readable name from URL domain
+  if (item.url) {
+    try {
+      const domain = new URL(item.url).hostname.replace(/^www\./, '')
+      // Strip TLD and capitalize
+      const name = domain.replace(/\.(com|net|org|co\.uk|io|gg|tv|info|me|cc|dev|app|news|games)$/i, '')
+        .replace(/\./g, ' ')
+        .split(/[\s\-_]+/)
+        .filter(Boolean)
+        .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+        .join(' ')
+      if (name) return name
+    } catch { /* ignore */ }
+  }
+  return '—'
+}
+
+function ensureDate(d: string | null): string {
+  if (d) return d
+  return '—'
+}
+
 // ─── Types ──────────────────────────────────────────────────────────────────
 
 interface CoverageItem {
@@ -610,9 +639,9 @@ export default function CoverageFeedPage() {
                     <th style={{ textAlign: 'center', padding: '10px 12px', fontWeight: 600, color: '#475569' }}>
                       Tier
                     </th>
-                    <th onClick={() => handleSort('review_score')}
+                    <th onClick={() => handleSort('relevance_score')}
                       style={{ textAlign: 'center', padding: '10px 12px', fontWeight: 600, color: '#475569', cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}>
-                      Score{sortIcon('review_score')}
+                      Score{sortIcon('relevance_score')}
                     </th>
                     <th style={{ textAlign: 'center', padding: '10px 12px', fontWeight: 600, color: '#475569' }}>
                       Sentiment
@@ -664,11 +693,11 @@ export default function CoverageFeedPage() {
                             </td>
                           )}
                           <td style={{ padding: '8px 12px', color: '#64748b', whiteSpace: 'nowrap', fontSize: '12px' }}>
-                            {formatDate(item.publish_date)}
+                            {formatDate(item.publish_date) !== '—' ? formatDate(item.publish_date) : ensureDate(item.discovered_at ? new Date(item.discovered_at).toISOString().split('T')[0] : null)}
                           </td>
                           <td style={{ padding: '8px 12px' }}>
                             <div style={{ fontWeight: 500, color: '#1e293b', fontSize: '13px' }}>
-                              {item.outlet?.name || '—'}
+                              {getOutletDisplayName(item)}
                             </div>
                             {item.territory && (
                               <div style={{ fontSize: '11px', color: '#94a3b8' }}>{item.territory}</div>
@@ -765,11 +794,17 @@ export default function CoverageFeedPage() {
                             ) : <span style={{ color: '#d1d5db' }}>—</span>}
                           </td>
                           <td style={{ padding: '8px 12px', textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>
-                            {item.review_score != null ? (
-                              <span style={{ fontWeight: 600, color: item.review_score >= 80 ? '#16a34a' : item.review_score >= 60 ? '#ca8a04' : '#dc2626' }}>
-                                {item.review_score}
-                              </span>
-                            ) : <span style={{ color: '#d1d5db' }}>—</span>}
+                            {(() => {
+                              const score = item.review_score ?? item.relevance_score
+                              if (score == null) return <span style={{ color: '#d1d5db' }}>—</span>
+                              const color = score >= 80 ? '#16a34a' : score >= 60 ? '#ca8a04' : '#dc2626'
+                              return (
+                                <span style={{ fontWeight: 600, color }}>
+                                  {score}
+                                  {item.review_score != null && <span style={{ fontSize: '9px', color: '#94a3b8', marginLeft: '2px' }}>rev</span>}
+                                </span>
+                              )
+                            })()}
                           </td>
                           <td style={{ padding: '8px 12px', textAlign: 'center' }}>
                             {item.sentiment && sentimentColor ? (
@@ -788,11 +823,6 @@ export default function CoverageFeedPage() {
                             }}>
                               {item.approval_status.replace('_', ' ')}
                             </span>
-                            {item.relevance_score != null && (
-                              <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '2px' }}>
-                                rel: {item.relevance_score}%
-                              </div>
-                            )}
                           </td>
                           <td style={{ padding: '8px 12px', textAlign: 'center' }}>
                             <span style={{ fontSize: '11px', color: '#64748b' }}>
@@ -849,6 +879,38 @@ export default function CoverageFeedPage() {
                                     Reject
                                   </button>
                                 )}
+                                <button
+                                  onClick={async () => {
+                                    const keyword = prompt('Enter keyword to blacklist (items matching this will be hidden):', '')
+                                    if (!keyword?.trim()) return
+                                    const clientId = item.client_id || clientFilter
+                                    const gameId = item.game_id || gameFilter
+                                    if (!clientId) { alert('Cannot determine client — please select a client filter first.'); return }
+                                    try {
+                                      await fetch('/api/coverage-keywords', {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({
+                                          client_id: clientId,
+                                          game_id: gameId || null,
+                                          keyword: keyword.trim(),
+                                          keyword_type: 'blacklist'
+                                        })
+                                      })
+                                      // Also reject this item
+                                      await fetch('/api/coverage-items', {
+                                        method: 'PUT',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ id: item.id, approval_status: 'rejected' })
+                                      })
+                                      fetchItems()
+                                    } catch (err) { console.error('Blacklist error:', err) }
+                                  }}
+                                  title="Blacklist a keyword from this item"
+                                  style={{ padding: '3px 6px', backgroundColor: 'white', color: '#94a3b8', border: '1px solid #e2e8f0', borderRadius: '4px', fontSize: '11px', cursor: 'pointer' }}
+                                >
+                                  BL
+                                </button>
                                 <button
                                   onClick={() => handleDelete(item.id)}
                                   title="Delete permanently"

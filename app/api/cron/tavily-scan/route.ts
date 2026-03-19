@@ -257,6 +257,7 @@ export async function GET(request: Request) {
 
               // Try to match outlet by domain, auto-create if not found
               let outletId = source.outlet_id
+              let outletTraffic: number | null = null
               try {
                 const resultDomain = new URL(result.url).hostname.replace('www.', '')
                 if (!outletId) {
@@ -268,6 +269,7 @@ export async function GET(request: Request) {
                   if (outlet) {
                     if (outlet.is_blacklisted) continue // Skip blacklisted outlets
                     outletId = outlet.id
+                    outletTraffic = outlet.monthly_unique_visitors
                   } else {
                     // Auto-create outlet from domain
                     const outletName = domainToOutletName(resultDomain)
@@ -276,14 +278,16 @@ export async function GET(request: Request) {
                       .insert({
                         name: outletName,
                         domain: resultDomain,
-                        tier: null
+                        tier: 'C'
                       })
                       .select('id')
                       .single()
                     if (newOutlet) outletId = newOutlet.id
                   }
                 }
-              } catch { /* ignore outlet lookup errors */ }
+              } catch (outletErr) {
+                console.warn(`[Tavily Scan] Outlet lookup error for ${result.url}:`, outletErr)
+              }
 
               // Use publish date from Tavily, fall back to today
               const publishDate = result.publishedDate
@@ -308,6 +312,7 @@ export async function GET(request: Request) {
                 publish_date: publishDate,
                 coverage_type: 'news', // Gemini will refine this
                 territory,
+                monthly_unique_visitors: outletTraffic, // Propagate from outlet
                 relevance_score: null, // Left null for AI enrichment
                 relevance_reasoning: null, // AI will fill this
                 approval_status: 'pending_review', // AI will upgrade or reject

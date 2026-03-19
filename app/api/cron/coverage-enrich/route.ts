@@ -217,6 +217,11 @@ Respond with ONLY valid JSON:
           updated_at: new Date().toISOString(),
         }
 
+        // Propagate outlet traffic to item if missing
+        if (!item.monthly_unique_visitors && outlet?.monthly_unique_visitors) {
+          updates.monthly_unique_visitors = outlet.monthly_unique_visitors
+        }
+
         // Only update territory if we have a value and the item doesn't already have one
         if (territory && !item.territory) {
           updates.territory = territory
