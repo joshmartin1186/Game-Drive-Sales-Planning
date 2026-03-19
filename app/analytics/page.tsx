@@ -65,61 +65,82 @@ export default function AnalyticsPage() {
   const gridRef = useRef<HTMLDivElement>(null)
 
   // Wishlist widget state
-  const [wishlistData, setWishlistData] = useState<{game: string; date: string; additions: number; deletions: number; purchases: number}[]>([])
-  const [wishlistStats, setWishlistStats] = useState<{totalAdds: number; totalDels: number; totalPurchases: number; games: number; dataPoints: number} | null>(null)
-  const [bundleStats, setBundleStats] = useState<{totalBundles: number; netRevenue: number; netUnits: number} | null>(null)
+  const [wishlistData, setWishlistData] = useState<{game: string; gameId: string; date: string; additions: number; deletions: number; purchases: number; gifts: number}[]>([])
+  const [bundleData, setBundleData] = useState<{bundleName: string; gameId: string; game: string; date: string; netUnits: number; netRevenue: number}[]>([])
 
-  // Fetch wishlist & bundle data for the widget
+  // Fetch wishlist & bundle data — respects all analytics filters
   useEffect(() => {
     const fetchWishlistData = async () => {
-      // Fetch wishlists — get all data, filtered by selected client if set
-      const params = new URLSearchParams()
-      if (selectedClient && selectedClient !== 'all') {
-        params.set('client_id', selectedClient)
-      }
-
       try {
-        const [wlRes, blRes] = await Promise.all([
-          supabase.from('steam_wishlists').select('game_id, date, additions, deletions, purchases_and_activations, game:games(name)')
-            .order('date', { ascending: true })
-            .limit(500),
-          supabase.from('steam_bundles').select('bundle_name, net_units, net_revenue_usd')
-            .limit(500),
-        ])
+        // Build wishlist query with filters
+        let wlQuery = supabase.from('steam_wishlists')
+          .select('game_id, date, additions, deletions, purchases_and_activations, gifts, game:games(name, client_id)')
+          .order('date', { ascending: true })
+          .limit(1000)
 
-        if (wlRes.data && wlRes.data.length > 0) {
-          const rows = wlRes.data.map(r => ({
-            game: ((r as Record<string, unknown>).game as { name: string } | null)?.name || 'Unknown',
-            date: r.date as string,
-            additions: (r.additions as number) || 0,
-            deletions: (r.deletions as number) || 0,
-            purchases: (r.purchases_and_activations as number) || 0,
-          }))
-          setWishlistData(rows)
-          const gameNames = new Set(rows.map(r => r.game))
-          setWishlistStats({
-            totalAdds: rows.reduce((s, r) => s + r.additions, 0),
-            totalDels: rows.reduce((s, r) => s + r.deletions, 0),
-            totalPurchases: rows.reduce((s, r) => s + r.purchases, 0),
-            games: gameNames.size,
-            dataPoints: rows.length,
+        if (dateRange.start) wlQuery = wlQuery.gte('date', dateRange.start.toISOString().split('T')[0])
+        if (dateRange.end) wlQuery = wlQuery.lte('date', dateRange.end.toISOString().split('T')[0])
+        if (selectedClient && selectedClient !== 'all') wlQuery = wlQuery.eq('client_id', selectedClient)
+
+        // Build bundle query with filters
+        let blQuery = supabase.from('steam_bundles')
+          .select('bundle_name, game_id, date, net_units, net_revenue_usd, game:games(name, client_id)')
+          .order('date', { ascending: true })
+          .limit(1000)
+
+        if (dateRange.start) blQuery = blQuery.gte('date', dateRange.start.toISOString().split('T')[0])
+        if (dateRange.end) blQuery = blQuery.lte('date', dateRange.end.toISOString().split('T')[0])
+        if (selectedClient && selectedClient !== 'all') blQuery = blQuery.eq('client_id', selectedClient)
+
+        const [wlRes, blRes] = await Promise.all([wlQuery, blQuery])
+
+        if (wlRes.data) {
+          let rows = wlRes.data.map(r => {
+            const gameObj = (r as Record<string, unknown>).game as { name: string; client_id: string } | null
+            return {
+              game: gameObj?.name || 'Unknown',
+              gameId: r.game_id as string,
+              date: r.date as string,
+              additions: (r.additions as number) || 0,
+              deletions: (r.deletions as number) || 0,
+              purchases: (r.purchases_and_activations as number) || 0,
+              gifts: (r.gifts as number) || 0,
+            }
           })
+          // Filter by selected product (game name)
+          if (selectedProduct && selectedProduct !== 'all') {
+            rows = rows.filter(r => r.game === selectedProduct)
+          }
+          setWishlistData(rows)
+        } else {
+          setWishlistData([])
         }
 
-        if (blRes.data && blRes.data.length > 0) {
-          const bundleNames = new Set(blRes.data.map(r => r.bundle_name))
-          setBundleStats({
-            totalBundles: bundleNames.size,
-            netRevenue: blRes.data.reduce((s, r) => s + (Number(r.net_revenue_usd) || 0), 0),
-            netUnits: blRes.data.reduce((s, r) => s + (Number(r.net_units) || 0), 0),
+        if (blRes.data) {
+          let bRows = blRes.data.map(r => {
+            const gameObj = (r as Record<string, unknown>).game as { name: string; client_id: string } | null
+            return {
+              bundleName: r.bundle_name as string,
+              gameId: r.game_id as string,
+              game: gameObj?.name || 'Unknown',
+              date: r.date as string,
+              netUnits: Number(r.net_units) || 0,
+              netRevenue: Number(r.net_revenue_usd) || 0,
+            }
           })
+          if (selectedProduct && selectedProduct !== 'all') {
+            bRows = bRows.filter(r => r.game === selectedProduct)
+          }
+          setBundleData(bRows)
+        } else {
+          setBundleData([])
         }
       } catch (err) {
         console.error('Failed to load wishlist data:', err)
       }
     }
     fetchWishlistData()
-  }, [supabase, selectedClient])
+  }, [supabase, selectedClient, selectedProduct, dateRange])
 
   // Fetch all clients and build platform connectivity map
   useEffect(() => {
@@ -2317,120 +2338,174 @@ export default function AnalyticsPage() {
   }
 
   // Render wishlist & bundles widget
+  // Compute wishlist stats from filtered data
+  const wlTotalAdds = wishlistData.reduce((s, r) => s + r.additions, 0)
+  const wlTotalDels = wishlistData.reduce((s, r) => s + r.deletions, 0)
+  const wlTotalPurchases = wishlistData.reduce((s, r) => s + r.purchases, 0)
+  const wlTotalGifts = wishlistData.reduce((s, r) => s + r.gifts, 0)
+  const wlGameNames = new Set(wishlistData.map(r => r.game))
+  const wlHasData = wishlistData.length > 0
+  const blHasData = bundleData.length > 0
+  const blBundleNames = new Set(bundleData.map(r => r.bundleName))
+  const blTotalRevenue = bundleData.reduce((s, r) => s + r.netRevenue, 0)
+  const blTotalUnits = bundleData.reduce((s, r) => s + r.netUnits, 0)
+
   const renderWishlistWidget = () => {
-    const hasWl = wishlistStats && wishlistStats.dataPoints > 0
-    const hasBl = bundleStats && bundleStats.totalBundles > 0
+    if (!wlHasData && !blHasData) return null
 
-    if (!hasWl && !hasBl) {
-      return (
-        <div style={{ padding: '32px', textAlign: 'center', color: '#94a3b8' }}>
-          <div style={{ fontSize: '24px', marginBottom: '8px' }}>&#x2764;</div>
-          <p style={{ fontSize: '14px', fontWeight: 500, marginBottom: '4px' }}>No Wishlist or Bundle Data Yet</p>
-          <p style={{ fontSize: '12px' }}>Go to <a href="/analytics/wishlists" style={{ color: '#2563eb', textDecoration: 'underline' }}>Wishlists & Bundles</a> to sync from Steam API or import CSV data.</p>
-        </div>
-      )
-    }
-
-    // Mini chart — aggregate additions by date across all games
-    const dateMap = new Map<string, {adds: number; dels: number; purch: number}>()
+    // Chart data — aggregate by date across filtered games
+    const dateMap = new Map<string, {adds: number; dels: number; purch: number; gifts: number}>()
     for (const r of wishlistData) {
-      const existing = dateMap.get(r.date) || { adds: 0, dels: 0, purch: 0 }
+      const existing = dateMap.get(r.date) || { adds: 0, dels: 0, purch: 0, gifts: 0 }
       existing.adds += r.additions
       existing.dels += r.deletions
       existing.purch += r.purchases
+      existing.gifts += r.gifts
       dateMap.set(r.date, existing)
     }
     const chartData = Array.from(dateMap.entries()).sort((a, b) => a[0].localeCompare(b[0]))
     const maxVal = Math.max(...chartData.map(([, d]) => Math.max(d.adds, d.dels, d.purch)), 1)
     const niceMax = Math.ceil(maxVal / 100) * 100
 
-    const cW = 520
-    const cH = 160
-    const cPad = { top: 10, right: 10, bottom: 24, left: 45 }
+    const cW = 700
+    const cH = 200
+    const cPad = { top: 12, right: 12, bottom: 28, left: 50 }
     const plotW = cW - cPad.left - cPad.right
     const plotH = cH - cPad.top - cPad.bottom
     const xStep = chartData.length > 1 ? plotW / (chartData.length - 1) : plotW
     const yScale = (v: number) => cPad.top + plotH - (v / niceMax) * plotH
 
-    const makeLine = (getter: (d: {adds: number; dels: number; purch: number}) => number) =>
+    const makeLine = (getter: (d: {adds: number; dels: number; purch: number; gifts: number}) => number) =>
       chartData.map(([, d], i) => `${i === 0 ? 'M' : 'L'}${cPad.left + i * xStep},${yScale(getter(d))}`).join(' ')
 
     const fmt = (n: number) => n >= 1000 ? `${(n/1000).toFixed(n >= 10000 ? 0 : 1)}k` : String(n)
+    const fmtFull = (n: number) => n.toLocaleString('en-US')
+
+    // Per-game breakdown for table
+    const gameStats = Array.from(wlGameNames).map(name => {
+      const rows = wishlistData.filter(r => r.game === name)
+      return {
+        name,
+        adds: rows.reduce((s, r) => s + r.additions, 0),
+        dels: rows.reduce((s, r) => s + r.deletions, 0),
+        purch: rows.reduce((s, r) => s + r.purchases, 0),
+        gifts: rows.reduce((s, r) => s + r.gifts, 0),
+        days: rows.length,
+      }
+    }).sort((a, b) => b.adds - a.adds)
 
     return (
-      <div style={{ display: 'flex', gap: '20px', padding: '4px 0' }}>
-        {/* Left: stats */}
-        <div style={{ minWidth: '200px' }}>
-          {hasWl && (
-            <>
-              <div style={{ fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Wishlists ({wishlistStats.games} game{wishlistStats.games !== 1 ? 's' : ''})</div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '14px' }}>
-                <div style={{ padding: '8px', backgroundColor: '#f0fdf4', borderRadius: '8px' }}>
-                  <div style={{ fontSize: '18px', fontWeight: 700, color: '#16a34a' }}>+{fmt(wishlistStats.totalAdds)}</div>
-                  <div style={{ fontSize: '10px', color: '#64748b' }}>Additions</div>
-                </div>
-                <div style={{ padding: '8px', backgroundColor: '#fef2f2', borderRadius: '8px' }}>
-                  <div style={{ fontSize: '18px', fontWeight: 700, color: '#dc2626' }}>-{fmt(wishlistStats.totalDels)}</div>
-                  <div style={{ fontSize: '10px', color: '#64748b' }}>Deletions</div>
-                </div>
-                <div style={{ padding: '8px', backgroundColor: '#eff6ff', borderRadius: '8px' }}>
-                  <div style={{ fontSize: '18px', fontWeight: 700, color: '#2563eb' }}>{fmt(wishlistStats.totalPurchases)}</div>
-                  <div style={{ fontSize: '10px', color: '#64748b' }}>Purchases</div>
-                </div>
-                <div style={{ padding: '8px', backgroundColor: '#f8fafc', borderRadius: '8px' }}>
-                  <div style={{ fontSize: '18px', fontWeight: 700, color: wishlistStats.totalAdds - wishlistStats.totalDels >= 0 ? '#16a34a' : '#dc2626' }}>
-                    {wishlistStats.totalAdds - wishlistStats.totalDels >= 0 ? '+' : ''}{fmt(wishlistStats.totalAdds - wishlistStats.totalDels)}
-                  </div>
-                  <div style={{ fontSize: '10px', color: '#64748b' }}>Net Change</div>
-                </div>
-              </div>
-            </>
-          )}
-          {hasBl && (
-            <>
-              <div style={{ fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Bundles</div>
-              <div style={{ padding: '8px', backgroundColor: '#faf5ff', borderRadius: '8px', marginBottom: '8px' }}>
-                <div style={{ fontSize: '16px', fontWeight: 700, color: '#7c3aed' }}>{bundleStats.totalBundles} bundle{bundleStats.totalBundles !== 1 ? 's' : ''}</div>
-                <div style={{ fontSize: '11px', color: '#64748b' }}>{fmt(bundleStats.netUnits)} units &middot; ${bundleStats.netRevenue.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} net</div>
-              </div>
-            </>
-          )}
-          <a href="/analytics/wishlists" style={{ fontSize: '12px', color: '#2563eb', textDecoration: 'none', fontWeight: 500 }}>View full details &rarr;</a>
+      <div>
+        {/* Stats row */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '12px', marginBottom: '20px' }}>
+          <div style={{ padding: '12px 16px', backgroundColor: '#f0fdf4', borderRadius: '10px' }}>
+            <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 500, marginBottom: '4px' }}>Additions</div>
+            <div style={{ fontSize: '24px', fontWeight: 700, color: '#16a34a' }}>+{fmtFull(wlTotalAdds)}</div>
+          </div>
+          <div style={{ padding: '12px 16px', backgroundColor: '#fef2f2', borderRadius: '10px' }}>
+            <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 500, marginBottom: '4px' }}>Deletions</div>
+            <div style={{ fontSize: '24px', fontWeight: 700, color: '#dc2626' }}>-{fmtFull(wlTotalDels)}</div>
+          </div>
+          <div style={{ padding: '12px 16px', backgroundColor: '#eff6ff', borderRadius: '10px' }}>
+            <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 500, marginBottom: '4px' }}>Purchases</div>
+            <div style={{ fontSize: '24px', fontWeight: 700, color: '#2563eb' }}>{fmtFull(wlTotalPurchases)}</div>
+          </div>
+          <div style={{ padding: '12px 16px', backgroundColor: '#faf5ff', borderRadius: '10px' }}>
+            <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 500, marginBottom: '4px' }}>Gifts</div>
+            <div style={{ fontSize: '24px', fontWeight: 700, color: '#7c3aed' }}>{fmtFull(wlTotalGifts)}</div>
+          </div>
+          <div style={{ padding: '12px 16px', backgroundColor: wlTotalAdds - wlTotalDels >= 0 ? '#f0fdf4' : '#fef2f2', borderRadius: '10px' }}>
+            <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 500, marginBottom: '4px' }}>Net Change</div>
+            <div style={{ fontSize: '24px', fontWeight: 700, color: wlTotalAdds - wlTotalDels >= 0 ? '#16a34a' : '#dc2626' }}>
+              {wlTotalAdds - wlTotalDels >= 0 ? '+' : ''}{fmtFull(wlTotalAdds - wlTotalDels)}
+            </div>
+          </div>
         </div>
 
-        {/* Right: mini chart */}
+        {/* Chart */}
         {chartData.length >= 2 && (
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <svg viewBox={`0 0 ${cW} ${cH}`} width="100%" style={{ maxHeight: '180px' }}>
-              {/* Grid */}
+          <div style={{ marginBottom: '20px' }}>
+            <svg viewBox={`0 0 ${cW} ${cH}`} width="100%" style={{ maxHeight: '220px' }}>
               {[0, 0.25, 0.5, 0.75, 1].map((pct, i) => {
                 const y = cPad.top + plotH * (1 - pct)
                 return <line key={i} x1={cPad.left} y1={y} x2={cW - cPad.right} y2={y} stroke="#f1f5f9" strokeWidth={1} />
               })}
-              {/* Y labels */}
-              {[0, 0.5, 1].map((pct, i) => {
+              {[0, 0.25, 0.5, 0.75, 1].map((pct, i) => {
                 const v = Math.round(niceMax * pct)
                 const y = cPad.top + plotH * (1 - pct)
-                return <text key={i} x={cPad.left - 6} y={y + 3} textAnchor="end" fontSize={9} fill="#94a3b8">{fmt(v)}</text>
+                return <text key={i} x={cPad.left - 6} y={y + 3} textAnchor="end" fontSize={10} fill="#94a3b8">{fmt(v)}</text>
               })}
-              {/* Area */}
               <path d={`${makeLine(d => d.adds)} L${cPad.left + (chartData.length - 1) * xStep},${cPad.top + plotH} L${cPad.left},${cPad.top + plotH} Z`} fill="#16a34a" opacity={0.06} />
-              {/* Lines */}
-              <path d={makeLine(d => d.adds)} fill="none" stroke="#16a34a" strokeWidth={1.5} />
-              <path d={makeLine(d => d.dels)} fill="none" stroke="#dc2626" strokeWidth={1} strokeDasharray="3 2" />
-              <path d={makeLine(d => d.purch)} fill="none" stroke="#2563eb" strokeWidth={1.5} />
-              {/* X labels */}
-              {chartData.filter((_, i) => i % Math.max(1, Math.floor(chartData.length / 6)) === 0 || i === chartData.length - 1).map(([date], idx) => {
+              <path d={makeLine(d => d.adds)} fill="none" stroke="#16a34a" strokeWidth={2} />
+              <path d={makeLine(d => d.dels)} fill="none" stroke="#dc2626" strokeWidth={1.5} strokeDasharray="4 2" />
+              <path d={makeLine(d => d.purch)} fill="none" stroke="#2563eb" strokeWidth={2} />
+              {chartData.filter((_, i) => i % Math.max(1, Math.floor(chartData.length / 8)) === 0 || i === chartData.length - 1).map(([date], idx) => {
                 const origIdx = chartData.findIndex(([d]) => d === date)
                 const x = cPad.left + origIdx * xStep
                 const d = new Date(date + 'T00:00:00')
-                return <text key={idx} x={x} y={cH - 4} textAnchor="middle" fontSize={8} fill="#94a3b8">{d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</text>
+                return <text key={idx} x={x} y={cH - 6} textAnchor="middle" fontSize={9} fill="#94a3b8">{d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</text>
               })}
             </svg>
-            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', marginTop: '2px' }}>
-              <span style={{ fontSize: '10px', color: '#64748b' }}><span style={{ display: 'inline-block', width: 8, height: 2, backgroundColor: '#16a34a', borderRadius: 1, marginRight: 3, verticalAlign: 'middle' }}></span>Adds</span>
-              <span style={{ fontSize: '10px', color: '#64748b' }}><span style={{ display: 'inline-block', width: 8, height: 2, backgroundColor: '#dc2626', borderRadius: 1, marginRight: 3, verticalAlign: 'middle' }}></span>Dels</span>
-              <span style={{ fontSize: '10px', color: '#64748b' }}><span style={{ display: 'inline-block', width: 8, height: 2, backgroundColor: '#2563eb', borderRadius: 1, marginRight: 3, verticalAlign: 'middle' }}></span>Purchases</span>
+            <div style={{ display: 'flex', gap: '16px', justifyContent: 'center', marginTop: '4px' }}>
+              <span style={{ fontSize: '11px', color: '#64748b' }}><span style={{ display: 'inline-block', width: 12, height: 2, backgroundColor: '#16a34a', borderRadius: 1, marginRight: 4, verticalAlign: 'middle' }}></span>Additions</span>
+              <span style={{ fontSize: '11px', color: '#64748b' }}><span style={{ display: 'inline-block', width: 12, height: 2, backgroundColor: '#dc2626', borderRadius: 1, marginRight: 4, verticalAlign: 'middle', borderTop: '1px dashed #dc2626' }}></span>Deletions</span>
+              <span style={{ fontSize: '11px', color: '#64748b' }}><span style={{ display: 'inline-block', width: 12, height: 2, backgroundColor: '#2563eb', borderRadius: 1, marginRight: 4, verticalAlign: 'middle' }}></span>Purchases</span>
+            </div>
+          </div>
+        )}
+
+        {/* Per-game breakdown table */}
+        {gameStats.length > 1 && (
+          <div style={{ marginBottom: blHasData ? '20px' : '0' }}>
+            <div style={{ fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Per-Game Breakdown</div>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
+                  <th style={{ textAlign: 'left', padding: '6px 8px', color: '#64748b', fontWeight: 500, fontSize: '11px' }}>Game</th>
+                  <th style={{ textAlign: 'right', padding: '6px 8px', color: '#64748b', fontWeight: 500, fontSize: '11px' }}>Additions</th>
+                  <th style={{ textAlign: 'right', padding: '6px 8px', color: '#64748b', fontWeight: 500, fontSize: '11px' }}>Deletions</th>
+                  <th style={{ textAlign: 'right', padding: '6px 8px', color: '#64748b', fontWeight: 500, fontSize: '11px' }}>Purchases</th>
+                  <th style={{ textAlign: 'right', padding: '6px 8px', color: '#64748b', fontWeight: 500, fontSize: '11px' }}>Gifts</th>
+                  <th style={{ textAlign: 'right', padding: '6px 8px', color: '#64748b', fontWeight: 500, fontSize: '11px' }}>Net</th>
+                  <th style={{ textAlign: 'right', padding: '6px 8px', color: '#64748b', fontWeight: 500, fontSize: '11px' }}>Days</th>
+                </tr>
+              </thead>
+              <tbody>
+                {gameStats.map(g => (
+                  <tr key={g.name} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                    <td style={{ padding: '6px 8px', fontWeight: 500, color: '#1e293b' }}>{g.name}</td>
+                    <td style={{ textAlign: 'right', padding: '6px 8px', color: '#16a34a' }}>+{fmtFull(g.adds)}</td>
+                    <td style={{ textAlign: 'right', padding: '6px 8px', color: '#dc2626' }}>-{fmtFull(g.dels)}</td>
+                    <td style={{ textAlign: 'right', padding: '6px 8px', color: '#2563eb' }}>{fmtFull(g.purch)}</td>
+                    <td style={{ textAlign: 'right', padding: '6px 8px', color: '#7c3aed' }}>{fmtFull(g.gifts)}</td>
+                    <td style={{ textAlign: 'right', padding: '6px 8px', fontWeight: 600, color: g.adds - g.dels >= 0 ? '#16a34a' : '#dc2626' }}>
+                      {g.adds - g.dels >= 0 ? '+' : ''}{fmtFull(g.adds - g.dels)}
+                    </td>
+                    <td style={{ textAlign: 'right', padding: '6px 8px', color: '#64748b' }}>{g.days}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* Bundle section */}
+        {blHasData && (
+          <div>
+            <div style={{ fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Bundle Performance</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
+              <div style={{ padding: '12px 16px', backgroundColor: '#faf5ff', borderRadius: '10px' }}>
+                <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 500, marginBottom: '4px' }}>Active Bundles</div>
+                <div style={{ fontSize: '24px', fontWeight: 700, color: '#7c3aed' }}>{blBundleNames.size}</div>
+              </div>
+              <div style={{ padding: '12px 16px', backgroundColor: '#f8fafc', borderRadius: '10px' }}>
+                <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 500, marginBottom: '4px' }}>Net Units</div>
+                <div style={{ fontSize: '24px', fontWeight: 700, color: '#1e293b' }}>{fmtFull(blTotalUnits)}</div>
+              </div>
+              <div style={{ padding: '12px 16px', backgroundColor: '#f0fdf4', borderRadius: '10px' }}>
+                <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 500, marginBottom: '4px' }}>Net Revenue</div>
+                <div style={{ fontSize: '24px', fontWeight: 700, color: '#16a34a' }}>${blTotalRevenue.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</div>
+              </div>
             </div>
           </div>
         )}
@@ -2736,8 +2811,8 @@ export default function AnalyticsPage() {
           </>
         )}
 
-        {/* Wishlist & Bundle widget — always shows when data exists, regardless of sales data */}
-        {wishlistStats && wishlistStats.dataPoints > 0 && (
+        {/* Wishlist & Bundle widget — always shows when data exists, respects all filters */}
+        {(wlHasData || blHasData) && (
           <div style={{
             backgroundColor: '#fff',
             borderRadius: '12px',
@@ -2747,8 +2822,11 @@ export default function AnalyticsPage() {
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
               <span style={{ fontSize: '18px' }}>&#x2764;</span>
-              <h3 style={{ fontSize: '16px', fontWeight: 600, color: '#1e293b', margin: 0 }}>Steam Wishlists & Bundles</h3>
-              <span style={{ fontSize: '12px', color: '#94a3b8', marginLeft: 'auto' }}>{wishlistStats.dataPoints} data points &middot; {wishlistStats.games} game{wishlistStats.games !== 1 ? 's' : ''}</span>
+              <h3 style={{ fontSize: '16px', fontWeight: 600, color: '#1e293b', margin: 0 }}>Steam Wishlists{blHasData ? ' & Bundles' : ''}</h3>
+              <span style={{ fontSize: '12px', color: '#94a3b8', marginLeft: 'auto' }}>
+                {wishlistData.length} data points &middot; {wlGameNames.size} game{wlGameNames.size !== 1 ? 's' : ''}
+                {selectedProduct !== 'all' && <> &middot; filtered to {selectedProduct}</>}
+              </span>
             </div>
             {renderWishlistWidget()}
           </div>
