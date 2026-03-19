@@ -906,10 +906,10 @@ export default function CoverageFeedPage() {
                                       fetchItems()
                                     } catch (err) { console.error('Blacklist error:', err) }
                                   }}
-                                  title="Blacklist a keyword from this item"
-                                  style={{ padding: '3px 6px', backgroundColor: 'white', color: '#94a3b8', border: '1px solid #e2e8f0', borderRadius: '4px', fontSize: '11px', cursor: 'pointer' }}
+                                  title="Blacklist a keyword — future items matching it will be hidden"
+                                  style={{ padding: '3px 8px', backgroundColor: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', borderRadius: '4px', fontSize: '11px', cursor: 'pointer', fontWeight: 500 }}
                                 >
-                                  BL
+                                  &#x26D4; Blacklist
                                 </button>
                                 <button
                                   onClick={() => handleDelete(item.id)}
