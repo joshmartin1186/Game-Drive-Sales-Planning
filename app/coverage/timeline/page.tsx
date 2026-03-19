@@ -199,13 +199,22 @@ export default function TimelinePage() {
     if (canView) fetchAnnotations()
   }, [canView, fetchAnnotations])
 
-  // Handle right-click on a day cell to open inline annotation popover
-  const handleDayContextMenu = useCallback((e: React.MouseEvent, day: string) => {
-    e.preventDefault()
-    setInlineAnnotation({ day, x: e.clientX, y: e.clientY })
+  // Open annotation popover for a day — used by double-click on cells and buttons
+  const openAnnotationForDay = useCallback((day: string, x?: number, y?: number) => {
+    // If no coordinates provided (from a button click), center the popover on screen
+    const posX = x ?? Math.round(window.innerWidth / 2 - 160)
+    const posY = y ?? Math.round(window.innerHeight / 3)
+    setInlineAnnotation({ day, x: posX, y: posY })
     setInlineForm({ event_type: 'pr_mention', outlet_or_source: '', observed_effect: 'unknown', confidence: 'suspected', notes: '' })
     setEditingAnnotation(null)
   }, [])
+
+  // Handle double-click on a day cell to open inline annotation popover
+  const handleDayDoubleClick = useCallback((e: React.MouseEvent, day: string) => {
+    e.preventDefault()
+    e.stopPropagation()
+    openAnnotationForDay(day, e.clientX, e.clientY)
+  }, [openAnnotationForDay])
 
   // Open popover to edit an existing annotation
   const handleEditAnnotation = useCallback((e: React.MouseEvent, annotation: typeof annotations[0]) => {
@@ -582,20 +591,13 @@ export default function TimelinePage() {
             </button>
 
             <button
-              onClick={() => {
-                setAnnotationPrefill({
-                  game_id: gameFilter || undefined,
-                  client_id: clientFilter || undefined,
-                  event_date: selectedDay || new Date().toISOString().split('T')[0],
-                })
-                setShowAnnotationSidebar(true)
-              }}
+              onClick={() => openAnnotationForDay(selectedDay || new Date().toISOString().split('T')[0])}
               style={{
                 padding: '6px 12px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: 'pointer',
-                backgroundColor: '#2563eb', color: 'white', border: '1px solid #2563eb',
+                backgroundColor: '#f59e0b', color: 'white', border: '1px solid #f59e0b',
               }}
             >
-              + Log PR Insight
+              + Add Annotation
             </button>
           </div>
 
@@ -811,8 +813,8 @@ export default function TimelinePage() {
                                 <div
                                   key={di}
                                   onClick={() => { setSelectedDay(day); setSelectedItem(null) }}
-                                  onContextMenu={(e) => handleDayContextMenu(e, day)}
-                                  title={`${day}: ${count} item${count !== 1 ? 's' : ''}${hasAnnotations ? ` · ${dayAnnotations.length} annotation(s) — right-click to add` : ' — right-click to add annotation'}`}
+                                  onDoubleClick={(e) => handleDayDoubleClick(e, day)}
+                                  title={`${day}: ${count} item${count !== 1 ? 's' : ''}${hasAnnotations ? ` · ${dayAnnotations.length} annotation(s)` : ''} — double-click to annotate`}
                                   style={{
                                     aspectRatio: '1',
                                     borderRadius: '4px',
@@ -928,7 +930,7 @@ export default function TimelinePage() {
                       </div>
                     )}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#94a3b8', fontStyle: 'italic' }}>
-                      <span>Right-click any day to add annotation</span>
+                      <span>Double-click any day to add annotation</span>
                     </div>
                   </div>
                 </div>
@@ -1073,7 +1075,7 @@ export default function TimelinePage() {
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
                           <div style={{ fontSize: '11px', fontWeight: 600, color: '#92400e' }}>PR Annotations</div>
                           <button
-                            onClick={(e) => handleDayContextMenu(e as unknown as React.MouseEvent, selectedDay)}
+                            onClick={() => openAnnotationForDay(selectedDay)}
                             style={{
                               fontSize: '11px', padding: '2px 8px', borderRadius: '4px', cursor: 'pointer',
                               backgroundColor: '#fef3c7', color: '#92400e', border: '1px solid #fde68a', fontWeight: 500,
@@ -1121,7 +1123,7 @@ export default function TimelinePage() {
                     {/* Add annotation button when no annotations exist */}
                     {showAnnotations && selectedDay && (!annotationsByDate[selectedDay] || annotationsByDate[selectedDay].length === 0) && (
                       <button
-                        onClick={(e) => handleDayContextMenu(e as unknown as React.MouseEvent, selectedDay)}
+                        onClick={() => openAnnotationForDay(selectedDay)}
                         style={{
                           width: '100%', padding: '10px', borderRadius: '8px', cursor: 'pointer',
                           backgroundColor: '#fffbeb', color: '#92400e', border: '1px dashed #fde68a',
