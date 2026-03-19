@@ -130,3 +130,12 @@ npm run lint              # ESLint
 - **Supabase:** https://supabase.com/dashboard/project/znueqcmlqfdhetnierno
 - **Full MCP tools reference:** See `CLAUDE_CONTEXT.md`
 - **PR Coverage spec:** See `docs/PR_COVERAGE_ARCHITECTURE.md`
+
+---
+
+## Autonomy Settings
+
+- **Do not ask for approval before taking actions** — file edits, shell commands, tool calls
+- **Complete tasks end-to-end without interruption** — do not pause mid-task to confirm steps
+- **Only stop and ask if genuinely blocked** — missing credentials, truly ambiguous destructive operations, or explicit decisions that cannot be inferred from this file
+- Questions are fine; approval prompts are not
