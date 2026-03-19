@@ -68,6 +68,74 @@ export default function AnalyticsPage() {
   const [wishlistData, setWishlistData] = useState<{game: string; gameId: string; date: string; additions: number; deletions: number; purchases: number; gifts: number}[]>([])
   const [bundleData, setBundleData] = useState<{bundleName: string; gameId: string; game: string; date: string; netUnits: number; netRevenue: number}[]>([])
 
+  // AI Insights state
+  const [insightsExpanded, setInsightsExpanded] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('gd-insights-expanded') === 'true'
+    }
+    return false
+  })
+  const [insights, setInsights] = useState<{id: string; insight_type: string; insight_text: string; supporting_annotation_ids: string[]; generated_at: string}[]>([])
+  const [insightsLoading, setInsightsLoading] = useState(false)
+  const [refreshingInsights, setRefreshingInsights] = useState(false)
+
+  // Persist insights expanded state
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('gd-insights-expanded', String(insightsExpanded))
+    }
+  }, [insightsExpanded])
+
+  // Fetch AI insights
+  useEffect(() => {
+    const fetchInsights = async () => {
+      const params = new URLSearchParams()
+      if (selectedClient && selectedClient !== 'all') params.set('client_id', selectedClient)
+      try {
+        const res = await fetch(`/api/pr-insights?${params}`)
+        if (res.ok) {
+          const data = await res.json()
+          setInsights(data.insights || [])
+        }
+      } catch { /* ignore */ }
+    }
+    fetchInsights()
+  }, [selectedClient])
+
+  const handleRefreshInsights = async () => {
+    setRefreshingInsights(true)
+    try {
+      const body: Record<string, string> = {}
+      if (selectedClient && selectedClient !== 'all') body.client_id = selectedClient
+      await fetch('/api/pr-insights', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      // Re-fetch
+      const params = new URLSearchParams()
+      if (selectedClient && selectedClient !== 'all') params.set('client_id', selectedClient)
+      const res = await fetch(`/api/pr-insights?${params}`)
+      if (res.ok) {
+        const data = await res.json()
+        setInsights(data.insights || [])
+      }
+    } catch (err) {
+      console.error('Refresh insights failed:', err)
+    } finally {
+      setRefreshingInsights(false)
+    }
+  }
+
+  const handleDismissInsight = async (id: string) => {
+    setInsights(prev => prev.filter(i => i.id !== id))
+    await fetch('/api/pr-insights', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, is_dismissed: true }),
+    })
+  }
+
   // Fetch wishlist & bundle data — respects all analytics filters
   useEffect(() => {
     const fetchWishlistData = async () => {
@@ -2674,6 +2742,81 @@ export default function AnalyticsPage() {
             No committed sales calendar. Period analysis uses price detection only.
           </div>
         ) : null}
+
+        {/* AI Insights Card */}
+        {insights.length > 0 && (
+          <div style={{
+            backgroundColor: 'white', borderRadius: '10px', padding: insightsExpanded ? '16px 20px' : '12px 20px',
+            boxShadow: '0 1px 2px rgba(0,0,0,0.05)', marginBottom: '16px',
+            border: '1px solid #e0e7ff', transition: 'all 0.2s'
+          }}>
+            <div
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}
+              onClick={() => setInsightsExpanded(!insightsExpanded)}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '16px' }}>🧠</span>
+                <span style={{ fontSize: '14px', fontWeight: 600, color: '#1e293b' }}>AI Insights</span>
+                <span style={{ fontSize: '12px', color: '#6366f1', backgroundColor: '#eef2ff', padding: '2px 8px', borderRadius: '10px', fontWeight: 500 }}>
+                  {insights.length}
+                </span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                {insightsExpanded && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleRefreshInsights() }}
+                    disabled={refreshingInsights}
+                    style={{
+                      padding: '4px 10px', fontSize: '11px', fontWeight: 500,
+                      backgroundColor: '#eef2ff', color: '#4f46e5', border: '1px solid #c7d2fe',
+                      borderRadius: '4px', cursor: refreshingInsights ? 'not-allowed' : 'pointer',
+                      opacity: refreshingInsights ? 0.6 : 1
+                    }}
+                  >
+                    {refreshingInsights ? 'Generating...' : 'Refresh Insights'}
+                  </button>
+                )}
+                <svg width="16" height="16" fill="none" stroke="#64748b" viewBox="0 0 24 24"
+                  style={{ transform: insightsExpanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </div>
+            </div>
+            {insightsExpanded && (
+              <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                {insights.slice(0, 5).map(insight => (
+                  <div key={insight.id} style={{
+                    padding: '10px 14px', backgroundColor: '#fafbff', borderRadius: '8px',
+                    border: '1px solid #e0e7ff', display: 'flex', gap: '12px', alignItems: 'flex-start'
+                  }}>
+                    <span style={{ fontSize: '14px', flexShrink: 0 }}>
+                      {insight.insight_type === 'outlet_pattern' ? '📰' :
+                       insight.insight_type === 'timing_pattern' ? '⏱️' :
+                       insight.insight_type === 'genre_pattern' ? '🎮' : '💡'}
+                    </span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ fontSize: '13px', color: '#1e293b', margin: 0, lineHeight: 1.5 }}>{insight.insight_text}</p>
+                      <p style={{ fontSize: '11px', color: '#94a3b8', margin: '4px 0 0 0' }}>
+                        Based on {insight.supporting_annotation_ids?.length || 0} confirmed annotation{(insight.supporting_annotation_ids?.length || 0) !== 1 ? 's' : ''}
+                        {' · '}{new Date(insight.generated_at).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => handleDismissInsight(insight.id)}
+                      style={{
+                        padding: '2px 6px', fontSize: '11px', color: '#94a3b8', background: 'none',
+                        border: '1px solid #e2e8f0', borderRadius: '4px', cursor: 'pointer', flexShrink: 0
+                      }}
+                      title="Dismiss"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {isLoading ? (
           <div className={styles.statsGrid}>

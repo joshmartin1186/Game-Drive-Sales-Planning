@@ -47,6 +47,10 @@
     {
       "path": "/api/cron/sullygnome-scan",
       "schedule": "0 4 * * 1"
+    },
+    {
+      "path": "/api/cron/correlation-detect",
+      "schedule": "15 */6 * * *"
     }
   ],
   "buildCommand": "next build"

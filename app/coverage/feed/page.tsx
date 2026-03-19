@@ -5,6 +5,7 @@ import { Sidebar } from '../../components/Sidebar'
 import { useAuth } from '@/lib/auth-context'
 import { CoverageNav } from '../components/CoverageNav'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import AnnotationSidebar, { CorrelationCandidate } from '@/app/components/AnnotationSidebar'
 
 function getOutletDisplayName(item: CoverageItem): string {
   if (item.outlet?.name && item.outlet.name !== 'Unknown') return item.outlet.name
@@ -154,8 +155,14 @@ export default function CoverageFeedPage() {
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
 
   // View mode
-  const [viewMode, setViewMode] = useState<'all' | 'pending'>('all')
+  const [viewMode, setViewMode] = useState<'all' | 'pending' | 'correlations'>('all')
   const [hideDuplicates, setHideDuplicates] = useState(false)
+
+  // Correlations
+  const [correlationCandidates, setCorrelationCandidates] = useState<CorrelationCandidate[]>([])
+  const [correlationCount, setCorrelationCount] = useState(0)
+  const [selectedCandidate, setSelectedCandidate] = useState<CorrelationCandidate | null>(null)
+  const [showAnnotationSidebar, setShowAnnotationSidebar] = useState(false)
 
   // Selection
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -241,6 +248,54 @@ export default function CoverageFeedPage() {
   useEffect(() => {
     if (canView) fetchItems()
   }, [canView, fetchItems])
+
+  // Fetch correlation candidates
+  const fetchCorrelations = useCallback(async () => {
+    try {
+      const res = await fetch('/api/correlation-candidates?status=pending')
+      if (res.ok) {
+        const json = await res.json()
+        const data = json.data || json || []
+        setCorrelationCandidates(Array.isArray(data) ? data : [])
+        setCorrelationCount(Array.isArray(data) ? data.length : 0)
+      }
+    } catch (err) {
+      console.error('Failed to fetch correlation candidates:', err)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (canView) fetchCorrelations()
+  }, [canView, fetchCorrelations])
+
+  useEffect(() => {
+    if (viewMode === 'correlations') fetchCorrelations()
+  }, [viewMode, fetchCorrelations])
+
+  // Correlation actions
+  const handleCorrelationAction = async (id: string, status: 'rejected' | 'inconclusive') => {
+    try {
+      await fetch('/api/correlation-candidates', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, status })
+      })
+      fetchCorrelations()
+    } catch (err) {
+      console.error('Failed to update correlation candidate:', err)
+    }
+  }
+
+  const handleCorrelationApprove = (candidate: CorrelationCandidate) => {
+    setSelectedCandidate(candidate)
+    setShowAnnotationSidebar(true)
+  }
+
+  const getConfidenceLabel = (score: number): { label: string; bg: string; color: string } => {
+    if (score >= 0.7) return { label: 'high', bg: '#dcfce7', color: '#166534' }
+    if (score >= 0.4) return { label: 'medium', bg: '#fef9c3', color: '#854d0e' }
+    return { label: 'low', bg: '#fee2e2', color: '#dc2626' }
+  }
 
   // Actions
   const handleApprove = async (id: string) => {
@@ -461,6 +516,17 @@ export default function CoverageFeedPage() {
               Review Queue ({pendingCount})
             </button>
             <button
+              onClick={() => setViewMode('correlations')}
+              style={{
+                padding: '8px 16px', borderRadius: '8px', fontSize: '13px', fontWeight: 500, cursor: 'pointer',
+                backgroundColor: viewMode === 'correlations' ? '#7c3aed' : 'white',
+                color: viewMode === 'correlations' ? 'white' : '#475569',
+                border: viewMode === 'correlations' ? '1px solid #7c3aed' : '1px solid #e2e8f0'
+              }}
+            >
+              Correlations ({correlationCount})
+            </button>
+            <button
               onClick={() => setHideDuplicates(!hideDuplicates)}
               style={{
                 padding: '8px 16px', borderRadius: '8px', fontSize: '13px', fontWeight: 500, cursor: 'pointer',
@@ -485,8 +551,114 @@ export default function CoverageFeedPage() {
             </div>
           </div>
 
+          {/* Correlations View */}
+          {viewMode === 'correlations' && (
+            <div style={{ backgroundColor: 'white', borderRadius: '10px', boxShadow: '0 1px 2px rgba(0,0,0,0.05)', overflow: 'hidden' }}>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                  <thead>
+                    <tr style={{ borderBottom: '2px solid #e2e8f0', backgroundColor: '#f8fafc' }}>
+                      <th style={{ textAlign: 'left', padding: '10px 12px', fontWeight: 600, color: '#475569' }}>Game</th>
+                      <th style={{ textAlign: 'left', padding: '10px 12px', fontWeight: 600, color: '#475569' }}>Event</th>
+                      <th style={{ textAlign: 'left', padding: '10px 12px', fontWeight: 600, color: '#475569' }}>Outlet / Source</th>
+                      <th style={{ textAlign: 'left', padding: '10px 12px', fontWeight: 600, color: '#475569' }}>Suspected Effect</th>
+                      <th style={{ textAlign: 'center', padding: '10px 12px', fontWeight: 600, color: '#475569' }}>Confidence</th>
+                      <th style={{ textAlign: 'right', padding: '10px 12px', fontWeight: 600, color: '#475569' }}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {correlationCandidates.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} style={{ padding: '60px 16px', textAlign: 'center', color: '#94a3b8' }}>
+                          No pending correlation candidates.
+                          <div style={{ marginTop: '8px', fontSize: '13px' }}>
+                            Candidates will appear here when the system detects potential coverage-to-sales correlations.
+                          </div>
+                        </td>
+                      </tr>
+                    ) : (
+                      correlationCandidates.map((c, i) => {
+                        const conf = getConfidenceLabel(c.detection_confidence)
+                        return (
+                          <tr key={c.id} style={{ borderBottom: '1px solid #f1f5f9', backgroundColor: i % 2 === 0 ? 'white' : '#fafbfc' }}>
+                            <td style={{ padding: '8px 12px', fontWeight: 500, color: '#1e293b' }}>
+                              {c.game?.name || '—'}
+                              {c.coverage_item?.title && (
+                                <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>
+                                  {c.coverage_item.url ? (
+                                    <a href={c.coverage_item.url} target="_blank" rel="noopener noreferrer" style={{ color: '#64748b', textDecoration: 'none' }}>
+                                      {c.coverage_item.title.length > 50 ? c.coverage_item.title.substring(0, 50) + '...' : c.coverage_item.title}
+                                    </a>
+                                  ) : c.coverage_item.title.length > 50 ? c.coverage_item.title.substring(0, 50) + '...' : c.coverage_item.title}
+                                </div>
+                              )}
+                            </td>
+                            <td style={{ padding: '8px 12px' }}>
+                              <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '9999px', backgroundColor: '#f1f5f9', color: '#475569' }}>
+                                {c.event_type.replace(/_/g, ' ')}
+                              </span>
+                              <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>
+                                {formatDate(c.event_date)}
+                              </div>
+                            </td>
+                            <td style={{ padding: '8px 12px', color: '#64748b', fontSize: '13px' }}>
+                              {c.outlet_or_source || '—'}
+                            </td>
+                            <td style={{ padding: '8px 12px' }}>
+                              <span style={{ fontWeight: 500, color: '#1e293b' }}>{c.suspected_effect.replace(/_/g, ' ')}</span>
+                              <span style={{
+                                marginLeft: '6px', fontSize: '11px', padding: '1px 6px', borderRadius: '4px',
+                                backgroundColor: c.direction === 'positive' ? '#dcfce7' : c.direction === 'negative' ? '#fee2e2' : '#f3f4f6',
+                                color: c.direction === 'positive' ? '#166534' : c.direction === 'negative' ? '#dc2626' : '#374151'
+                              }}>
+                                {c.direction}
+                              </span>
+                            </td>
+                            <td style={{ padding: '8px 12px', textAlign: 'center' }}>
+                              <span style={{
+                                fontSize: '11px', padding: '2px 8px', borderRadius: '9999px', fontWeight: 600,
+                                backgroundColor: conf.bg, color: conf.color
+                              }}>
+                                {conf.label}
+                              </span>
+                            </td>
+                            <td style={{ padding: '8px 12px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                              <div style={{ display: 'flex', gap: '4px', justifyContent: 'flex-end' }}>
+                                <button
+                                  onClick={() => handleCorrelationApprove(c)}
+                                  style={{ padding: '3px 8px', backgroundColor: '#dcfce7', color: '#166534', border: '1px solid #86efac', borderRadius: '4px', fontSize: '11px', cursor: 'pointer', fontWeight: 500 }}
+                                >
+                                  Approve
+                                </button>
+                                <button
+                                  onClick={() => handleCorrelationAction(c.id, 'rejected')}
+                                  style={{ padding: '3px 8px', backgroundColor: '#fee2e2', color: '#dc2626', border: '1px solid #fecaca', borderRadius: '4px', fontSize: '11px', cursor: 'pointer', fontWeight: 500 }}
+                                >
+                                  Reject
+                                </button>
+                                <button
+                                  onClick={() => handleCorrelationAction(c.id, 'inconclusive')}
+                                  style={{ padding: '3px 8px', backgroundColor: '#f3f4f6', color: '#475569', border: '1px solid #e2e8f0', borderRadius: '4px', fontSize: '11px', cursor: 'pointer', fontWeight: 500 }}
+                                >
+                                  Inconclusive
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        )
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+              <div style={{ padding: '12px 16px', borderTop: '1px solid #f1f5f9', fontSize: '13px', color: '#64748b' }}>
+                {correlationCandidates.length} pending correlation{correlationCandidates.length !== 1 ? 's' : ''}
+              </div>
+            </div>
+          )}
+
           {/* Filters */}
-          <div style={{
+          {viewMode !== 'correlations' && <div style={{
             backgroundColor: 'white', padding: '16px', borderRadius: '10px',
             boxShadow: '0 1px 2px rgba(0,0,0,0.05)', marginBottom: '16px'
           }}>
@@ -567,10 +739,10 @@ export default function CoverageFeedPage() {
                 </button>
               )}
             </div>
-          </div>
+          </div>}
 
           {/* Bulk actions */}
-          {canEdit && selected.size > 0 && (
+          {viewMode !== 'correlations' && canEdit && selected.size > 0 && (
             <div style={{
               backgroundColor: '#eff6ff', padding: '10px 16px', borderRadius: '8px',
               marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '12px',
@@ -608,7 +780,7 @@ export default function CoverageFeedPage() {
           )}
 
           {/* Table */}
-          <div style={{ backgroundColor: 'white', borderRadius: '10px', boxShadow: '0 1px 2px rgba(0,0,0,0.05)', overflow: 'hidden' }}>
+          {viewMode !== 'correlations' && <div style={{ backgroundColor: 'white', borderRadius: '10px', boxShadow: '0 1px 2px rgba(0,0,0,0.05)', overflow: 'hidden' }}>
             <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
                 <thead>
@@ -931,9 +1103,27 @@ export default function CoverageFeedPage() {
             <div style={{ padding: '12px 16px', borderTop: '1px solid #f1f5f9', fontSize: '13px', color: '#64748b' }}>
               Showing {items.length} of {totalCount} items
             </div>
-          </div>
+          </div>}
         </div>
       </div>
+
+      {/* Annotation Sidebar for correlation approval */}
+      <AnnotationSidebar
+        isOpen={showAnnotationSidebar}
+        onClose={() => { setShowAnnotationSidebar(false); setSelectedCandidate(null) }}
+        onSaved={() => { setShowAnnotationSidebar(false); setSelectedCandidate(null); fetchCorrelations() }}
+        candidate={selectedCandidate}
+        prefill={selectedCandidate ? {
+          game_id: selectedCandidate.game_id,
+          client_id: selectedCandidate.client_id,
+          event_date: selectedCandidate.event_date,
+          event_type: selectedCandidate.event_type,
+          outlet_or_source: selectedCandidate.outlet_or_source,
+          observed_effect: selectedCandidate.suspected_effect,
+          direction: selectedCandidate.direction,
+          confidence: selectedCandidate.detection_confidence >= 0.7 ? 'high' : selectedCandidate.detection_confidence >= 0.4 ? 'medium' : 'low',
+        } : undefined}
+      />
 
       {/* Manual Add Item Modal */}
       {showAddModal && (

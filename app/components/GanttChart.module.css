@@ -808,6 +808,234 @@
   font-size: 0.8rem;
 }
 
+/* ── Annotation Lane ─────────────────────────────────── */
+.annotationLane {
+  display: flex;
+  position: sticky;
+  top: 56px;
+  z-index: 18;
+  padding-left: 220px;
+  margin: 0;
+  background: #f0f4ff;
+  border-bottom: 2px solid #e2e8f0;
+  height: 32px;
+  min-height: 32px;
+}
+
+.annotationLaneLabel {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 220px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #1e40af;
+  background: #f0f4ff;
+  border-bottom: 2px solid #e2e8f0;
+  border-right: 1px solid #e2e8f0;
+  gap: 6px;
+  z-index: 2;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.annotationLaneLabel span {
+  opacity: 0.7;
+}
+
+.annotationLaneDays {
+  display: flex;
+  position: relative;
+  height: 32px;
+}
+
+.annotationLaneDay {
+  position: relative;
+  height: 32px;
+  border-right: 1px solid rgba(37, 99, 235, 0.1);
+  flex-shrink: 0;
+}
+
+.annotationLaneDay.weekend {
+  background: rgba(37, 99, 235, 0.04);
+}
+
+/* Annotation marker dot */
+.annotationMarker {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: transform 0.12s, box-shadow 0.12s;
+  z-index: 2;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+
+.annotationMarker:hover {
+  transform: translate(-50%, -50%) scale(1.5);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  z-index: 5;
+}
+
+/* Annotation popover */
+.annotationPopover {
+  position: fixed;
+  z-index: 1000;
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.18), 0 0 0 1px rgba(0,0,0,0.06);
+  min-width: 320px;
+  max-width: 420px;
+  max-height: 400px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  animation: annotationPopoverIn 0.15s ease-out;
+}
+
+@keyframes annotationPopoverIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.annotationPopoverHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: #f0f4ff;
+  border-bottom: 1px solid #bfdbfe;
+  flex-shrink: 0;
+}
+
+.annotationPopoverDate {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #1e40af;
+}
+
+.annotationPopoverStats {
+  display: flex;
+  gap: 10px;
+  font-size: 0.7rem;
+  color: #64748b;
+}
+
+.annotationPopoverStat {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.annotationPopoverStatValue {
+  font-weight: 700;
+  color: #334155;
+}
+
+.annotationPopoverClose {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1rem;
+  color: #94a3b8;
+  padding: 0 2px;
+  line-height: 1;
+}
+
+.annotationPopoverClose:hover {
+  color: #334155;
+}
+
+.annotationPopoverBody {
+  overflow-y: auto;
+  padding: 6px 0;
+  flex: 1;
+}
+
+.annotationPopoverItem {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 14px;
+  border-bottom: 1px solid #f1f5f9;
+  transition: background 0.1s;
+}
+
+.annotationPopoverItem:last-child {
+  border-bottom: none;
+}
+
+.annotationPopoverItem:hover {
+  background: #f8fafc;
+}
+
+.annotationPopoverTypeBadge {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  font-weight: 800;
+  color: #fff;
+  margin-top: 1px;
+}
+
+.annotationPopoverItemContent {
+  flex: 1;
+  min-width: 0;
+}
+
+.annotationPopoverItemTitle {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #1e293b;
+  line-height: 1.3;
+}
+
+.annotationPopoverItemMeta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+  font-size: 0.68rem;
+  color: #64748b;
+}
+
+.annotationPopoverItemType {
+  background: #f1f5f9;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 0.62rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: #475569;
+}
+
+.annotationPopoverConfidence {
+  background: #f1f5f9;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 0.62rem;
+  font-weight: 600;
+  color: #475569;
+}
+
+/* Shift today indicator down when annotation lane is visible */
+.todayIndicatorWithAnnotations {
+  top: 134px; /* 66px + 36px coverage + 32px annotation */
+}
+
 /* Today Indicator Line */
 .todayIndicator {
   position: absolute;

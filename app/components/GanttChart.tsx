@@ -29,6 +29,18 @@ export interface CoverageDayData {
   items: { title: string; outlet: string; tier: string; type: string; url?: string }[]
 }
 
+export interface AnnotationDayData {
+  count: number
+  items: {
+    id: string
+    event_type: string
+    outlet_or_source: string
+    observed_effect: string
+    confidence: string
+    direction: string
+  }[]
+}
+
 interface GanttChartProps {
   sales: SaleWithDetails[]
   products: (Product & { game: Game & { client: Client } })[]
@@ -50,6 +62,8 @@ interface GanttChartProps {
   showEvents?: boolean
   coverageByDate?: Record<string, CoverageDayData>
   showCoverage?: boolean
+  annotationsByDate?: Record<string, AnnotationDayData>
+  showAnnotations?: boolean
 }
 
 interface SelectionState {
@@ -149,7 +163,9 @@ export default function GanttChart(props: GanttChartProps) {
     allSales,
     showEvents = true,
     coverageByDate,
-    showCoverage = false
+    showCoverage = false,
+    annotationsByDate,
+    showAnnotations = false
   } = props
   
   const [timelineStart, setTimelineStart] = useState(() => {
@@ -181,6 +197,13 @@ export default function GanttChart(props: GanttChartProps) {
 
   // Coverage popover state
   const [coveragePopover, setCoveragePopover] = useState<{
+    dateKey: string
+    x: number
+    y: number
+  } | null>(null)
+
+  // Annotation popover state
+  const [annotationPopover, setAnnotationPopover] = useState<{
     dateKey: string
     x: number
     y: number
@@ -220,6 +243,22 @@ export default function GanttChart(props: GanttChartProps) {
       scrollContainerRef.current?.removeEventListener('scroll', handleClose)
     }
   }, [coveragePopover])
+
+  // Close annotation popover on outside click or scroll
+  useEffect(() => {
+    if (!annotationPopover) return
+    const handleClose = () => setAnnotationPopover(null)
+    const handleKeyDown = (e: KeyboardEvent) => { if (e.key === 'Escape') handleClose() }
+    document.addEventListener('click', handleClose)
+    document.addEventListener('keydown', handleKeyDown)
+    scrollContainerRef.current?.addEventListener('scroll', handleClose)
+    return () => {
+      document.removeEventListener('click', handleClose)
+      document.removeEventListener('keydown', handleKeyDown)
+      scrollContainerRef.current?.removeEventListener('scroll', handleClose)
+    }
+  }, [annotationPopover])
+
   const scrollTrackRef = useRef<HTMLDivElement>(null)
   
   const selectionRef = useRef<{
@@ -1872,9 +1911,123 @@ export default function GanttChart(props: GanttChartProps) {
               </div>
             )}
 
+            {/* Annotation Lane */}
+            {showAnnotations && annotationsByDate && Object.keys(annotationsByDate).length > 0 && (
+              <div className={styles.annotationLane}>
+                <div className={styles.annotationLaneLabel}>
+                  <span>🔗</span> Correlations
+                </div>
+                <div className={styles.annotationLaneDays}>
+                  {days.map((day, idx) => {
+                    const isWeekend = day.getDay() === 0 || day.getDay() === 6
+                    const dateKey = format(day, 'yyyy-MM-dd')
+                    const annData = annotationsByDate[dateKey]
+                    const eventTypeColor = (et: string) => {
+                      switch (et) {
+                        case 'pr_mention': return '#2563eb'
+                        case 'influencer_play': return '#7c3aed'
+                        case 'steam_sale': return '#16a34a'
+                        case 'steam_event': return '#f59e0b'
+                        case 'bundle': return '#ec4899'
+                        default: return '#64748b'
+                      }
+                    }
+                    return (
+                      <div
+                        key={idx}
+                        className={`${styles.annotationLaneDay} ${isWeekend ? styles.weekend : ''}`}
+                        style={{ width: dayWidth }}
+                      >
+                        {annData && (
+                          <div
+                            className={styles.annotationMarker}
+                            style={{ backgroundColor: eventTypeColor(annData.items[0]?.event_type ?? 'other') }}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              const rect = (e.target as HTMLElement).getBoundingClientRect()
+                              setAnnotationPopover(prev =>
+                                prev?.dateKey === dateKey ? null : {
+                                  dateKey,
+                                  x: Math.min(rect.left, window.innerWidth - 360),
+                                  y: rect.bottom + 6
+                                }
+                              )
+                            }}
+                            title={`${annData.count} event${annData.count !== 1 ? 's' : ''} — Click to view`}
+                          />
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Annotation Popover */}
+            {annotationPopover && annotationsByDate && annotationsByDate[annotationPopover.dateKey] && (
+              <div
+                className={styles.annotationPopover}
+                style={{
+                  left: annotationPopover.x,
+                  top: annotationPopover.y,
+                }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className={styles.annotationPopoverHeader}>
+                  <div>
+                    <div className={styles.annotationPopoverDate}>
+                      {format(new Date(annotationPopover.dateKey + 'T12:00:00'), 'EEEE, MMM d, yyyy')}
+                    </div>
+                    <div className={styles.annotationPopoverStats}>
+                      <div className={styles.annotationPopoverStat}>
+                        <span className={styles.annotationPopoverStatValue}>{annotationsByDate[annotationPopover.dateKey].count}</span> event{annotationsByDate[annotationPopover.dateKey].count !== 1 ? 's' : ''}
+                      </div>
+                    </div>
+                  </div>
+                  <button className={styles.annotationPopoverClose} onClick={() => setAnnotationPopover(null)}>✕</button>
+                </div>
+                <div className={styles.annotationPopoverBody}>
+                  {annotationsByDate[annotationPopover.dateKey].items.map((item, i) => {
+                    const typeColor = (() => {
+                      switch (item.event_type) {
+                        case 'pr_mention': return '#2563eb'
+                        case 'influencer_play': return '#7c3aed'
+                        case 'steam_sale': return '#16a34a'
+                        case 'steam_event': return '#f59e0b'
+                        case 'bundle': return '#ec4899'
+                        default: return '#64748b'
+                      }
+                    })()
+                    const typeLabel = item.event_type.replace(/_/g, ' ')
+                    const dirArrow = item.direction === 'up' ? '↑' : item.direction === 'down' ? '↓' : '→'
+                    return (
+                      <div key={i} className={styles.annotationPopoverItem}>
+                        <div
+                          className={styles.annotationPopoverTypeBadge}
+                          style={{ backgroundColor: typeColor }}
+                        >
+                          {dirArrow}
+                        </div>
+                        <div className={styles.annotationPopoverItemContent}>
+                          <div className={styles.annotationPopoverItemTitle}>
+                            {item.outlet_or_source}
+                          </div>
+                          <div className={styles.annotationPopoverItemMeta}>
+                            <span className={styles.annotationPopoverItemType}>{typeLabel}</span>
+                            <span>{item.observed_effect}</span>
+                            <span className={styles.annotationPopoverConfidence}>{item.confidence}</span>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
             {todayIndex !== -1 && (
               <div
-                className={`${styles.todayIndicator} ${showCoverage && coverageByDate && Object.keys(coverageByDate).length > 0 ? styles.todayIndicatorWithCoverage : ''}`}
+                className={`${styles.todayIndicator} ${showCoverage && coverageByDate && Object.keys(coverageByDate).length > 0 ? styles.todayIndicatorWithCoverage : ''} ${showAnnotations && annotationsByDate && Object.keys(annotationsByDate).length > 0 ? styles.todayIndicatorWithAnnotations : ''}`}
                 style={{ left: todayIndex * dayWidth + dayWidth / 2 + SIDEBAR_WIDTH }}
               />
             )}

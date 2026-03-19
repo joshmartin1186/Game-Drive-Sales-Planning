@@ -64,6 +64,9 @@ export default function SettingsClientsPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [expandedClients, setExpandedClients] = useState<Set<string>>(new Set())
   const [expandedGames, setExpandedGames] = useState<Set<string>>(new Set())
+  const [gameTab, setGameTab] = useState<Record<string, 'products' | 'intelligence'>>({})
+  const [gameAnnotations, setGameAnnotations] = useState<Record<string, unknown[]>>({})
+  const [annotationFilter, setAnnotationFilter] = useState<{eventType: string; direction: string; effect: string}>({ eventType: 'all', direction: 'all', effect: 'all' })
 
   // Modal state
   const [modalType, setModalType] = useState<ModalType>(null)
@@ -533,6 +536,16 @@ export default function SettingsClientsPage() {
     })
   }
 
+  const fetchGameAnnotations = useCallback(async (gameId: string) => {
+    try {
+      const res = await fetch(`/api/pr-annotations?game_id=${gameId}`)
+      if (res.ok) {
+        const data = await res.json()
+        setGameAnnotations(prev => ({ ...prev, [gameId]: data.annotations || [] }))
+      }
+    } catch { /* ignore */ }
+  }, [])
+
   const totalGames = (client: Client) => client.games?.length || 0
   const totalProducts = (client: Client) =>
     client.games?.reduce((sum, g) => sum + (g.products?.length || 0), 0) || 0
@@ -706,54 +719,214 @@ export default function SettingsClientsPage() {
                                 </div>
                               </div>
 
-                              {/* Products under game */}
+                              {/* Game tabs: Products / Intelligence */}
                               {gameExpanded && (
                                 <>
-                                  {game.products && game.products.length > 0 ? (
-                                    <div className={styles.productList}>
-                                      {game.products.map(product => (
-                                        <div key={product.id} className={styles.productRow}>
-                                          <span className={styles.productName}>{product.name}</span>
-                                          <span className={styles.typeBadge}>{product.product_type}</span>
-                                          {product.launch_date && (
-                                            <span className={styles.launchBadge}>
-                                              {format(new Date(product.launch_date), 'MMM d, yyyy')}
-                                            </span>
-                                          )}
-                                          {product.product_aliases && product.product_aliases.length > 0 && (
-                                            <span className={styles.aliasesBadge} title={product.product_aliases.join(', ')}>
-                                              aka {product.product_aliases[0]}{product.product_aliases.length > 1 ? ` +${product.product_aliases.length - 1}` : ''}
-                                            </span>
-                                          )}
-                                          <div className={styles.platformDots}>
-                                            {product.product_platforms?.map(pp => (
-                                              <span
-                                                key={pp.platform_id}
-                                                className={styles.platformDot}
-                                                style={{ backgroundColor: pp.platform?.color_hex || '#94a3b8' }}
-                                                title={pp.platform?.name || 'Unknown'}
-                                              />
-                                            ))}
-                                            {(!product.product_platforms || product.product_platforms.length === 0) && (
-                                              <span className={styles.noPlatforms}>No platforms</span>
-                                            )}
-                                          </div>
-                                          {canEdit && (
-                                            <div className={styles.productActions}>
-                                              <button className={styles.editBtn} onClick={() => openEditProduct(product)} title="Edit product">✎</button>
-                                              <button className={styles.deleteBtn} onClick={() => handleDeleteProduct(product.id, product.name)} title="Delete product">✕</button>
-                                            </div>
-                                          )}
-                                        </div>
-                                      ))}
-                                    </div>
-                                  ) : (
-                                    <p className={styles.noItems} style={{ marginLeft: '16px' }}>No products yet</p>
-                                  )}
-                                  {canEdit && (
-                                    <button className={styles.addProductBtn} onClick={() => openAddProduct(game.id)} style={{ marginLeft: '16px' }}>
-                                      + Add Product
+                                  <div style={{ display: 'flex', gap: '2px', margin: '8px 0 12px 0', borderBottom: '1px solid #e2e8f0', paddingBottom: '0' }}>
+                                    <button
+                                      onClick={() => setGameTab(prev => ({ ...prev, [game.id]: 'products' }))}
+                                      style={{
+                                        padding: '6px 14px', fontSize: '12px', fontWeight: 600, border: 'none', cursor: 'pointer',
+                                        borderBottom: (gameTab[game.id] || 'products') === 'products' ? '2px solid #2563eb' : '2px solid transparent',
+                                        color: (gameTab[game.id] || 'products') === 'products' ? '#2563eb' : '#64748b',
+                                        background: 'none'
+                                      }}
+                                    >
+                                      Products
                                     </button>
+                                    <button
+                                      onClick={() => {
+                                        setGameTab(prev => ({ ...prev, [game.id]: 'intelligence' }))
+                                        if (!gameAnnotations[game.id]) fetchGameAnnotations(game.id)
+                                      }}
+                                      style={{
+                                        padding: '6px 14px', fontSize: '12px', fontWeight: 600, border: 'none', cursor: 'pointer',
+                                        borderBottom: gameTab[game.id] === 'intelligence' ? '2px solid #6366f1' : '2px solid transparent',
+                                        color: gameTab[game.id] === 'intelligence' ? '#6366f1' : '#64748b',
+                                        background: 'none'
+                                      }}
+                                    >
+                                      🧠 Intelligence
+                                    </button>
+                                  </div>
+
+                                  {(gameTab[game.id] || 'products') === 'products' ? (
+                                    <>
+                                      {game.products && game.products.length > 0 ? (
+                                        <div className={styles.productList}>
+                                          {game.products.map(product => (
+                                            <div key={product.id} className={styles.productRow}>
+                                              <span className={styles.productName}>{product.name}</span>
+                                              <span className={styles.typeBadge}>{product.product_type}</span>
+                                              {product.launch_date && (
+                                                <span className={styles.launchBadge}>
+                                                  {format(new Date(product.launch_date), 'MMM d, yyyy')}
+                                                </span>
+                                              )}
+                                              {product.product_aliases && product.product_aliases.length > 0 && (
+                                                <span className={styles.aliasesBadge} title={product.product_aliases.join(', ')}>
+                                                  aka {product.product_aliases[0]}{product.product_aliases.length > 1 ? ` +${product.product_aliases.length - 1}` : ''}
+                                                </span>
+                                              )}
+                                              <div className={styles.platformDots}>
+                                                {product.product_platforms?.map(pp => (
+                                                  <span
+                                                    key={pp.platform_id}
+                                                    className={styles.platformDot}
+                                                    style={{ backgroundColor: pp.platform?.color_hex || '#94a3b8' }}
+                                                    title={pp.platform?.name || 'Unknown'}
+                                                  />
+                                                ))}
+                                                {(!product.product_platforms || product.product_platforms.length === 0) && (
+                                                  <span className={styles.noPlatforms}>No platforms</span>
+                                                )}
+                                              </div>
+                                              {canEdit && (
+                                                <div className={styles.productActions}>
+                                                  <button className={styles.editBtn} onClick={() => openEditProduct(product)} title="Edit product">✎</button>
+                                                  <button className={styles.deleteBtn} onClick={() => handleDeleteProduct(product.id, product.name)} title="Delete product">✕</button>
+                                                </div>
+                                              )}
+                                            </div>
+                                          ))}
+                                        </div>
+                                      ) : (
+                                        <p className={styles.noItems} style={{ marginLeft: '16px' }}>No products yet</p>
+                                      )}
+                                      {canEdit && (
+                                        <button className={styles.addProductBtn} onClick={() => openAddProduct(game.id)} style={{ marginLeft: '16px' }}>
+                                          + Add Product
+                                        </button>
+                                      )}
+                                    </>
+                                  ) : (
+                                    /* Intelligence Tab */
+                                    <div style={{ padding: '0 4px' }}>
+                                      {(() => {
+                                        const annotations = (gameAnnotations[game.id] || []) as {
+                                          id: string; event_type: string; event_date: string; outlet_or_source: string;
+                                          observed_effect: string; direction: string; confidence: string; notes: string;
+                                          is_auto_detected: boolean
+                                        }[]
+                                        const filtered = annotations.filter(a => {
+                                          if (annotationFilter.eventType !== 'all' && a.event_type !== annotationFilter.eventType) return false
+                                          if (annotationFilter.direction !== 'all' && a.direction !== annotationFilter.direction) return false
+                                          if (annotationFilter.effect !== 'all' && a.observed_effect !== annotationFilter.effect) return false
+                                          return true
+                                        })
+                                        const confirmed = annotations.filter(a => a.confidence === 'confirmed').length
+                                        const topOutlet = annotations.reduce((acc, a) => {
+                                          if (a.outlet_or_source) acc[a.outlet_or_source] = (acc[a.outlet_or_source] || 0) + 1
+                                          return acc
+                                        }, {} as Record<string, number>)
+                                        const topOutletName = Object.entries(topOutlet).sort((a, b) => b[1] - a[1])[0]?.[0] || '—'
+                                        const effectCounts = annotations.reduce((acc, a) => {
+                                          acc[a.observed_effect] = (acc[a.observed_effect] || 0) + 1
+                                          return acc
+                                        }, {} as Record<string, number>)
+                                        const strongestEffect = Object.entries(effectCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || '—'
+                                        const effectLabels: Record<string, string> = {
+                                          sales_spike: 'Sales Spike', wishlist_spike: 'Wishlist Spike',
+                                          pr_pickup: 'PR Pickup', none: 'None', unknown: 'Unknown'
+                                        }
+                                        const typeLabels: Record<string, string> = {
+                                          pr_mention: 'PR Mention', influencer_play: 'Influencer', steam_sale: 'Steam Sale',
+                                          steam_event: 'Steam Event', bundle: 'Bundle', epic_free: 'Epic Free',
+                                          press_interview: 'Interview', other: 'Other'
+                                        }
+
+                                        return (
+                                          <>
+                                            {/* Summary */}
+                                            {annotations.length > 0 && (
+                                              <div style={{
+                                                padding: '10px 14px', backgroundColor: '#fafbff', borderRadius: '8px',
+                                                border: '1px solid #e0e7ff', marginBottom: '12px', fontSize: '13px', color: '#475569'
+                                              }}>
+                                                <strong>{confirmed}</strong> confirmed correlation{confirmed !== 1 ? 's' : ''}
+                                                {' · Top outlet: '}<strong>{topOutletName}</strong>
+                                                {' · Strongest effect: '}<strong>{effectLabels[strongestEffect] || strongestEffect}</strong>
+                                              </div>
+                                            )}
+
+                                            {/* Filters */}
+                                            <div style={{ display: 'flex', gap: '8px', marginBottom: '10px', flexWrap: 'wrap' }}>
+                                              <select
+                                                value={annotationFilter.eventType}
+                                                onChange={e => setAnnotationFilter(f => ({ ...f, eventType: e.target.value }))}
+                                                style={{ padding: '4px 8px', fontSize: '11px', border: '1px solid #e2e8f0', borderRadius: '4px' }}
+                                              >
+                                                <option value="all">All Types</option>
+                                                {Object.entries(typeLabels).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                                              </select>
+                                              <select
+                                                value={annotationFilter.direction}
+                                                onChange={e => setAnnotationFilter(f => ({ ...f, direction: e.target.value }))}
+                                                style={{ padding: '4px 8px', fontSize: '11px', border: '1px solid #e2e8f0', borderRadius: '4px' }}
+                                              >
+                                                <option value="all">All Directions</option>
+                                                <option value="pr_to_sales">PR → Sales</option>
+                                                <option value="sales_to_pr">Sales → PR</option>
+                                              </select>
+                                              <select
+                                                value={annotationFilter.effect}
+                                                onChange={e => setAnnotationFilter(f => ({ ...f, effect: e.target.value }))}
+                                                style={{ padding: '4px 8px', fontSize: '11px', border: '1px solid #e2e8f0', borderRadius: '4px' }}
+                                              >
+                                                <option value="all">All Effects</option>
+                                                {Object.entries(effectLabels).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                                              </select>
+                                            </div>
+
+                                            {/* Annotations list */}
+                                            {filtered.length === 0 ? (
+                                              <p style={{ color: '#94a3b8', fontSize: '13px', textAlign: 'center', padding: '20px 0' }}>
+                                                No annotations yet. Annotations are created from the Sales Timeline or PR Coverage feed.
+                                              </p>
+                                            ) : (
+                                              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                                {filtered.map(a => (
+                                                  <div key={a.id} style={{
+                                                    padding: '8px 12px', backgroundColor: 'white', borderRadius: '6px',
+                                                    border: '1px solid #e2e8f0', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '10px'
+                                                  }}>
+                                                    <span style={{ fontWeight: 600, color: '#1e293b', minWidth: '72px' }}>{a.event_date}</span>
+                                                    <span style={{
+                                                      padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 600,
+                                                      backgroundColor: a.event_type === 'pr_mention' ? '#eff6ff' : a.event_type === 'steam_sale' ? '#f0fdf4' : '#faf5ff',
+                                                      color: a.event_type === 'pr_mention' ? '#2563eb' : a.event_type === 'steam_sale' ? '#16a34a' : '#7c3aed'
+                                                    }}>
+                                                      {typeLabels[a.event_type] || a.event_type}
+                                                    </span>
+                                                    <span style={{ color: '#64748b', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                      {a.outlet_or_source || '—'}
+                                                    </span>
+                                                    <span style={{
+                                                      padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 500,
+                                                      backgroundColor: a.observed_effect === 'sales_spike' ? '#dcfce7' : a.observed_effect === 'wishlist_spike' ? '#dbeafe' : '#f1f5f9',
+                                                      color: a.observed_effect === 'sales_spike' ? '#166534' : a.observed_effect === 'wishlist_spike' ? '#1e40af' : '#475569'
+                                                    }}>
+                                                      {effectLabels[a.observed_effect] || a.observed_effect}
+                                                    </span>
+                                                    <span style={{ fontSize: '10px', color: '#94a3b8' }}>
+                                                      {a.direction === 'pr_to_sales' ? 'PR→Sales' : 'Sales→PR'}
+                                                    </span>
+                                                    <span style={{
+                                                      padding: '1px 5px', borderRadius: '10px', fontSize: '9px', fontWeight: 600,
+                                                      backgroundColor: a.confidence === 'confirmed' ? '#dcfce7' : a.confidence === 'suspected' ? '#fef9c3' : '#fee2e2',
+                                                      color: a.confidence === 'confirmed' ? '#166534' : a.confidence === 'suspected' ? '#854d0e' : '#991b1b'
+                                                    }}>
+                                                      {a.confidence}
+                                                    </span>
+                                                    {a.is_auto_detected && <span style={{ fontSize: '10px', color: '#94a3b8' }}>🤖</span>}
+                                                  </div>
+                                                ))}
+                                              </div>
+                                            )}
+                                          </>
+                                        )
+                                      })()}
+                                    </div>
                                   )}
                                 </>
                               )}

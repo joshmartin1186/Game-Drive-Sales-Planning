@@ -16,6 +16,7 @@
     "@dnd-kit/sortable": "^8.0.0",
     "@dnd-kit/utilities": "^3.2.1",
     "@google/genai": "^1.42.0",
+    "@google/generative-ai": "^0.24.1",
     "@supabase/auth-helpers-nextjs": "^0.8.7",
     "@supabase/supabase-js": "^2.38.4",
     "@tavily/core": "^0.7.1",
