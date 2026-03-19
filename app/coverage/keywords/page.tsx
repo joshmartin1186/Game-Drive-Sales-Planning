@@ -115,8 +115,9 @@ export default function KeywordsPage() {
   const blacklistCount = keywords.filter(k => k.keyword_type === 'blacklist').length
 
   // Add a single keyword
-  const handleAdd = async () => {
+  const handleAdd = async (typeOverride?: KeywordType) => {
     if (!newKeyword.trim() || !selectedClientId || !selectedGameId) return
+    const kwType = typeOverride || newType
     setAdding(true)
     try {
       const res = await fetch('/api/coverage-keywords', {
@@ -126,7 +127,7 @@ export default function KeywordsPage() {
           client_id: selectedClientId,
           game_id: selectedGameId,
           keyword: newKeyword.trim(),
-          keyword_type: newType
+          keyword_type: kwType
         })
       })
       if (res.ok) {
@@ -407,25 +408,29 @@ export default function KeywordsPage() {
                       style={{ width: '100%', padding: '8px 12px', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '14px', boxSizing: 'border-box' }}
                     />
                   </div>
-                  <select
-                    value={newType}
-                    onChange={e => setNewType(e.target.value as KeywordType)}
-                    style={{ padding: '8px 12px', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '14px', backgroundColor: 'white' }}
-                  >
-                    <option value="whitelist">Whitelist</option>
-                    <option value="blacklist">Blacklist</option>
-                  </select>
                   <button
-                    onClick={handleAdd}
+                    onClick={() => handleAdd('whitelist')}
                     disabled={adding || !newKeyword.trim()}
                     style={{
-                      padding: '8px 20px', backgroundColor: '#2563eb', color: 'white',
-                      border: 'none', borderRadius: '6px', fontSize: '14px', fontWeight: 500,
+                      padding: '8px 16px', backgroundColor: '#dcfce7', color: '#166534',
+                      border: '1px solid #86efac', borderRadius: '6px', fontSize: '14px', fontWeight: 600,
                       cursor: adding || !newKeyword.trim() ? 'not-allowed' : 'pointer',
-                      opacity: adding || !newKeyword.trim() ? 0.7 : 1, whiteSpace: 'nowrap'
+                      opacity: adding || !newKeyword.trim() ? 0.6 : 1, whiteSpace: 'nowrap'
                     }}
                   >
-                    {adding ? 'Adding...' : 'Add'}
+                    + Whitelist
+                  </button>
+                  <button
+                    onClick={() => handleAdd('blacklist')}
+                    disabled={adding || !newKeyword.trim()}
+                    style={{
+                      padding: '8px 16px', backgroundColor: '#fee2e2', color: '#dc2626',
+                      border: '1px solid #fecaca', borderRadius: '6px', fontSize: '14px', fontWeight: 600,
+                      cursor: adding || !newKeyword.trim() ? 'not-allowed' : 'pointer',
+                      opacity: adding || !newKeyword.trim() ? 0.6 : 1, whiteSpace: 'nowrap'
+                    }}
+                  >
+                    ⛔ Blacklist
                   </button>
                 </div>
               )}
