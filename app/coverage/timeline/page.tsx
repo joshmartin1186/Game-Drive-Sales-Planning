@@ -156,34 +156,6 @@ export default function TimelinePage() {
   // ─── Table sort ───────────────────────────────────────────────────────────
   const [tableSort, setTableSort] = useState<{ field: string; dir: 'asc' | 'desc' }>({ field: 'publish_date', dir: 'desc' })
 
-  // ─── Resizable height ───────────────────────────────────────────────────
-  const [timelineHeight, setTimelineHeight] = useState<number | null>(null) // null = default calc
-
-  const handleResizeMouseDown = useCallback((e: React.MouseEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-    const scrollEl = scrollRef.current
-    if (!scrollEl) return
-    const startY = e.clientY
-    const startH = scrollEl.getBoundingClientRect().height
-
-    const handleMouseMove = (ev: MouseEvent) => {
-      ev.preventDefault()
-      const delta = ev.clientY - startY
-      const newH = Math.max(200, Math.round(startH + delta))
-      setTimelineHeight(newH)
-    }
-    const handleMouseUp = () => {
-      document.removeEventListener('mousemove', handleMouseMove)
-      document.removeEventListener('mouseup', handleMouseUp)
-      document.body.style.cursor = ''
-      document.body.style.userSelect = ''
-    }
-    document.body.style.cursor = 'ns-resize'
-    document.body.style.userSelect = 'none'
-    document.addEventListener('mousemove', handleMouseMove)
-    document.addEventListener('mouseup', handleMouseUp)
-  }, [])
 
   // ─── Container width ─────────────────────────────────────────────────────
   const timelineCardRef = useRef<HTMLDivElement>(null)
@@ -548,11 +520,11 @@ export default function TimelinePage() {
   // ─── Render ───────────────────────────────────────────────────────────────
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: '#f8fafc' }}>
+    <div style={{ display: 'flex', height: '100vh', backgroundColor: '#f8fafc' }}>
       <Sidebar />
 
-      <div ref={containerRef} style={{ flex: 1, padding: '32px', overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
-        <div style={{ width: '100%' }}>
+      <div ref={containerRef} style={{ flex: 1, padding: '24px 32px', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <div style={{ width: '100%', display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
           {/* Header */}
           <div style={{ marginBottom: '16px' }}>
             <h1 style={{ fontSize: '28px', fontWeight: 700, color: '#1e293b', margin: 0 }}>Coverage Timeline</h1>
@@ -664,7 +636,7 @@ export default function TimelinePage() {
               TIMELINE VIEW (Gantt-style)
               ═══════════════════════════════════════════════════════════════════ */}
           {viewMode === 'timeline' && (
-            <div ref={timelineCardRef} style={{ backgroundColor: 'white', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', overflow: 'hidden' }}>
+            <div ref={timelineCardRef} style={{ backgroundColor: 'white', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', overflow: 'hidden', flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
               {/* Zoom controls */}
               <div style={{
                 display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 16px',
@@ -725,7 +697,7 @@ export default function TimelinePage() {
               {/* Scrollable timeline area */}
               <div ref={scrollRef} style={{
                 overflowX: 'auto', overflowY: 'auto',
-                height: timelineHeight ? `${timelineHeight}px` : 'calc(100vh - 380px)',
+                flex: 1, minHeight: 0,
               }}>
                 <div style={{ width: manualDayWidth !== null ? totalWidth : '100%', minWidth: manualDayWidth !== null ? totalWidth : '100%', position: 'relative' }}>
 
@@ -1012,21 +984,6 @@ export default function TimelinePage() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><div style={{ width: '2px', height: '10px', backgroundColor: '#f97316' }} /><span>Today</span></div>
               </div>
 
-              {/* Resize handle */}
-              <div
-                onMouseDown={handleResizeMouseDown}
-                style={{
-                  height: '14px', cursor: 'ns-resize', backgroundColor: '#f1f5f9',
-                  borderTop: '2px solid #e2e8f0',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  gap: '3px', flexDirection: 'column',
-                }}
-                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#e2e8f0' }}
-                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#f1f5f9' }}
-              >
-                <div style={{ width: '40px', height: '2px', borderRadius: '1px', backgroundColor: '#94a3b8' }} />
-                <div style={{ width: '28px', height: '2px', borderRadius: '1px', backgroundColor: '#94a3b8' }} />
-              </div>
             </div>
           )}
 
@@ -1061,7 +1018,7 @@ export default function TimelinePage() {
             }
 
             return (
-              <div style={{ backgroundColor: 'white', borderRadius: '12px', padding: '20px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)' }}>
+              <div style={{ backgroundColor: 'white', borderRadius: '12px', padding: '20px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', flex: 1, overflow: 'auto' }}>
                 <div style={{ fontSize: '14px', fontWeight: 600, color: '#1e293b', marginBottom: '16px' }}>
                   Coverage Density — {coverageItems.length} items across {allDays.length} days
                 </div>
@@ -1152,8 +1109,8 @@ export default function TimelinePage() {
             })
 
             return (
-              <div style={{ backgroundColor: 'white', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', overflow: 'hidden' }}>
-                <div style={{ overflowX: 'auto', height: timelineHeight ? `${timelineHeight}px` : 'calc(100vh - 380px)', overflowY: 'auto' }}>
+              <div style={{ backgroundColor: 'white', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', overflow: 'hidden', flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+                <div style={{ overflowX: 'auto', flex: 1, minHeight: 0, overflowY: 'auto' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '900px' }}>
                     <thead>
                       <tr>
@@ -1229,20 +1186,6 @@ export default function TimelinePage() {
                       )}
                     </tbody>
                   </table>
-                </div>
-                {/* Resize handle */}
-                <div
-                  onMouseDown={handleResizeMouseDown}
-                  style={{
-                    height: '8px', cursor: 'ns-resize', backgroundColor: '#f1f5f9',
-                    borderTop: '1px solid #e2e8f0',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    transition: 'background-color 0.15s',
-                  }}
-                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#e2e8f0' }}
-                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = '#f1f5f9' }}
-                >
-                  <div style={{ width: '40px', height: '3px', borderRadius: '2px', backgroundColor: '#cbd5e1' }} />
                 </div>
               </div>
             )
