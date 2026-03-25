@@ -1387,9 +1387,12 @@ export default function TimelinePage() {
           <div id="ann-popover" style={{
             position: 'fixed',
             left: Math.min(annotationPopover.x, (typeof window !== 'undefined' ? window.innerWidth : 1200) - 340),
-            top: Math.min(annotationPopover.y, (typeof window !== 'undefined' ? window.innerHeight : 800) - 440),
-            width: '320px', backgroundColor: 'white', borderRadius: '12px',
-            boxShadow: '0 20px 60px rgba(0,0,0,0.2), 0 0 0 1px rgba(0,0,0,0.05)', zIndex: 1000, overflow: 'hidden',
+            ...((typeof window !== 'undefined' && annotationPopover.y > window.innerHeight - 500)
+              ? { bottom: Math.max(8, window.innerHeight - annotationPopover.y) }
+              : { top: annotationPopover.y }),
+            width: '320px', maxHeight: 'calc(100vh - 16px)', backgroundColor: 'white', borderRadius: '12px',
+            boxShadow: '0 20px 60px rgba(0,0,0,0.2), 0 0 0 1px rgba(0,0,0,0.05)', zIndex: 1000,
+            display: 'flex', flexDirection: 'column', overflow: 'hidden',
           }}>
             <div style={{ padding: '10px 16px', backgroundColor: '#fffbeb', borderBottom: '1px solid #fde68a', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
@@ -1402,7 +1405,7 @@ export default function TimelinePage() {
                 style={{ background: 'none', border: 'none', fontSize: '18px', color: '#92400e', cursor: 'pointer' }}>×</button>
             </div>
 
-            <div style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <div style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: '10px', overflowY: 'auto', flex: 1 }}>
               <div>
                 <label style={{ fontSize: '11px', fontWeight: 600, color: '#64748b', display: 'block', marginBottom: '3px' }}>Date</label>
                 <input type="date" value={annotationForm.event_date} onChange={e => setAnnotationForm(f => ({ ...f, event_date: e.target.value }))}
@@ -1479,7 +1482,7 @@ export default function TimelinePage() {
               </div>
             </div>
 
-            <div style={{ padding: '10px 16px', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
+            <div style={{ padding: '10px 16px', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
               {editingAnnotationId ? (
                 <button onClick={() => deleteAnnotation(editingAnnotationId)}
                   style={{ padding: '6px 12px', borderRadius: '6px', fontSize: '12px', fontWeight: 500, cursor: 'pointer', backgroundColor: '#fee2e2', color: '#991b1b', border: '1px solid #fecaca' }}>
