@@ -372,17 +372,16 @@ export default function TimelinePage() {
         res = await fetch('/api/pr-annotations', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
       }
       if (!res.ok) {
-        const err = await res.json().catch(() => ({}))
-        console.error('Save annotation API error:', res.status, err)
-        setPendingAnnotationMarker(null)
-        return
+        const errBody = await res.json().catch(() => ({}))
+        console.error('Save annotation API error:', res.status, errBody)
+      } else {
+        await fetchAnnotations()
       }
       setAnnotationPopover(null)
       setEditingAnnotationId(null)
-      await fetchAnnotations()
       setPendingAnnotationMarker(null)
-    } catch (err) { console.error('Save annotation failed:', err); setPendingAnnotationMarker(null) }
-    finally { setAnnotationSaving(false) }
+    } catch (err) { console.error('Save annotation failed:', err) }
+    finally { setAnnotationSaving(false); setPendingAnnotationMarker(null) }
   }, [annotationPopover, annotationForm, editingAnnotationId, gameFilter, clientFilter, fetchAnnotations])
 
   const deleteAnnotation = useCallback(async (id: string) => {

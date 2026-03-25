@@ -68,18 +68,16 @@ export async function POST(request: NextRequest) {
     }
 
     const record: Record<string, unknown> = {
-      game_id: body.game_id,
-      client_id: body.client_id,
+      game_id: body.game_id || null,
+      client_id: body.client_id || null,
       event_type: body.event_type,
       event_date: body.event_date,
       observed_effect: body.observed_effect,
       direction: body.direction,
       confidence: body.confidence,
       outlet_or_source: body.outlet_or_source || null,
-      coverage_item_id: body.coverage_item_id || null,
       notes: body.notes || null,
       is_auto_detected: body.is_auto_detected || false,
-      metrics_snapshot: body.metrics_snapshot || null,
     }
 
     const { data, error } = await supabase
@@ -113,7 +111,7 @@ export async function PUT(request: NextRequest) {
 
     const allowedFields = [
       'event_type', 'event_date', 'observed_effect', 'direction', 'confidence',
-      'outlet_or_source', 'coverage_item_id', 'notes', 'is_auto_detected', 'metrics_snapshot',
+      'outlet_or_source', 'notes', 'is_auto_detected',
       'game_id', 'client_id'
     ]
 
