@@ -370,9 +370,9 @@ export default function TimelinePage() {
       }
       setAnnotationPopover(null)
       setEditingAnnotationId(null)
+      await fetchAnnotations()
       setPendingAnnotationMarker(null)
-      fetchAnnotations()
-    } catch (err) { console.error('Save annotation failed:', err) }
+    } catch (err) { console.error('Save annotation failed:', err); setPendingAnnotationMarker(null) }
     finally { setAnnotationSaving(false) }
   }, [annotationPopover, annotationForm, editingAnnotationId, gameFilter, clientFilter, fetchAnnotations])
 
@@ -987,9 +987,9 @@ export default function TimelinePage() {
                           {showAnnotations && allDays.map((day, idx) => {
                             const anns = annotationsByDate[day]
                             if (!anns) return null
-                            // Filter annotations to this row
+                            // Filter annotations to this row (null game_id = show on all rows)
                             const rowAnns = anns.filter(a => {
-                              if (timelineGroupBy === 'game' && row.gameId) return a.game_id === row.gameId
+                              if (timelineGroupBy === 'game' && row.gameId) return !a.game_id || a.game_id === row.gameId
                               return true
                             })
                             if (rowAnns.length === 0) return null
