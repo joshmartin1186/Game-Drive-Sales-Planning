@@ -386,7 +386,7 @@ export default function TimelinePage() {
 
   const deleteAnnotation = useCallback(async (id: string) => {
     try {
-      await fetch('/api/pr-annotations', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) })
+      await fetch(`/api/pr-annotations?id=${id}`, { method: 'DELETE' })
       setAnnotationPopover(null)
       setEditingAnnotationId(null)
       setPendingAnnotationMarker(null)
@@ -995,9 +995,10 @@ export default function TimelinePage() {
                           {showAnnotations && allDays.map((day, idx) => {
                             const anns = annotationsByDate[day]
                             if (!anns) return null
-                            // Filter annotations to this row (null game_id = show on all rows)
+                            // Filter annotations to this specific row
                             const rowAnns = anns.filter(a => {
-                              if (timelineGroupBy === 'game' && row.gameId) return !a.game_id || a.game_id === row.gameId
+                              if (timelineGroupBy === 'game' && row.gameId) return a.game_id === row.gameId
+                              if (timelineGroupBy === 'game' && !row.gameId) return !a.game_id
                               return true
                             })
                             if (rowAnns.length === 0) return null
