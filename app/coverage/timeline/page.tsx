@@ -148,7 +148,7 @@ export default function TimelinePage() {
   } | null>(null)
   const [annotationForm, setAnnotationForm] = useState({
     event_type: 'pr_mention', outlet_or_source: '', observed_effect: 'unknown',
-    confidence: 'suspected', notes: '',
+    confidence: 'suspected', notes: '', event_date: '',
   })
   const [annotationSaving, setAnnotationSaving] = useState(false)
   const [editingAnnotationId, setEditingAnnotationId] = useState<string | null>(null)
@@ -328,7 +328,7 @@ export default function TimelinePage() {
 
   const openAnnotationAt = useCallback((day: string, x: number, y: number, gameId?: string, outletName?: string) => {
     setAnnotationPopover({ day, x, y, gameId, outletName })
-    setAnnotationForm({ event_type: 'pr_mention', outlet_or_source: outletName || '', observed_effect: 'unknown', confidence: 'suspected', notes: '' })
+    setAnnotationForm({ event_type: 'pr_mention', outlet_or_source: outletName || '', observed_effect: 'unknown', confidence: 'suspected', notes: '', event_date: day })
     setEditingAnnotationId(null)
   }, [])
 
@@ -340,6 +340,7 @@ export default function TimelinePage() {
       observed_effect: ann.observed_effect,
       confidence: ann.confidence,
       notes: ann.notes || '',
+      event_date: ann.event_date,
     })
     setEditingAnnotationId(ann.id)
   }, [])
@@ -352,7 +353,7 @@ export default function TimelinePage() {
         game_id: annotationPopover.gameId || gameFilter || null,
         client_id: clientFilter || null,
         event_type: annotationForm.event_type,
-        event_date: annotationPopover.day,
+        event_date: annotationForm.event_date || annotationPopover.day,
         outlet_or_source: annotationForm.outlet_or_source || null,
         observed_effect: annotationForm.observed_effect,
         direction: 'pr_to_sales',
@@ -978,7 +979,7 @@ export default function TimelinePage() {
                             ))
                           })}
 
-                          {/* Per-row annotation markers */}
+                          {/* Per-row annotation bookmark markers */}
                           {showAnnotations && allDays.map((day, idx) => {
                             const anns = annotationsByDate[day]
                             if (!anns) return null
@@ -988,18 +989,66 @@ export default function TimelinePage() {
                               return true
                             })
                             if (rowAnns.length === 0) return null
+                            const rowAnnKey = `${row.gameId || row.label}-${day}`
+                            const isExpanded = expandedAnnotationDay === rowAnnKey
                             return (
                               <div
                                 key={`ann-${day}`}
-                                onClick={(e) => { e.stopPropagation(); openEditAnnotation(rowAnns[0], e.clientX, e.clientY) }}
                                 style={{
-                                  position: 'absolute', left: idx * dayWidth + dayWidth / 2 - 4,
-                                  bottom: 2, width: '8px', height: '8px',
-                                  backgroundColor: '#f59e0b', borderRadius: '50%',
-                                  border: '1px solid #d97706', cursor: 'pointer', zIndex: 5,
+                                  position: 'absolute', left: idx * dayWidth + dayWidth / 2 - 7,
+                                  bottom: 1, zIndex: isExpanded ? 30 : 5,
                                 }}
-                                title={`${rowAnns.length} annotation(s)`}
-                              />
+                              >
+                                <div
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    setExpandedAnnotationDay(isExpanded ? null : rowAnnKey)
+                                  }}
+                                  onDoubleClick={(e) => { e.stopPropagation(); openEditAnnotation(rowAnns[0], e.clientX, e.clientY) }}
+                                  style={{ cursor: 'pointer' }}
+                                  title={`${rowAnns.length} annotation(s) — click to expand, double-click to edit`}
+                                >
+                                  <svg width="14" height="18" viewBox="0 0 16 20" fill="none">
+                                    <path d="M1 1h14v16.5L8 14l-7 3.5V1z" fill="#eab308" stroke="#ca8a04" strokeWidth="1.5" />
+                                    {rowAnns.length > 1 && (
+                                      <text x="8" y="11" textAnchor="middle" fontSize="8" fontWeight="bold" fill="#713f12">
+                                        {rowAnns.length}
+                                      </text>
+                                    )}
+                                  </svg>
+                                </div>
+                                {isExpanded && (
+                                  <div
+                                    onClick={(e) => e.stopPropagation()}
+                                    style={{
+                                      position: 'absolute', bottom: '20px', left: '50%', transform: 'translateX(-50%)',
+                                      backgroundColor: '#fffef5', border: '1px solid #eab308', borderRadius: '6px',
+                                      padding: '8px 10px', minWidth: '180px', maxWidth: '260px',
+                                      boxShadow: '0 4px 12px rgba(0,0,0,0.12)', zIndex: 50,
+                                    }}
+                                  >
+                                    {rowAnns.map((ann, i) => (
+                                      <div
+                                        key={ann.id}
+                                        onClick={() => openEditAnnotation(ann, 0, 0)}
+                                        style={{
+                                          cursor: 'pointer', padding: '4px 0',
+                                          borderBottom: i < rowAnns.length - 1 ? '1px solid #fde68a' : 'none',
+                                        }}
+                                      >
+                                        <div style={{ fontSize: '11px', fontWeight: 600, color: '#92400e' }}>
+                                          {ann.event_type.replace(/_/g, ' ')}
+                                        </div>
+                                        {ann.notes && (
+                                          <div style={{ fontSize: '10px', color: '#78716c', marginTop: '2px', lineHeight: 1.3 }}>
+                                            {ann.notes.length > 80 ? ann.notes.slice(0, 80) + '…' : ann.notes}
+                                          </div>
+                                        )}
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
                             )
                           })}
                         </div>
@@ -1346,7 +1395,7 @@ export default function TimelinePage() {
               <div>
                 <div style={{ fontSize: '13px', fontWeight: 600, color: '#92400e' }}>{editingAnnotationId ? 'Edit Annotation' : 'Add Annotation'}</div>
                 <div style={{ fontSize: '11px', color: '#b45309' }}>
-                  {new Date(annotationPopover.day + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                  {new Date((annotationForm.event_date || annotationPopover.day) + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
                 </div>
               </div>
               <button onClick={() => { setAnnotationPopover(null); setEditingAnnotationId(null) }}
@@ -1354,6 +1403,12 @@ export default function TimelinePage() {
             </div>
 
             <div style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <div>
+                <label style={{ fontSize: '11px', fontWeight: 600, color: '#64748b', display: 'block', marginBottom: '3px' }}>Date</label>
+                <input type="date" value={annotationForm.event_date} onChange={e => setAnnotationForm(f => ({ ...f, event_date: e.target.value }))}
+                  style={{ width: '100%', padding: '6px 8px', borderRadius: '6px', border: '1px solid #e2e8f0', fontSize: '12px', boxSizing: 'border-box' }} />
+              </div>
+
               <div>
                 <label style={{ fontSize: '11px', fontWeight: 600, color: '#64748b', display: 'block', marginBottom: '3px' }}>Event Type</label>
                 <select value={annotationForm.event_type} onChange={e => setAnnotationForm(f => ({ ...f, event_type: e.target.value }))}
