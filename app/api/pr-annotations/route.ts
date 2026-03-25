@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
     const supabase = getSupabase()
     const body = await request.json()
 
-    const requiredFields = ['game_id', 'client_id', 'event_type', 'event_date', 'observed_effect', 'direction', 'confidence']
+    const requiredFields = ['event_type', 'event_date', 'observed_effect', 'direction', 'confidence']
     for (const field of requiredFields) {
       if (!body[field]) {
         return NextResponse.json({ error: `${field} is required` }, { status: 400 })

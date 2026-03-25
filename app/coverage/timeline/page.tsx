@@ -245,8 +245,10 @@ export default function TimelinePage() {
   const annotationsByDate = useMemo(() => {
     const map: Record<string, Annotation[]> = {}
     for (const a of annotations) {
-      if (!map[a.event_date]) map[a.event_date] = []
-      map[a.event_date].push(a)
+      // Normalize event_date to YYYY-MM-DD (Supabase may return full timestamps)
+      const dateKey = a.event_date ? a.event_date.split('T')[0] : a.event_date
+      if (!map[dateKey]) map[dateKey] = []
+      map[dateKey].push(a)
     }
     return map
   }, [annotations])
@@ -363,10 +365,17 @@ export default function TimelinePage() {
         is_auto_detected: false,
         updated_at: new Date().toISOString(),
       }
+      let res: Response
       if (editingAnnotationId) {
-        await fetch('/api/pr-annotations', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: editingAnnotationId, ...payload }) })
+        res = await fetch('/api/pr-annotations', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: editingAnnotationId, ...payload }) })
       } else {
-        await fetch('/api/pr-annotations', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+        res = await fetch('/api/pr-annotations', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+      }
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        console.error('Save annotation API error:', res.status, err)
+        setPendingAnnotationMarker(null)
+        return
       }
       setAnnotationPopover(null)
       setEditingAnnotationId(null)
