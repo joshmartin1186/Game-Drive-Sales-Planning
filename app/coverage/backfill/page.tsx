@@ -14,6 +14,7 @@ interface StatusData {
     total: number
     missing_muv: number
     missing_tier: number
+    missing_country: number
   }
 }
 
@@ -230,6 +231,12 @@ export default function BackfillPage() {
             </p>
             <p className={styles.statusLabel}>Missing Tier</p>
           </div>
+          <div className={styles.statusCard}>
+            <p className={status.outlets.missing_country === 0 ? styles.statusValueGood : styles.statusValueBad}>
+              {status.outlets.missing_country}
+            </p>
+            <p className={styles.statusLabel}>Generic Country</p>
+          </div>
         </div>
       )}
 
@@ -316,6 +323,20 @@ export default function BackfillPage() {
             onClick={() => runTask('assign_tiers', 'Assign tiers')}
           >
             {runningTask === 'assign_tiers' ? 'Running...' : 'Run'}
+          </button>
+        </div>
+
+        <div className={styles.taskCard}>
+          <div className={styles.taskInfo}>
+            <p className={styles.taskName}>7. Detect Outlet Countries</p>
+            <p className={styles.taskDesc}>Auto-detect country for {status?.outlets.missing_country || '?'} outlets tagged as &quot;International&quot; or missing country, using domain TLD and known outlet mappings</p>
+          </div>
+          <button
+            className={styles.taskBtnGreen}
+            disabled={isRunning}
+            onClick={() => runTask('backfill_countries', 'Detect countries')}
+          >
+            {runningTask === 'backfill_countries' ? 'Running...' : 'Run'}
           </button>
         </div>
       </div>

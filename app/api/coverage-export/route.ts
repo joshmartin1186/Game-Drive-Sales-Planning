@@ -31,7 +31,9 @@ export async function GET(request: NextRequest) {
 
     // Only show approved items by default for client reports
     if (approvalStatus) {
-      if (approvalStatus === 'approved') {
+      if (approvalStatus === 'all') {
+        // No filter — include all statuses (approved, pending, rejected)
+      } else if (approvalStatus === 'approved') {
         query = query.in('approval_status', ['auto_approved', 'manually_approved'])
       } else {
         query = query.eq('approval_status', approvalStatus)
@@ -109,14 +111,19 @@ export async function GET(request: NextRequest) {
       }
     })
 
-    // Compute summary stats
+    // Separate informational items from press coverage for accurate metrics
+    const pressItems = items.filter((item: Record<string, unknown>) => (item.coverage_type as string) !== 'informational')
+    const informationalItems = items.filter((item: Record<string, unknown>) => (item.coverage_type as string) === 'informational')
+
+    // Compute summary stats — exclude informational items from reach/UMV totals
     const totalPieces = items.length
     // Use pre-computed display_visitors (primary reach per item) for all aggregations
-    const totalReach = items.reduce((sum: number, item: Record<string, unknown>) => {
+    // Only count press items in reach totals — informational pages inflate numbers
+    const totalReach = pressItems.reduce((sum: number, item: Record<string, unknown>) => {
       return sum + ((item.display_visitors as number | null) || 0)
     }, 0)
     // Estimated views: social items have known view counts; news items get 2% of outlet traffic
-    const estimatedViews = items.reduce((sum: number, item: Record<string, unknown>) => {
+    const estimatedViews = pressItems.reduce((sum: number, item: Record<string, unknown>) => {
       const sourceType = item.source_type as string | null
       const isSocial = sourceType && SOCIAL_SOURCE_TYPES.has(sourceType)
       const reach = (item.display_visitors as number | null) || 0
@@ -251,6 +258,10 @@ export async function GET(request: NextRequest) {
         territory_breakdown: territoryBreakdown,
         reach_by_tier: reachByTier,
         review_distribution: reviewDistribution,
+        informational_sources: {
+          count: informationalItems.length,
+          excluded_reach: informationalItems.reduce((sum: number, item: Record<string, unknown>) => sum + ((item.display_visitors as number | null) || 0), 0),
+        },
         ave_estimate: { total: Math.round(totalAVE), by_tier: aveByTier },
         youtube_metrics: { total_videos: ytVideos, total_views: ytViews, total_likes: ytLikes, total_comments: ytComments },
         sentiment_summary: { counts: sentimentCounts, top_quotes: topQuotes.slice(0, 5) },

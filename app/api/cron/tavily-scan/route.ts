@@ -3,6 +3,7 @@ import { getServerSupabase } from '@/lib/supabase'
 import { tavily } from '@tavily/core'
 import { inferTerritory } from '@/lib/territory'
 import { domainToOutletName } from '@/lib/outlet-utils'
+import { detectOutletCountry } from '@/lib/outlet-country'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -278,6 +279,7 @@ export async function GET(request: Request) {
                       .insert({
                         name: outletName,
                         domain: resultDomain,
+                        country: detectOutletCountry(resultDomain),
                         tier: 'C'
                       })
                       .select('id')

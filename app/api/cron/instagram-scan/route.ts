@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSupabase } from '@/lib/supabase'
 import { inferTerritory } from '@/lib/territory'
+import { detectOutletCountry } from '@/lib/outlet-country'
 
 function getSupabase() {
   return getServerSupabase()
@@ -253,6 +254,7 @@ async function processInstagramPosts(
         .insert({
           name: authorFullName,
           domain: creatorDomain,
+          country: detectOutletCountry(creatorDomain),
           tier: 'D', // Default tier since we can't get follower count from hashtag scraper
           is_active: true,
         })

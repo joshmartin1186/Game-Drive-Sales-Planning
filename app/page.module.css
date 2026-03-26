@@ -295,6 +295,58 @@
   accent-color: #d22939;
 }
 
+.platformFilters {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  border-left: 1px solid #e2e4ea;
+  padding-left: 16px;
+  margin-left: 4px;
+}
+
+.platformFiltersLabel {
+  font-size: 14px;
+  font-weight: 600;
+  color: #44445a;
+  white-space: nowrap;
+}
+
+.platformCheckbox {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #44445a;
+  cursor: pointer;
+  padding: 6px 10px;
+  background: #f0f0f4;
+  border-radius: 6px;
+  border: 1px solid #e2e4ea;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.platformCheckbox:hover {
+  background: #e2e4ea;
+}
+
+.platformCheckbox input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: #d22939;
+}
+
+.platformDot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
 .clearFilters {
   padding: 10px 16px;
   background: #f0f0f4;

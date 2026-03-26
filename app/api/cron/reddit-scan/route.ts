@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSupabase } from '@/lib/supabase'
 import { inferTerritory } from '@/lib/territory'
+import { detectOutletCountry } from '@/lib/outlet-country'
 
 function getSupabase() {
   return getServerSupabase()
@@ -266,6 +267,7 @@ async function processRedditPosts(
         .insert({
           name: `r/${subreddit}`,
           domain: subredditDomain,
+          country: detectOutletCountry(subredditDomain),
           tier: 'C',
           is_active: true,
         })

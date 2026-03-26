@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { classifyCoverageType } from '@/lib/coverage-utils'
 
 function getSupabase() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -168,7 +169,7 @@ export async function POST(request: NextRequest) {
           url: item.url.trim(),
           publish_date: item.publish_date || null,
           territory: item.territory || null,
-          coverage_type: item.coverage_type || null,
+          coverage_type: classifyCoverageType(item.coverage_type, item.url.trim()),
           monthly_unique_visitors: item.monthly_unique_visitors || null,
           review_score: item.review_score || null,
           quotes: item.quotes || null,
@@ -229,6 +230,11 @@ export async function POST(request: NextRequest) {
 
         if (newOutlet) rest.outlet_id = newOutlet.id
       }
+    }
+
+    // Auto-classify informational URLs (Wikipedia, Steam Store, SteamDB, etc.)
+    if (!rest.coverage_type || rest.coverage_type === 'news') {
+      rest.coverage_type = classifyCoverageType(rest.coverage_type, url.trim())
     }
 
     const { data, error } = await supabase

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { detectOutletCountry } from '@/lib/outlet-country'
 
 function getSupabase() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -81,18 +82,21 @@ export async function POST(request: NextRequest) {
 
     // Handle bulk import
     if (Array.isArray(body)) {
-      const outlets = body.map(item => ({
-        name: item.name?.trim(),
-        domain: item.domain?.trim() || null,
-        country: item.country?.trim() || null,
-        monthly_unique_visitors: item.monthly_unique_visitors ? parseInt(item.monthly_unique_visitors) : null,
-        tier: item.tier || suggestTier(item.monthly_unique_visitors ? parseInt(item.monthly_unique_visitors) : null),
-        metacritic_status: item.metacritic_status === true || item.metacritic_status === 'true',
-        custom_tags: item.custom_tags || [],
-        rss_feed_url: item.rss_feed_url?.trim() || null,
-        scan_frequency: item.scan_frequency || 'daily',
-        is_active: true
-      })).filter(o => o.name)
+      const outlets = body.map(item => {
+        const domain = item.domain?.trim() || null
+        return {
+          name: item.name?.trim(),
+          domain,
+          country: item.country?.trim() || detectOutletCountry(domain),
+          monthly_unique_visitors: item.monthly_unique_visitors ? parseInt(item.monthly_unique_visitors) : null,
+          tier: item.tier || suggestTier(item.monthly_unique_visitors ? parseInt(item.monthly_unique_visitors) : null),
+          metacritic_status: item.metacritic_status === true || item.metacritic_status === 'true',
+          custom_tags: item.custom_tags || [],
+          rss_feed_url: item.rss_feed_url?.trim() || null,
+          scan_frequency: item.scan_frequency || 'daily',
+          is_active: true
+        }
+      }).filter(o => o.name)
 
       const { data, error } = await supabase
         .from('outlets')
@@ -116,12 +120,15 @@ export async function POST(request: NextRequest) {
 
     const autoTier = tier || suggestTier(monthly_unique_visitors || null)
 
+    const cleanDomain = domain?.trim() || null
+    const detectedCountry = country?.trim() || detectOutletCountry(cleanDomain)
+
     const { data, error } = await supabase
       .from('outlets')
       .insert([{
         name: name.trim(),
-        domain: domain?.trim() || null,
-        country: country?.trim() || null,
+        domain: cleanDomain,
+        country: detectedCountry,
         monthly_unique_visitors: monthly_unique_visitors || null,
         tier: autoTier,
         metacritic_status: metacritic_status || false,
@@ -172,6 +179,11 @@ export async function PUT(request: NextRequest) {
     // Auto-suggest tier if traffic changed and tier not explicitly set
     if ('monthly_unique_visitors' in updates && !('tier' in updates)) {
       filteredUpdates.tier = suggestTier(updates.monthly_unique_visitors)
+    }
+
+    // Auto-detect country if domain changed and country not explicitly set
+    if ('domain' in updates && !('country' in updates)) {
+      filteredUpdates.country = detectOutletCountry(updates.domain)
     }
 
     const { data, error } = await supabase

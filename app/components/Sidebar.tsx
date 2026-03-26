@@ -3,24 +3,16 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { useAuth } from '@/lib/auth-context'
 import type { FeatureKey } from '@/lib/auth'
 import styles from './Sidebar.module.css'
 
 const STORAGE_KEY = 'gamedrive-sidebar-collapsed'
 
-interface PlatformData {
-  name: string
-  color_hex: string
-  cooldown_days: number
-}
-
 export function Sidebar() {
   const pathname = usePathname()
   const { profile, loading, isSuperAdmin, hasAccess, signOut } = useAuth()
   const [collapsed, setCollapsed] = useState(false)
-  const [platformsData, setPlatformsData] = useState<PlatformData[]>([])
 
   // Hydrate collapsed state from localStorage
   useEffect(() => {
@@ -30,17 +22,7 @@ export function Sidebar() {
     } catch {}
   }, [])
 
-  // Fetch platforms from database instead of hardcoding
-  useEffect(() => {
-    const supabase = createClientComponentClient()
-    supabase
-      .from('platforms')
-      .select('name, color_hex, cooldown_days')
-      .order('name')
-      .then(({ data }) => {
-        if (data) setPlatformsData(data)
-      })
-  }, [])
+  // Platforms removed from sidebar per client feedback (Alisa) — not useful here
 
   const toggleCollapse = () => {
     const next = !collapsed
@@ -117,12 +99,6 @@ export function Sidebar() {
     isSuperAdmin
 
   const isSettingsActive = pathname.startsWith('/settings')
-
-  const platforms = platformsData.map(p => ({
-    name: p.name,
-    color: p.color_hex,
-    cooldown: `${p.cooldown_days}d`
-  }))
 
   const userInitial = profile
     ? (profile.display_name || profile.email || '?').charAt(0).toUpperCase()
@@ -237,40 +213,6 @@ export function Sidebar() {
                 </div>
               </Link>
             )}
-          </div>
-        )}
-
-        {/* Active platforms */}
-        {collapsed ? (
-          <div className={styles.platformsSectionCollapsed}>
-            <div className={styles.platformDotsRow}>
-              {platforms.map((platform) => (
-                <div
-                  key={platform.name}
-                  className={styles.platformDotCollapsed}
-                  style={{ backgroundColor: platform.color }}
-                  title={`${platform.name} (${platform.cooldown})`}
-                />
-              ))}
-            </div>
-          </div>
-        ) : (
-          <div className={styles.platformsSection}>
-            <div className={styles.platformsLabel}>Active Platforms</div>
-            <div className={styles.platformsList}>
-              {platforms.map((platform) => (
-                <div key={platform.name} className={styles.platformRow}>
-                  <div className={styles.platformName}>
-                    <div
-                      className={styles.platformDot}
-                      style={{ backgroundColor: platform.color }}
-                    />
-                    <span className={styles.platformNameText}>{platform.name}</span>
-                  </div>
-                  <span className={styles.platformCooldown}>{platform.cooldown}</span>
-                </div>
-              ))}
-            </div>
           </div>
         )}
 

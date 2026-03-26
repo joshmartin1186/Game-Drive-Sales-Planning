@@ -3,6 +3,7 @@ import { getServerSupabase } from '@/lib/supabase'
 import Parser from 'rss-parser'
 import { inferTerritory } from '@/lib/territory'
 import { domainToOutletName } from '@/lib/outlet-utils'
+import { detectOutletCountry } from '@/lib/outlet-country'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -360,6 +361,7 @@ export async function GET(request: Request) {
                   .insert({
                     name: outletName,
                     domain: articleDomain,
+                    country: detectOutletCountry(articleDomain),
                     tier: null
                   })
                   .select('id')

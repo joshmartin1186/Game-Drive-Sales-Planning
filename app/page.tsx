@@ -74,6 +74,7 @@ export default function GameDriveDashboard() {
   const [editLaunchDateState, setEditLaunchDateState] = useState<EditLaunchDateState | null>(null)
   const [filterClientId, setFilterClientId] = useState<string>('')
   const [filterGameId, setFilterGameId] = useState<string>('')
+  const [filterPlatformIds, setFilterPlatformIds] = useState<Set<string>>(new Set())
   const [filterProductId, setFilterProductId] = useState<string>('')  // For version management
   const [activeVersionId, setActiveVersionId] = useState<string | null>(null)  // null = working draft
   const [activeVersionSnapshot, setActiveVersionSnapshot] = useState<SaleSnapshot[] | null>(null)  // Snapshot data when viewing a version
@@ -105,6 +106,7 @@ export default function GameDriveDashboard() {
     try {
       const { data: platformsData, error: platformsError } = await supabase.from('platforms').select('*').order('name')
       if (platformsError) throw platformsError; setPlatforms(platformsData || [])
+      setFilterPlatformIds(prev => prev.size === 0 ? new Set((platformsData || []).map((p: Platform) => p.id)) : prev)
       const { data: eventsData, error: eventsError } = await supabase.from('platform_events').select(`*, platform:platforms(*)`).order('start_date', { ascending: false })
       if (eventsError) throw eventsError; setPlatformEvents(eventsData || [])
       const { data: clientsData, error: clientsError } = await supabase.from('clients').select('*').order('name')
@@ -574,6 +576,7 @@ export default function GameDriveDashboard() {
       if (filterProductId) { result = result.filter(s => s.product_id === filterProductId) }
       else if (filterGameId) { result = result.filter(s => s.product?.game_id === filterGameId) }
       else if (filterClientId) { result = result.filter(s => s.product?.game?.client_id === filterClientId) }
+      if (filterPlatformIds.size > 0 && filterPlatformIds.size < platforms.length) { result = result.filter(s => filterPlatformIds.has(s.platform_id)) }
       return result
     }
 
@@ -582,8 +585,9 @@ export default function GameDriveDashboard() {
     if (filterProductId) { result = result.filter(s => s.product_id === filterProductId) }
     else if (filterGameId) { result = result.filter(s => s.product?.game_id === filterGameId) }
     else if (filterClientId) { result = result.filter(s => s.product?.game?.client_id === filterClientId) }
+    if (filterPlatformIds.size > 0 && filterPlatformIds.size < platforms.length) { result = result.filter(s => filterPlatformIds.has(s.platform_id)) }
     return result
-  }, [sales, filterClientId, filterGameId, filterProductId, activeVersionId, activeVersionSnapshot, products, platforms])
+  }, [sales, filterClientId, filterGameId, filterProductId, filterPlatformIds, activeVersionId, activeVersionSnapshot, products, platforms])
 
   const { conflicts, conflictDetails } = useMemo(() => {
     const conflictList: ConflictInfo[] = []
@@ -687,7 +691,25 @@ export default function GameDriveDashboard() {
         <div className={styles.filterGroup}><label>Product:</label><select value={filterProductId} onChange={(e) => setFilterProductId(e.target.value)}><option value="">All Products</option>{filteredProducts.map(product => (<option key={product.id} value={product.id}>{product.name}</option>))}</select></div>
         <div className={styles.filterGroup}><label className={styles.checkboxLabel}><input type="checkbox" checked={showEvents} onChange={(e) => setShowEvents(e.target.checked)} />Show Platform Events</label></div>
         <div className={styles.filterGroup}><label className={styles.checkboxLabel}><input type="checkbox" checked={showCoverage} onChange={(e) => setShowCoverage(e.target.checked)} />Show Coverage</label></div>
-        {(filterClientId || filterGameId || filterProductId) && (<button className={styles.clearFilters} onClick={() => { setFilterClientId(''); setFilterGameId(''); setFilterProductId(''); setActiveVersionId(null); setActiveVersionSnapshot(null) }}>Clear Filters</button>)}
+        {platforms.length > 0 && (
+          <div className={styles.platformFilters}>
+            <label className={styles.platformFiltersLabel}>Platforms:</label>
+            {platforms.map(p => (
+              <label key={p.id} className={styles.platformCheckbox}>
+                <input type="checkbox" checked={filterPlatformIds.has(p.id)} onChange={(e) => {
+                  setFilterPlatformIds(prev => {
+                    const next = new Set(prev)
+                    if (e.target.checked) { next.add(p.id) } else { next.delete(p.id) }
+                    return next
+                  })
+                }} />
+                <span className={styles.platformDot} style={{ backgroundColor: p.color_hex || '#666' }} />
+                {p.name}
+              </label>
+            ))}
+          </div>
+        )}
+        {(filterClientId || filterGameId || filterProductId || filterPlatformIds.size < platforms.length) && (<button className={styles.clearFilters} onClick={() => { setFilterClientId(''); setFilterGameId(''); setFilterProductId(''); setFilterPlatformIds(new Set(platforms.map(p => p.id))); setActiveVersionId(null); setActiveVersionSnapshot(null) }}>Clear Filters</button>)}
       </div>
 
       {/* Version viewing banner */}

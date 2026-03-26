@@ -77,7 +77,7 @@ interface CampaignOption { id: string; name: string; client_id: string | null; g
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
-const COVERAGE_TYPES = ['news', 'review', 'preview', 'interview', 'trailer', 'trailer_repost', 'stream', 'video', 'guide', 'roundup', 'mention', 'feature']
+const COVERAGE_TYPES = ['news', 'review', 'preview', 'interview', 'trailer', 'trailer_repost', 'stream', 'video', 'guide', 'roundup', 'mention', 'feature', 'informational']
 const SENTIMENTS = ['positive', 'neutral', 'negative', 'mixed']
 const APPROVAL_STATUSES = ['auto_approved', 'pending_review', 'rejected', 'manually_approved']
 const SOURCE_TYPES = ['rss', 'tavily', 'youtube', 'twitch', 'reddit', 'twitter', 'tiktok', 'instagram', 'manual']
@@ -146,9 +146,12 @@ export default function CoverageFeedPage() {
   const [aiFilter, setAiFilter] = useState('')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
+  const [debouncedDateFrom, setDebouncedDateFrom] = useState('')
+  const [debouncedDateTo, setDebouncedDateTo] = useState('')
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const searchTimeout = useRef<NodeJS.Timeout | null>(null)
+  const dateTimeout = useRef<NodeJS.Timeout | null>(null)
 
   // Sort
   const [sortBy, setSortBy] = useState('monthly_unique_visitors')
@@ -186,20 +189,30 @@ export default function CoverageFeedPage() {
   const [addError, setAddError] = useState<string | null>(null)
   const [showMoreOptions, setShowMoreOptions] = useState(false)
 
-  // Debounced search
+  // Debounced search (800ms so user can finish typing)
   useEffect(() => {
     if (searchTimeout.current) clearTimeout(searchTimeout.current)
-    searchTimeout.current = setTimeout(() => setDebouncedSearch(search), 300)
+    searchTimeout.current = setTimeout(() => setDebouncedSearch(search), 800)
     return () => { if (searchTimeout.current) clearTimeout(searchTimeout.current) }
   }, [search])
+
+  // Debounced date filters (1200ms so user can finish typing the full year)
+  useEffect(() => {
+    if (dateTimeout.current) clearTimeout(dateTimeout.current)
+    dateTimeout.current = setTimeout(() => {
+      setDebouncedDateFrom(dateFrom)
+      setDebouncedDateTo(dateTo)
+    }, 1200)
+    return () => { if (dateTimeout.current) clearTimeout(dateTimeout.current) }
+  }, [dateFrom, dateTo])
 
   // Fetch reference data
   useEffect(() => {
     if (!canView) return
     async function load() {
       const [clientsRes, gamesRes, campaignsRes] = await Promise.all([
-        supabase.from('clients').select('id, name').eq('pr_tracking_enabled', true).order('name'),
-        supabase.from('games').select('id, name, client_id').eq('pr_tracking_enabled', true).order('name'),
+        supabase.from('clients').select('id, name').order('name'),
+        supabase.from('games').select('id, name, client_id').order('name'),
         supabase.from('coverage_campaigns').select('id, name, client_id, game_id').order('name')
       ])
       if (clientsRes.data) setClients(clientsRes.data)
@@ -223,8 +236,8 @@ export default function CoverageFeedPage() {
     if (tierFilter) params.set('tier', tierFilter)
     if (territoryFilter) params.set('territory', territoryFilter)
     if (campaignFilter) params.set('campaign_id', campaignFilter)
-    if (dateFrom) params.set('date_from', dateFrom)
-    if (dateTo) params.set('date_to', dateTo)
+    if (debouncedDateFrom) params.set('date_from', debouncedDateFrom)
+    if (debouncedDateTo) params.set('date_to', debouncedDateTo)
     if (debouncedSearch) params.set('search', debouncedSearch)
     if (hideDuplicates) params.set('hide_duplicates', 'true')
     if (aiFilter) params.set('is_ai_generated', aiFilter)
@@ -243,7 +256,7 @@ export default function CoverageFeedPage() {
       console.error('Failed to fetch coverage items:', err)
     }
     setIsLoading(false)
-  }, [clientFilter, gameFilter, typeFilter, sentimentFilter, approvalFilter, sourceFilter, tierFilter, territoryFilter, campaignFilter, aiFilter, dateFrom, dateTo, debouncedSearch, sortBy, sortDir, viewMode, hideDuplicates])
+  }, [clientFilter, gameFilter, typeFilter, sentimentFilter, approvalFilter, sourceFilter, tierFilter, territoryFilter, campaignFilter, aiFilter, debouncedDateFrom, debouncedDateTo, debouncedSearch, sortBy, sortDir, viewMode, hideDuplicates])
 
   useEffect(() => {
     if (canView) fetchItems()
@@ -877,7 +890,14 @@ export default function CoverageFeedPage() {
                           </td>
                           <td style={{ padding: '8px 12px' }}>
                             {item.coverage_type ? (
-                              <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '9999px', backgroundColor: '#f1f5f9', color: '#475569' }}>
+                              <span style={{
+                                fontSize: '11px',
+                                padding: '2px 8px',
+                                borderRadius: '9999px',
+                                backgroundColor: item.coverage_type === 'informational' ? '#f3f4f6' : '#f1f5f9',
+                                color: item.coverage_type === 'informational' ? '#9ca3af' : '#475569',
+                                fontStyle: item.coverage_type === 'informational' ? 'italic' : 'normal',
+                              }}>
                                 {item.coverage_type}
                               </span>
                             ) : <span style={{ color: '#d1d5db' }}>—</span>}

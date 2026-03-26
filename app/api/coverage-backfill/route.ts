@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getServerSupabase } from '@/lib/supabase'
 import { tavily } from '@tavily/core'
 import { inferTerritory } from '@/lib/territory'
+import { classifyCoverageType } from '@/lib/coverage-utils'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -229,7 +230,7 @@ export async function POST(request: Request) {
             title: result.title.trim(),
             url: normalizedUrl,
             publish_date: result.publishedDate ? result.publishedDate.split('T')[0] : null,
-            coverage_type: 'news',
+            coverage_type: classifyCoverageType('news', normalizedUrl),
             territory,
             relevance_score: score,
             relevance_reasoning: `Historical backfill: "${searchQuery}"`,

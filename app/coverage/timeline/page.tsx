@@ -78,6 +78,7 @@ const TYPE_COLORS: Record<string, string> = {
   news: '#2563eb', review: '#7c3aed', preview: '#0891b2', interview: '#059669',
   trailer: '#dc2626', stream: '#9333ea', video: '#ea580c', guide: '#65a30d',
   roundup: '#0284c7', mention: '#94a3b8', feature: '#d946ef', trailer_repost: '#f97316',
+  informational: '#9ca3af',
 }
 
 const SENTIMENT_COLORS: Record<string, string> = {

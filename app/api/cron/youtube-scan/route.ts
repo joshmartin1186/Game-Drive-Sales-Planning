@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSupabase } from '@/lib/supabase'
 import { inferTerritory } from '@/lib/territory'
+import { detectOutletCountry } from '@/lib/outlet-country'
 
 function getSupabase() {
   return getServerSupabase()
@@ -142,6 +143,7 @@ export async function GET(request: NextRequest) {
               .insert({
                 name: channelName,
                 domain: channelDomain,
+                country: detectOutletCountry(channelDomain),
                 monthly_unique_visitors: subscribers,
                 tier: subscribers >= 1000000 ? 'A' : subscribers >= 100000 ? 'B' : subscribers >= 10000 ? 'C' : 'D',
                 is_active: true,

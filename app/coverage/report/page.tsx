@@ -336,15 +336,19 @@ export default function CoverageReportPage() {
       XLSX.utils.book_append_sheet(wb, summaryWs, 'Summary')
 
       // Coverage items sheet — sorted by visitors desc within each campaign group
-      const headerRow = ['Date', 'Territory', 'Media Outlet', 'Tier', 'Type', 'Title', 'URL', 'Monthly Unique Visitors', 'Review Score', 'Quotes/Notes', 'Campaign Section']
+      const headerRow = ['Date', 'Territory', 'Media Outlet', 'Tier', 'Type', 'Title', 'URL', 'Monthly Unique Visitors', 'Review Score', 'Quotes/Notes', 'PR Campaign']
       const rows: unknown[][] = [headerRow]
 
       for (const group of groupedItems) {
         rows.push([])
         rows.push([group.section, '', '', '', '', '', '', '', '', '', ''])
 
-        // Sort within group by visitors descending
-        const sorted = [...group.items].sort((a, b) => getVisitors(b) - getVisitors(a))
+        // Sort within group by publish date ascending (oldest to newest)
+        const sorted = [...group.items].sort((a, b) => {
+          const dateA = a.publish_date || '9999-99-99'
+          const dateB = b.publish_date || '9999-99-99'
+          return dateA.localeCompare(dateB)
+        })
 
         for (const item of sorted) {
           rows.push([
@@ -392,8 +396,12 @@ export default function CoverageReportPage() {
   const handleCSVExport = () => {
     setExporting(true)
     try {
-      // Sort all items by visitors descending (flat, no grouping)
-      const sorted = [...items].sort((a, b) => getVisitors(b) - getVisitors(a))
+      // Sort all items by publish date ascending (oldest to newest)
+      const sorted = [...items].sort((a, b) => {
+        const dateA = a.publish_date || '9999-99-99'
+        const dateB = b.publish_date || '9999-99-99'
+        return dateA.localeCompare(dateB)
+      })
 
       // Build title row: "Game Name - Campaign Name" or "Game Name" or "PR Report"
       const gameName = selectedGame ? games.find(g => g.id === selectedGame)?.name || '' : ''

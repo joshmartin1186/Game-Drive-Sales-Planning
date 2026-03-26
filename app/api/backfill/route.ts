@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSupabase } from '@/lib/supabase'
 import { domainToOutletName, extractDomain } from '@/lib/outlet-utils'
 import { inferTerritory } from '@/lib/territory'
+import { detectOutletCountry } from '@/lib/outlet-country'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -122,7 +123,7 @@ export async function POST(request: NextRequest) {
               const outletName = domainToOutletName(domain)
               const { data: newOutlet } = await supabase
                 .from('outlets')
-                .insert({ name: outletName, domain, tier: null })
+                .insert({ name: outletName, domain, country: detectOutletCountry(domain), tier: null })
                 .select('id')
                 .single()
               if (newOutlet) {
@@ -339,7 +340,44 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ task, total: outlets.length, updated })
       }
 
-      // ── 7. Summary / status check ──────────────────────────────────────
+      // ── 7. Backfill outlet countries from domain ──────────────────────
+      case 'backfill_countries': {
+        const { data: outlets } = await supabase
+          .from('outlets')
+          .select('id, domain, country')
+          .not('domain', 'is', null)
+          .or('country.is.null,country.eq.,country.eq.International')
+          .limit(2000)
+
+        if (!outlets || outlets.length === 0) {
+          return NextResponse.json({ task, result: 'No outlets need country backfill', updated: 0 })
+        }
+
+        let updated = 0
+        const changes: Array<{ domain: string; old: string; new: string }> = []
+
+        for (const outlet of outlets) {
+          if (!outlet.domain) continue
+          const detected = detectOutletCountry(outlet.domain)
+
+          // Only update if we detected a specific country (not "International")
+          // or if the current value is null/empty
+          if (detected !== 'International' || !outlet.country) {
+            if (detected !== (outlet.country || '')) {
+              await supabase
+                .from('outlets')
+                .update({ country: detected, updated_at: new Date().toISOString() })
+                .eq('id', outlet.id)
+              changes.push({ domain: outlet.domain, old: outlet.country || '(none)', new: detected })
+              updated++
+            }
+          }
+        }
+
+        return NextResponse.json({ task, total: outlets.length, updated, changes: changes.slice(0, 50) })
+      }
+
+      // ── 8. Summary / status check ──────────────────────────────────────
       case 'status': {
         const [
           { count: totalItems },
@@ -349,6 +387,7 @@ export async function POST(request: NextRequest) {
           { count: totalOutlets },
           { count: outletsMissingMuv },
           { count: outletsMissingTier },
+          { count: outletsMissingCountry },
         ] = await Promise.all([
           supabase.from('coverage_items').select('*', { count: 'exact', head: true }),
           supabase.from('coverage_items').select('*', { count: 'exact', head: true }).is('outlet_id', null),
@@ -357,6 +396,7 @@ export async function POST(request: NextRequest) {
           supabase.from('outlets').select('*', { count: 'exact', head: true }),
           supabase.from('outlets').select('*', { count: 'exact', head: true }).is('monthly_unique_visitors', null),
           supabase.from('outlets').select('*', { count: 'exact', head: true }).is('tier', null),
+          supabase.from('outlets').select('*', { count: 'exact', head: true }).or('country.is.null,country.eq.,country.eq.International'),
         ])
 
         return NextResponse.json({
@@ -371,6 +411,7 @@ export async function POST(request: NextRequest) {
             total: totalOutlets,
             missing_muv: outletsMissingMuv,
             missing_tier: outletsMissingTier,
+            missing_country: outletsMissingCountry,
           }
         })
       }

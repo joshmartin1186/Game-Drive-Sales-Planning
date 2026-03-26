@@ -46,8 +46,8 @@ export default function KeywordsPage() {
     async function fetchMeta() {
       try {
         const [clientsRes, gamesRes] = await Promise.all([
-          supabase.from('clients').select('*').eq('pr_tracking_enabled', true).order('name'),
-          supabase.from('games').select('*').eq('pr_tracking_enabled', true).order('name')
+          supabase.from('clients').select('*').order('name'),
+          supabase.from('games').select('*').order('name')
         ])
         if (clientsRes.data) {
           setClients(clientsRes.data)
@@ -114,10 +114,23 @@ export default function KeywordsPage() {
   const whitelistCount = keywords.filter(k => k.keyword_type === 'whitelist').length
   const blacklistCount = keywords.filter(k => k.keyword_type === 'blacklist').length
 
+  // Common words that are too generic to use as whitelist keywords
+  const GENERIC_WORDS = new Set(['the', 'a', 'an', 'and', 'or', 'for', 'in', 'on', 'at', 'to', 'of', 'is', 'it', 'be', 'as', 'do', 'no', 'so', 'up', 'go', 'if', 'my', 'us', 'we', 'he', 'me', 'am', 'by', 'all', 'new', 'one', 'two', 'out', 'day', 'get', 'has', 'him', 'his', 'how', 'its', 'may', 'not', 'now', 'old', 'see', 'way', 'who', 'did', 'let', 'say', 'she', 'too', 'use', 'her', 'was', 'but', 'are', 'had', 'end', 'set', 'run', 'own', 'put', 'big', 'few', 'yet', 'ever', 'just', 'game', 'play', 'best', 'good', 'love', 'life', 'time', 'long', 'last', 'free', 'back', 'home', 'more', 'over', 'only', 'very', 'make', 'like', 'even', 'most', 'also', 'come', 'made', 'well', 'then', 'some', 'them', 'been', 'have', 'will', 'what', 'when', 'your', 'from', 'they', 'know', 'want', 'give', 'with', 'this', 'that', 'each', 'into', 'than', 'much', 'take', 'live', 'here', 'real', 'dark', 'dead', 'lost', 'gone', 'left', 'rise', 'fall', 'open', 'true', 'zero', 'stay', 'forever', 'never', 'always', 'world', 'after', 'under', 'story', 'quest', 'night', 'light', 'dream', 'break', 'cross', 'power', 'super', 'final', 'first', 'great', 'every', 'black', 'white'])
+
   // Add a single keyword
   const handleAdd = async (typeOverride?: KeywordType) => {
     if (!newKeyword.trim() || !selectedClientId || !selectedGameId) return
     const kwType = typeOverride || newType
+
+    // Warn about generic single-word keywords that will produce false positives
+    const trimmed = newKeyword.trim().toLowerCase()
+    if (kwType === 'whitelist' && !trimmed.includes(' ') && GENERIC_WORDS.has(trimmed)) {
+      const proceed = window.confirm(
+        `Warning: "${newKeyword.trim()}" is a very common word and will match many irrelevant articles.\n\nConsider using the full game/product name instead.\n\nAdd it anyway?`
+      )
+      if (!proceed) return
+    }
+
     setAdding(true)
     try {
       const res = await fetch('/api/coverage-keywords', {
