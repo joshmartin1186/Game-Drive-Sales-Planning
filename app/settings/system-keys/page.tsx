@@ -356,7 +356,7 @@ export default function SystemKeysPage() {
                         href={config.docsUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        style={{ fontSize: '12px', color: '#2563eb', textDecoration: 'none' }}
+                        style={{ fontSize: '12px', color: '#b8232f', textDecoration: 'none' }}
                       >
                         Get API key →
                       </a>
@@ -364,7 +364,7 @@ export default function SystemKeysPage() {
                         onClick={() => handleSave(service.service_name)}
                         disabled={saving}
                         style={{
-                          padding: '8px 20px', backgroundColor: '#2563eb', color: 'white',
+                          padding: '8px 20px', backgroundColor: '#b8232f', color: 'white',
                           border: 'none', borderRadius: '6px', fontSize: '14px', fontWeight: 500,
                           cursor: saving ? 'not-allowed' : 'pointer',
                           opacity: saving ? 0.7 : 1

@@ -252,7 +252,7 @@ export default function SettingsPlatformsPage() {
                       onClick={() => handleSave(editingPlatform)}
                       style={{
                         padding: '10px 24px',
-                        backgroundColor: '#2563eb',
+                        backgroundColor: '#b8232f',
                         color: 'white',
                         border: 'none',
                         borderRadius: '8px',

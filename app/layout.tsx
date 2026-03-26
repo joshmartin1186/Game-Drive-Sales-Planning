@@ -7,8 +7,8 @@ import ChatBot from './components/ChatBot'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'GameDrive Sales Planning Tool',
-  description: 'Professional game sales planning across Steam, PlayStation, Xbox, Nintendo, and Epic',
+  title: 'Game Drive — Sales Planning & PR Coverage',
+  description: 'Game Drive: Professional game sales planning and PR coverage tracking across Steam, PlayStation, Xbox, Nintendo, and Epic',
 }
 
 export default function RootLayout({
@@ -19,7 +19,8 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
-        <link rel="icon" href="/favicon.ico" />
+        <link rel="icon" href="/images/GD_Black.png" type="image/png" />
+        <link rel="apple-touch-icon" href="/images/GD_RGB.png" />
       </head>
       <body className={inter.className}>
         <Providers>

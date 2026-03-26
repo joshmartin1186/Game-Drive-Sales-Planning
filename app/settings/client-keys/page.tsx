@@ -751,7 +751,7 @@ export default function ClientKeysPage() {
                           style={{
                             marginTop: '6px',
                             padding: '4px 8px',
-                            background: '#3b82f6',
+                            background: '#d22939',
                             color: 'white',
                             border: 'none',
                             borderRadius: '4px',
@@ -925,7 +925,7 @@ export default function ClientKeysPage() {
                           style={{
                             marginTop: '6px',
                             padding: '4px 8px',
-                            background: '#3b82f6',
+                            background: '#d22939',
                             color: 'white',
                             border: 'none',
                             borderRadius: '4px',
@@ -1182,7 +1182,7 @@ export default function ClientKeysPage() {
                 {syncResult.newUnmatched !== undefined && syncResult.newUnmatched > 0 && (
                   <p style={{ margin: '8px 0 0 0', fontSize: '13px', padding: '8px 12px', background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: '6px', color: '#9a3412' }}>
                     {syncResult.newUnmatched} new product(s) need matching.{' '}
-                    <Link href="/settings/product-matching" style={{ color: '#2563eb', textDecoration: 'underline', fontWeight: 500 }}>
+                    <Link href="/settings/product-matching" style={{ color: '#b8232f', textDecoration: 'underline', fontWeight: 500 }}>
                       Review now
                     </Link>
                   </p>
@@ -1603,7 +1603,7 @@ export default function ClientKeysPage() {
                 {psSyncResult.newUnmatched !== undefined && psSyncResult.newUnmatched > 0 && (
                   <p style={{ margin: '8px 0 0 0', fontSize: '13px', padding: '8px 12px', background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: '6px', color: '#9a3412' }}>
                     {psSyncResult.newUnmatched} new product(s) need matching.{' '}
-                    <Link href="/settings/product-matching" style={{ color: '#2563eb', textDecoration: 'underline', fontWeight: 500 }}>
+                    <Link href="/settings/product-matching" style={{ color: '#b8232f', textDecoration: 'underline', fontWeight: 500 }}>
                       Review now
                     </Link>
                   </p>

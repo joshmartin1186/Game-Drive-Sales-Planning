@@ -28,13 +28,13 @@
   justify-content: space-between;
   align-items: center;
   padding: 20px 24px;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid #e2e4ea;
 }
 
 .header h2 {
   font-size: 20px;
   font-weight: 600;
-  color: #1e293b;
+  color: #1a1a2e;
   margin: 0;
 }
 
@@ -42,7 +42,7 @@
   background: none;
   border: none;
   font-size: 24px;
-  color: #64748b;
+  color: #6b6b82;
   cursor: pointer;
   padding: 4px 8px;
   border-radius: 6px;
@@ -50,8 +50,8 @@
 }
 
 .closeBtn:hover {
-  background: #f1f5f9;
-  color: #1e293b;
+  background: #f0f0f4;
+  color: #1a1a2e;
 }
 
 /* Progress indicator */
@@ -60,8 +60,8 @@
   align-items: center;
   justify-content: center;
   padding: 20px 24px;
-  background: #f8fafc;
-  border-bottom: 1px solid #e2e8f0;
+  background: #f8f8fa;
+  border-bottom: 1px solid #e2e4ea;
 }
 
 .progressStep {
@@ -79,13 +79,13 @@
   justify-content: center;
   font-size: 13px;
   font-weight: 600;
-  background: #e2e8f0;
-  color: #64748b;
+  background: #e2e4ea;
+  color: #6b6b82;
   transition: all 0.2s;
 }
 
 .progressStep.active .stepNumber {
-  background: #3b82f6;
+  background: #d22939;
   color: white;
 }
 
@@ -97,11 +97,11 @@
 .stepLabel {
   font-size: 13px;
   font-weight: 500;
-  color: #64748b;
+  color: #6b6b82;
 }
 
 .progressStep.active .stepLabel {
-  color: #3b82f6;
+  color: #d22939;
 }
 
 .progressStep.completed .stepLabel {
@@ -111,7 +111,7 @@
 .progressLine {
   width: 60px;
   height: 2px;
-  background: #e2e8f0;
+  background: #e2e4ea;
   margin: 0 12px;
 }
 
@@ -138,9 +138,9 @@
   flex-direction: column;
   gap: 16px;
   padding: 20px;
-  background: #f8fafc;
+  background: #f8f8fa;
   border-radius: 12px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid #e2e4ea;
 }
 
 .optionGroup {
@@ -152,15 +152,15 @@
 .optionLabel {
   font-size: 13px;
   font-weight: 600;
-  color: #475569;
+  color: #44445a;
 }
 
 .presetSelect {
   padding: 10px 12px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid #e2e4ea;
   border-radius: 8px;
   font-size: 14px;
-  color: #1e293b;
+  color: #1a1a2e;
   background: white;
   cursor: pointer;
   max-width: 300px;
@@ -168,13 +168,13 @@
 
 .presetSelect:focus {
   outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  border-color: #d22939;
+  box-shadow: 0 0 0 3px rgba(210, 41, 57, 0.1);
 }
 
 .optionHint {
   font-size: 12px;
-  color: #64748b;
+  color: #6b6b82;
   margin: 0;
 }
 
@@ -189,17 +189,17 @@
   width: 18px;
   height: 18px;
   margin-top: 2px;
-  accent-color: #3b82f6;
+  accent-color: #d22939;
   cursor: pointer;
 }
 
 .checkboxText {
   font-size: 14px;
-  color: #1e293b;
+  color: #1a1a2e;
 }
 
 .checkboxText strong {
-  color: #3b82f6;
+  color: #d22939;
 }
 
 /* Upload step */
@@ -219,14 +219,14 @@
 }
 
 .dropzone:hover {
-  border-color: #3b82f6;
-  background: #f8fafc;
+  border-color: #d22939;
+  background: #f8f8fa;
 }
 
 .dropzoneActive {
-  border-color: #3b82f6;
+  border-color: #d22939;
   border-style: solid;
-  background: #eff6ff;
+  background: rgba(210, 41, 57, 0.06);
   transform: scale(1.01);
 }
 
@@ -255,18 +255,18 @@
 .uploadText {
   font-size: 16px;
   font-weight: 500;
-  color: #1e293b;
+  color: #1a1a2e;
   margin: 0 0 8px;
 }
 
 .uploadHint {
   font-size: 13px;
-  color: #64748b;
+  color: #6b6b82;
   margin: 0;
 }
 
 .templateInfo {
-  background: #f8fafc;
+  background: #f8f8fa;
   border-radius: 12px;
   padding: 20px;
 }
@@ -275,13 +275,13 @@
   margin: 0 0 12px;
   font-size: 15px;
   font-weight: 600;
-  color: #1e293b;
+  color: #1a1a2e;
 }
 
 .templateInfo p {
   margin: 0 0 12px;
   font-size: 14px;
-  color: #64748b;
+  color: #6b6b82;
 }
 
 .templateInfo ul {
@@ -291,7 +291,7 @@
 
 .templateInfo li {
   font-size: 14px;
-  color: #475569;
+  color: #44445a;
   margin-bottom: 6px;
 }
 
@@ -312,14 +312,14 @@
   align-items: center;
   gap: 12px;
   padding: 12px 16px;
-  background: #eff6ff;
+  background: rgba(210, 41, 57, 0.06);
   border-radius: 8px;
-  border: 1px solid #bfdbfe;
+  border: 1px solid rgba(210, 41, 57, 0.15);
 }
 
 .detectedLabel {
   font-size: 13px;
-  color: #64748b;
+  color: #6b6b82;
 }
 
 .detectedValue {
@@ -342,7 +342,7 @@
 
 .mappingHint {
   font-size: 14px;
-  color: #64748b;
+  color: #6b6b82;
   margin: 0;
 }
 
@@ -367,7 +367,7 @@
 .mappingRow label {
   font-size: 13px;
   font-weight: 500;
-  color: #475569;
+  color: #44445a;
 }
 
 .required {
@@ -376,22 +376,22 @@
 
 .mappingRow select {
   padding: 10px 12px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid #e2e4ea;
   border-radius: 8px;
   font-size: 14px;
-  color: #1e293b;
+  color: #1a1a2e;
   background: white;
   cursor: pointer;
 }
 
 .mappingRow select:focus {
   outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  border-color: #d22939;
+  box-shadow: 0 0 0 3px rgba(210, 41, 57, 0.1);
 }
 
 .previewSample {
-  background: #f8fafc;
+  background: #f8f8fa;
   border-radius: 12px;
   padding: 16px;
 }
@@ -400,7 +400,7 @@
   margin: 0 0 12px;
   font-size: 14px;
   font-weight: 600;
-  color: #1e293b;
+  color: #1a1a2e;
 }
 
 .sampleTable {
@@ -417,18 +417,18 @@
 .sampleTable td {
   padding: 8px 12px;
   text-align: left;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid #e2e4ea;
   white-space: nowrap;
 }
 
 .sampleTable th {
   background: white;
   font-weight: 600;
-  color: #475569;
+  color: #44445a;
 }
 
 .sampleTable td {
-  color: #64748b;
+  color: #6b6b82;
 }
 
 /* Preview step */
@@ -501,7 +501,7 @@
 
 .summaryLabel {
   font-size: 12px;
-  color: #64748b;
+  color: #6b6b82;
 }
 
 .errorList {
@@ -543,7 +543,7 @@
 }
 
 .rowErrors {
-  color: #64748b;
+  color: #6b6b82;
 }
 
 .moreErrors {
@@ -554,7 +554,7 @@
 }
 
 .validList {
-  background: #f8fafc;
+  background: #f8f8fa;
   border-radius: 10px;
   padding: 16px;
 }
@@ -563,7 +563,7 @@
   margin: 0 0 12px;
   font-size: 14px;
   font-weight: 600;
-  color: #1e293b;
+  color: #1a1a2e;
 }
 
 .validTable {
@@ -580,20 +580,20 @@
 .validTable td {
   padding: 10px 12px;
   text-align: left;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid #e2e4ea;
 }
 
 .validTable th {
   background: white;
   font-weight: 600;
-  color: #475569;
+  color: #44445a;
   font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 
 .validTable td {
-  color: #1e293b;
+  color: #1a1a2e;
 }
 
 .validTable tr.hasWarning {
@@ -616,7 +616,7 @@
   text-align: center;
   padding: 12px;
   font-size: 13px;
-  color: #64748b;
+  color: #6b6b82;
 }
 
 /* Footer */
@@ -625,8 +625,8 @@
   justify-content: space-between;
   align-items: center;
   padding: 16px 24px;
-  border-top: 1px solid #e2e8f0;
-  background: #f8fafc;
+  border-top: 1px solid #e2e4ea;
+  background: #f8f8fa;
 }
 
 .footerRight {
@@ -637,7 +637,7 @@
 .backBtn {
   background: none;
   border: none;
-  color: #64748b;
+  color: #6b6b82;
   font-size: 14px;
   cursor: pointer;
   padding: 8px 16px;
@@ -646,16 +646,16 @@
 }
 
 .backBtn:hover {
-  background: #e2e8f0;
-  color: #1e293b;
+  background: #e2e4ea;
+  color: #1a1a2e;
 }
 
 .cancelBtn {
   padding: 10px 20px;
   background: white;
-  border: 1px solid #e2e8f0;
+  border: 1px solid #e2e4ea;
   border-radius: 8px;
-  color: #64748b;
+  color: #6b6b82;
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
@@ -663,13 +663,13 @@
 }
 
 .cancelBtn:hover {
-  background: #f1f5f9;
+  background: #f0f0f4;
   border-color: #cbd5e1;
 }
 
 .primaryBtn {
   padding: 10px 24px;
-  background: #3b82f6;
+  background: #d22939;
   border: none;
   border-radius: 8px;
   color: white;
@@ -680,7 +680,7 @@
 }
 
 .primaryBtn:hover:not(:disabled) {
-  background: #2563eb;
+  background: #b8232f;
 }
 
 .primaryBtn:disabled {
@@ -766,7 +766,7 @@
 .productName {
   font-size: 13px;
   font-weight: 500;
-  color: #1e293b;
+  color: #1a1a2e;
 }
 
 .rowCountBadge {
@@ -781,16 +781,16 @@
 .gameSelect {
   padding: 6px 10px;
   font-size: 12px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid #e2e4ea;
   border-radius: 6px;
   background: white;
-  color: #1e293b;
+  color: #1a1a2e;
   min-width: 150px;
 }
 
 .gameSelect:disabled {
   opacity: 0.5;
-  background: #f8fafc;
+  background: #f8f8fa;
 }
 
 .createProductsBtn {

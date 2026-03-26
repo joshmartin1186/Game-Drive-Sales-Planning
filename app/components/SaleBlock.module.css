@@ -107,7 +107,7 @@
 }
 
 .duplicateBtn:hover {
-  background: rgba(59, 130, 246, 0.8);
+  background: rgba(210, 41, 57, 0.8);
 }
 
 .deleteBtn {
@@ -122,7 +122,7 @@
 .contextMenu {
   position: fixed;
   background: white;
-  border: 1px solid #e2e8f0;
+  border: 1px solid #e2e4ea;
   border-radius: 8px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
   padding: 4px;
@@ -147,13 +147,13 @@
 }
 
 .contextMenu button:hover {
-  background: #f1f5f9;
+  background: #f0f0f4;
 }
 
 .contextMenu hr {
   margin: 4px 0;
   border: none;
-  border-top: 1px solid #e2e8f0;
+  border-top: 1px solid #e2e4ea;
 }
 
 .deleteMenuItem {

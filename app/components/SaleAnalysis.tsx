@@ -221,7 +221,7 @@ export default function SaleAnalysis({ sales, platforms }: SaleAnalysisProps) {
           <div className={styles.statusGrid}>
             <div className={styles.statusItem}>
               <div className={styles.statusBar}>
-                <div className={styles.statusFill} style={{ width: `${stats.campaignRate}%`, backgroundColor: '#3b82f6' }} />
+                <div className={styles.statusFill} style={{ width: `${stats.campaignRate}%`, backgroundColor: '#d22939' }} />
               </div>
               <span className={styles.statusLabel}>Campaign: {stats.campaignCount} ({stats.campaignRate}%)</span>
             </div>

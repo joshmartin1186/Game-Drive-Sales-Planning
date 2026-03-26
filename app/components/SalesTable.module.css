@@ -17,14 +17,14 @@
 
 .count {
   font-size: 0.875rem;
-  color: #64748b;
+  color: #6b6b82;
 }
 
 .selectModeBtn {
   padding: 0.375rem 0.75rem;
-  background: #f1f5f9;
-  color: #475569;
-  border: 1px solid #e2e8f0;
+  background: #f0f0f4;
+  color: #44445a;
+  border: 1px solid #e2e4ea;
   border-radius: 6px;
   font-size: 0.8125rem;
   font-weight: 500;
@@ -33,7 +33,7 @@
 }
 
 .selectModeBtn:hover {
-  background: #e2e8f0;
+  background: #e2e4ea;
 }
 
 .selectModeBtn.active {
@@ -68,9 +68,9 @@
 
 .exportBtnSecondary {
   padding: 0.5rem 0.75rem;
-  background: #f1f5f9;
-  color: #475569;
-  border: 1px solid #e2e8f0;
+  background: #f0f0f4;
+  color: #44445a;
+  border: 1px solid #e2e4ea;
   border-radius: 6px;
   font-size: 0.875rem;
   font-weight: 500;
@@ -82,7 +82,7 @@
 }
 
 .exportBtnSecondary:hover {
-  background: #e2e8f0;
+  background: #e2e4ea;
   border-color: #cbd5e1;
 }
 
@@ -95,8 +95,8 @@
   gap: 1rem;
   padding: 1rem;
   margin-bottom: 1rem;
-  background: linear-gradient(135deg, #eff6ff 0%, #f0fdf4 100%);
-  border: 1px solid #dbeafe;
+  background: linear-gradient(135deg, rgba(210, 41, 57, 0.06) 0%, #f0fdf4 100%);
+  border: 1px solid rgba(210, 41, 57, 0.08);
   border-radius: 8px;
 }
 
@@ -110,7 +110,7 @@
 .selectAllBtn {
   padding: 0.375rem 0.75rem;
   background: white;
-  color: #475569;
+  color: #44445a;
   border: 1px solid #cbd5e1;
   border-radius: 6px;
   font-size: 0.8125rem;
@@ -120,7 +120,7 @@
 }
 
 .selectAllBtn:hover {
-  background: #f1f5f9;
+  background: #f0f0f4;
   border-color: #94a3b8;
 }
 
@@ -133,15 +133,15 @@
 
 .filterLabel {
   font-size: 0.75rem;
-  color: #64748b;
+  color: #6b6b82;
   font-weight: 500;
 }
 
 .gameFilterBtn {
   padding: 0.25rem 0.625rem;
   background: white;
-  color: #475569;
-  border: 1px solid #e2e8f0;
+  color: #44445a;
+  border: 1px solid #e2e4ea;
   border-radius: 20px;
   font-size: 0.75rem;
   font-weight: 500;
@@ -153,7 +153,7 @@
 }
 
 .gameFilterBtn:hover {
-  background: #f1f5f9;
+  background: #f0f0f4;
   border-color: #cbd5e1;
 }
 
@@ -208,7 +208,7 @@
 }
 
 .bulkEditBtn:hover {
-  background: #4f46e5;
+  background: #d22939;
 }
 
 .tableWrapper {
@@ -225,20 +225,20 @@
   text-align: left;
   padding: 0.75rem 0.5rem;
   font-weight: 600;
-  color: #475569;
-  background: #f8fafc;
-  border-bottom: 2px solid #e2e8f0;
+  color: #44445a;
+  background: #f8f8fa;
+  border-bottom: 2px solid #e2e4ea;
   white-space: nowrap;
 }
 
 .table td {
   padding: 0.625rem 0.5rem;
-  border-bottom: 1px solid #f1f5f9;
+  border-bottom: 1px solid #f0f0f4;
   color: #334155;
 }
 
 .table tbody tr:hover {
-  background: #f8fafc;
+  background: #f8f8fa;
 }
 
 .checkboxCol {
@@ -259,7 +259,7 @@
 }
 
 .clickableRow:hover {
-  background: #eff6ff !important;
+  background: rgba(210, 41, 57, 0.06) !important;
 }
 
 .selectedRow {
@@ -267,7 +267,7 @@
 }
 
 .selectedRow:hover {
-  background: #e0e7ff !important;
+  background: rgba(210, 41, 57, 0.08) !important;
 }
 
 .emptyRow {
@@ -317,7 +317,7 @@
   justify-content: center;
   width: 20px;
   height: 20px;
-  background: #3b82f6;
+  background: #d22939;
   color: white;
   border-radius: 4px;
   font-size: 0.75rem;
@@ -348,8 +348,8 @@
 }
 
 .goalBadge.acquisition {
-  background: #dbeafe;
-  color: #1d4ed8;
+  background: rgba(210, 41, 57, 0.08);
+  color: #b8232f;
 }
 
 .goalBadge.visibility {
@@ -377,13 +377,13 @@
 }
 
 .statusBadge.draft {
-  background: #f1f5f9;
-  color: #64748b;
+  background: #f0f0f4;
+  color: #6b6b82;
 }
 
 .statusBadge.planned {
-  background: #dbeafe;
-  color: #1d4ed8;
+  background: rgba(210, 41, 57, 0.08);
+  color: #b8232f;
 }
 
 .statusBadge.submitted {
@@ -408,8 +408,8 @@
 }
 
 .statusBadge.ended {
-  background: #f1f5f9;
-  color: #475569;
+  background: #f0f0f4;
+  color: #44445a;
 }
 
 .actionCell {
@@ -420,35 +420,35 @@
 .editBtn {
   padding: 0.25rem 0.5rem;
   background: none;
-  border: 1px solid #e2e8f0;
+  border: 1px solid #e2e4ea;
   border-radius: 4px;
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .editBtn:hover {
-  background: #eff6ff;
-  border-color: #bfdbfe;
+  background: rgba(210, 41, 57, 0.06);
+  border-color: rgba(210, 41, 57, 0.15);
 }
 
 .duplicateBtn {
   padding: 0.25rem 0.5rem;
   background: none;
-  border: 1px solid #e2e8f0;
+  border: 1px solid #e2e4ea;
   border-radius: 4px;
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .duplicateBtn:hover {
-  background: #eff6ff;
-  border-color: #bfdbfe;
+  background: rgba(210, 41, 57, 0.06);
+  border-color: rgba(210, 41, 57, 0.15);
 }
 
 .deleteBtn {
   padding: 0.25rem 0.5rem;
   background: none;
-  border: 1px solid #e2e8f0;
+  border: 1px solid #e2e4ea;
   border-radius: 4px;
   cursor: pointer;
   transition: all 0.2s;
@@ -467,7 +467,7 @@
 
 .editableCell:hover {
   background: #f0f9ff;
-  outline: 1px dashed #93c5fd;
+  outline: 1px dashed rgba(210, 41, 57, 0.25);
   outline-offset: -1px;
 }
 
@@ -475,12 +475,12 @@
   width: 100%;
   min-width: 80px;
   padding: 0.25rem 0.375rem;
-  border: 2px solid #3b82f6;
+  border: 2px solid #d22939;
   border-radius: 4px;
   font-size: 0.8125rem;
   font-family: inherit;
   background: white;
-  color: #1e293b;
+  color: #1a1a2e;
   outline: none;
   box-sizing: border-box;
 }

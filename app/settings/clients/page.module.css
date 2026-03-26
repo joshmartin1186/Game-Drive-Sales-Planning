@@ -13,7 +13,7 @@
 .topBar h1 {
   font-size: 24px;
   font-weight: 700;
-  color: #1e293b;
+  color: #1a1a2e;
   margin: 0;
 }
 
@@ -24,7 +24,7 @@
 
 .addBtn {
   padding: 10px 20px;
-  background: #2563eb;
+  background: #b8232f;
   color: white;
   border: none;
   border-radius: 8px;
@@ -35,14 +35,14 @@
   transition: background 150ms;
 }
 
-.addBtn:hover { background: #1d4ed8; }
+.addBtn:hover { background: #b8232f; }
 .addBtn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .secondaryBtn {
   padding: 10px 20px;
   background: white;
-  color: #475569;
-  border: 1px solid #e2e8f0;
+  color: #44445a;
+  border: 1px solid #e2e4ea;
   border-radius: 8px;
   font-size: 14px;
   font-weight: 500;
@@ -51,7 +51,7 @@
   transition: all 150ms;
 }
 
-.secondaryBtn:hover { background: #f8fafc; }
+.secondaryBtn:hover { background: #f8f8fa; }
 
 /* Action message */
 .actionMessage {
@@ -85,7 +85,7 @@
 .emptyIcon {
   width: 80px;
   height: 80px;
-  background: #f1f5f9;
+  background: #f0f0f4;
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -96,13 +96,13 @@
 .emptyState h3 {
   font-size: 20px;
   font-weight: 600;
-  color: #1e293b;
+  color: #1a1a2e;
   margin: 0 0 8px;
 }
 
 .emptyState p {
   font-size: 14px;
-  color: #64748b;
+  color: #6b6b82;
   margin: 0 0 24px;
 }
 
@@ -129,7 +129,7 @@
   transition: background 100ms;
 }
 
-.cardHeader:hover { background: #f8fafc; }
+.cardHeader:hover { background: #f8f8fa; }
 
 .cardTitle {
   display: flex;
@@ -140,7 +140,7 @@
 .cardTitle h3 {
   font-size: 16px;
   font-weight: 600;
-  color: #1e293b;
+  color: #1a1a2e;
   margin: 0;
 }
 
@@ -152,7 +152,7 @@
 
 .email {
   font-size: 13px;
-  color: #64748b;
+  color: #6b6b82;
 }
 
 .cardMeta {
@@ -163,9 +163,9 @@
 
 .countBadge {
   font-size: 12px;
-  color: #64748b;
+  color: #6b6b82;
   padding: 3px 8px;
-  background: #f1f5f9;
+  background: #f0f0f4;
   border-radius: 4px;
 }
 
@@ -177,7 +177,7 @@
 }
 
 .featureOn {
-  background: #dbeafe;
+  background: rgba(210, 41, 57, 0.08);
   color: #1e40af;
 }
 
@@ -187,8 +187,8 @@
 }
 
 .prOn {
-  background: #e0e7ff;
-  color: #4338ca;
+  background: rgba(210, 41, 57, 0.08);
+  color: #d22939;
 }
 
 .deleteBtn {
@@ -219,14 +219,14 @@
 }
 
 .editBtn:hover {
-  color: #2563eb;
-  background: #eff6ff;
+  color: #b8232f;
+  background: rgba(210, 41, 57, 0.06);
 }
 
 /* Card body */
 .cardBody {
   padding: 0 20px 16px;
-  border-top: 1px solid #f1f5f9;
+  border-top: 1px solid #f0f0f4;
 }
 
 /* Client toggles row */
@@ -234,7 +234,7 @@
   display: flex;
   gap: 16px;
   padding: 12px 0;
-  border-bottom: 1px solid #f1f5f9;
+  border-bottom: 1px solid #f0f0f4;
   margin-bottom: 8px;
 }
 
@@ -243,13 +243,13 @@
   align-items: center;
   gap: 6px;
   font-size: 13px;
-  color: #475569;
+  color: #44445a;
   cursor: pointer;
   user-select: none;
 }
 
 .toggleLabel input {
-  accent-color: #2563eb;
+  accent-color: #b8232f;
   cursor: pointer;
   width: 16px;
   height: 16px;
@@ -258,7 +258,7 @@
 /* Game section */
 .gameSection {
   margin-top: 12px;
-  border: 1px solid #f1f5f9;
+  border: 1px solid #f0f0f4;
   border-radius: 8px;
   padding: 12px;
 }
@@ -293,7 +293,7 @@
   align-items: center;
   gap: 4px;
   font-size: 11px;
-  color: #64748b;
+  color: #6b6b82;
   cursor: pointer;
   user-select: none;
   padding: 2px 6px;
@@ -302,7 +302,7 @@
 }
 
 .miniToggle input {
-  accent-color: #2563eb;
+  accent-color: #b8232f;
   cursor: pointer;
   width: 14px;
   height: 14px;
@@ -315,8 +315,8 @@
 
 .addGameBtn {
   padding: 8px 14px;
-  background: #f8fafc;
-  color: #475569;
+  background: #f8f8fa;
+  color: #44445a;
   border: 1px dashed #cbd5e1;
   border-radius: 8px;
   font-size: 13px;
@@ -329,7 +329,7 @@
 }
 
 .addGameBtn:hover {
-  background: #f1f5f9;
+  background: #f0f0f4;
   border-color: #94a3b8;
 }
 
@@ -337,7 +337,7 @@
 .productList {
   margin-top: 10px;
   margin-left: 16px;
-  border-left: 2px solid #e2e8f0;
+  border-left: 2px solid #e2e4ea;
   padding-left: 12px;
 }
 
@@ -351,14 +351,14 @@
 
 .productName {
   font-size: 13px;
-  color: #1e293b;
+  color: #1a1a2e;
 }
 
 .typeBadge {
   font-size: 11px;
   padding: 1px 6px;
-  background: #f1f5f9;
-  color: #64748b;
+  background: #f0f0f4;
+  color: #6b6b82;
   border-radius: 3px;
 }
 
@@ -402,7 +402,7 @@
 .addProductBtn {
   padding: 4px 10px;
   background: transparent;
-  color: #64748b;
+  color: #6b6b82;
   border: 1px dashed #cbd5e1;
   border-radius: 4px;
   font-size: 12px;
@@ -413,8 +413,8 @@
 }
 
 .addProductBtn:hover {
-  background: #f8fafc;
-  color: #475569;
+  background: #f8f8fa;
+  color: #44445a;
 }
 
 .noItems {
@@ -432,8 +432,8 @@
 
 .kwCount {
   font-size: 11px;
-  color: #2563eb;
-  background: #eff6ff;
+  color: #b8232f;
+  background: rgba(210, 41, 57, 0.06);
   padding: 1px 6px;
   border-radius: 3px;
 }
@@ -465,7 +465,7 @@
 .modal h2 {
   font-size: 20px;
   font-weight: 600;
-  color: #1e293b;
+  color: #1a1a2e;
   margin: 0 0 20px;
 }
 
@@ -498,7 +498,7 @@
   display: block;
   font-size: 13px;
   font-weight: 600;
-  color: #475569;
+  color: #44445a;
   margin-bottom: 4px;
 }
 
@@ -506,7 +506,7 @@
 .formField select {
   width: 100%;
   padding: 10px 12px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid #e2e4ea;
   border-radius: 6px;
   font-size: 14px;
   box-sizing: border-box;
@@ -517,8 +517,8 @@
 .formField input:focus,
 .formField select:focus {
   outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+  border-color: #d22939;
+  box-shadow: 0 0 0 3px rgba(210, 41, 57, 0.15);
 }
 
 .fieldHint {
@@ -548,13 +548,13 @@
 .checkboxLabel input {
   width: 16px;
   height: 16px;
-  accent-color: #2563eb;
+  accent-color: #b8232f;
 }
 
 .checkboxHint {
   margin: 6px 0 0 24px;
   font-size: 12px;
-  color: #64748b;
+  color: #6b6b82;
 }
 
 .platformCheckboxes {
@@ -569,14 +569,14 @@
   align-items: center;
   gap: 4px;
   font-size: 13px;
-  color: #475569;
+  color: #44445a;
   cursor: pointer;
 }
 
 .platformCheckbox input {
   width: 14px;
   height: 14px;
-  accent-color: #2563eb;
+  accent-color: #b8232f;
 }
 
 .platformColorDot {
@@ -588,7 +588,7 @@
 
 .selectedCount {
   font-size: 12px;
-  color: #64748b;
+  color: #6b6b82;
   margin: 6px 0 0;
 }
 
@@ -612,8 +612,8 @@
 .cancelBtn {
   padding: 10px 20px;
   background: white;
-  color: #475569;
-  border: 1px solid #e2e8f0;
+  color: #44445a;
+  border: 1px solid #e2e4ea;
   border-radius: 8px;
   font-size: 14px;
   font-weight: 500;
@@ -621,7 +621,7 @@
   font-family: inherit;
 }
 
-.cancelBtn:hover { background: #f8fafc; }
+.cancelBtn:hover { background: #f8f8fa; }
 
 /* Edit inline */
 .editInline {
@@ -632,7 +632,7 @@
 
 .editInput {
   padding: 4px 8px;
-  border: 1px solid #93c5fd;
+  border: 1px solid rgba(210, 41, 57, 0.25);
   border-radius: 4px;
   font-size: 13px;
   font-family: inherit;
@@ -640,12 +640,12 @@
 
 .editInput:focus {
   outline: none;
-  border-color: #3b82f6;
+  border-color: #d22939;
 }
 
 .saveBtn {
   padding: 4px 10px;
-  background: #2563eb;
+  background: #b8232f;
   color: white;
   border: none;
   border-radius: 4px;
@@ -656,8 +656,8 @@
 .cancelEditBtn {
   padding: 4px 10px;
   background: white;
-  color: #475569;
-  border: 1px solid #e2e8f0;
+  color: #44445a;
+  border: 1px solid #e2e4ea;
   border-radius: 4px;
   font-size: 12px;
   cursor: pointer;

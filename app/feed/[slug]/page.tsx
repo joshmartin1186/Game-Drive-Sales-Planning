@@ -115,12 +115,12 @@ export default function PublicFeedPage() {
             onKeyDown={e => e.key === 'Enter' && fetchFeed(password)}
             placeholder="Enter password..."
             style={{ width: '100%', padding: '12px 16px', border: '2px solid #e2e8f0', borderRadius: '10px', fontSize: '14px', marginBottom: '16px', outline: 'none', transition: 'border-color 0.2s' }}
-            onFocus={e => e.target.style.borderColor = '#3b82f6'}
+            onFocus={e => e.target.style.borderColor = '#d22939'}
             onBlur={e => e.target.style.borderColor = '#e2e8f0'}
           />
           <button
             onClick={() => fetchFeed(password)}
-            style={{ width: '100%', padding: '12px', background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)', color: '#fff', border: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: 600, cursor: 'pointer', transition: 'transform 0.1s, box-shadow 0.2s', boxShadow: '0 2px 8px rgba(37,99,235,0.3)' }}
+            style={{ width: '100%', padding: '12px', background: 'linear-gradient(135deg, #d22939 0%, #b8232f 100%)', color: '#fff', border: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: 600, cursor: 'pointer', transition: 'transform 0.1s, box-shadow 0.2s', boxShadow: '0 2px 8px rgba(210,41,57,0.3)' }}
             onMouseDown={e => (e.target as HTMLElement).style.transform = 'scale(0.98)'}
             onMouseUp={e => (e.target as HTMLElement).style.transform = 'scale(1)'}
           >View Coverage Report</button>
@@ -133,7 +133,7 @@ export default function PublicFeedPage() {
     return (
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f8fafc', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' }}>
         <div style={{ textAlign: 'center', color: '#64748b' }}>
-          <div style={{ width: '48px', height: '48px', border: '3px solid #e2e8f0', borderTopColor: '#3b82f6', borderRadius: '50%', margin: '0 auto 16px', animation: 'spin 0.8s linear infinite' }} />
+          <div style={{ width: '48px', height: '48px', border: '3px solid #e2e8f0', borderTopColor: '#d22939', borderRadius: '50%', margin: '0 auto 16px', animation: 'spin 0.8s linear infinite' }} />
           <div style={{ fontSize: '15px', fontWeight: 500 }}>Loading coverage report...</div>
           <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
         </div>
@@ -181,14 +181,18 @@ export default function PublicFeedPage() {
       <div style={{
         background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #334155 100%)',
         color: '#fff', padding: '52px 32px 48px', textAlign: 'center',
-        borderBottom: '4px solid #3b82f6'
+        borderBottom: '4px solid #d22939'
       }}>
         <div style={{ maxWidth: '1100px', margin: '0 auto' }}>
+          {/* Game Drive logo */}
+          <div style={{ marginBottom: '20px' }}>
+            <img src="/images/GD_RGB.png" alt="Game Drive" style={{ width: '40px', height: 'auto' }} />
+          </div>
           {/* Client name */}
           <div style={{
             display: 'inline-block', padding: '4px 16px', borderRadius: '20px',
-            background: 'rgba(59, 130, 246, 0.2)', border: '1px solid rgba(59, 130, 246, 0.3)',
-            fontSize: '13px', fontWeight: 600, color: '#93c5fd', letterSpacing: '0.5px',
+            background: 'rgba(210, 41, 57, 0.2)', border: '1px solid rgba(210, 41, 57, 0.3)',
+            fontSize: '13px', fontWeight: 600, color: '#fca5a5', letterSpacing: '0.5px',
             textTransform: 'uppercase', marginBottom: '16px'
           }}>
             {client.name}
@@ -376,7 +380,7 @@ export default function PublicFeedPage() {
                         <td style={{ padding: '10px 14px', maxWidth: '300px' }}>
                           {item.url ? (
                             <a href={item.url} target="_blank" rel="noopener noreferrer" style={{
-                              color: '#2563eb', textDecoration: 'none', fontSize: '13px',
+                              color: '#b8232f', textDecoration: 'none', fontSize: '13px',
                               lineHeight: 1.4, fontWeight: 500,
                               display: 'block', overflow: 'hidden', textOverflow: 'ellipsis'
                             }}

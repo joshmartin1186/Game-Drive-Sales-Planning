@@ -1,7 +1,7 @@
 /* Page layout */
 .pageWrapper {
   min-height: 100vh;
-  background: #f8fafc;
+  background: #f8f8fa;
 }
 
 .layoutContainer {
@@ -23,12 +23,12 @@
 .header h1 {
   font-size: 28px;
   font-weight: 700;
-  color: #1e293b;
+  color: #1a1a2e;
   margin: 0 0 8px 0;
 }
 
 .header p {
-  color: #64748b;
+  color: #6b6b82;
   margin: 0;
 }
 
@@ -46,7 +46,7 @@
   align-items: center;
   margin-bottom: 20px;
   padding-bottom: 16px;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid #e2e4ea;
 }
 
 .sectionTitle {
@@ -58,7 +58,7 @@
 .sectionTitle h2 {
   font-size: 18px;
   font-weight: 600;
-  color: #1e293b;
+  color: #1a1a2e;
   margin: 0;
 }
 
@@ -103,9 +103,9 @@
   align-items: center;
   justify-content: space-between;
   padding: 16px;
-  background: #f8fafc;
+  background: #f8f8fa;
   border-radius: 8px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid #e2e4ea;
 }
 
 .keyInfo {
@@ -132,7 +132,7 @@
 .keyMasked {
   font-family: monospace;
   font-size: 14px;
-  color: #475569;
+  color: #44445a;
 }
 
 .keyMeta {
@@ -149,7 +149,7 @@
 
 .actionButton {
   padding: 8px 12px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid #e2e4ea;
   background: white;
   border-radius: 6px;
   font-size: 13px;
@@ -161,7 +161,7 @@
 }
 
 .actionButton:hover {
-  background: #f1f5f9;
+  background: #f0f0f4;
 }
 
 .actionButton.test {
@@ -203,18 +203,18 @@
 }
 
 .actionButton.autoSyncOff {
-  color: #64748b;
+  color: #6b6b82;
   border-color: #cbd5e1;
 }
 
 .actionButton.autoSyncOff:hover {
-  background: #f1f5f9;
+  background: #f0f0f4;
 }
 
 .emptyState {
   text-align: center;
   padding: 40px;
-  color: #64748b;
+  color: #6b6b82;
 }
 
 .emptyState svg {
@@ -269,7 +269,7 @@
   background: none;
   border: none;
   cursor: pointer;
-  color: #64748b;
+  color: #6b6b82;
   padding: 4px;
 }
 
@@ -318,7 +318,7 @@
 
 .cancelButton {
   padding: 10px 20px;
-  background: #f1f5f9;
+  background: #f0f0f4;
   border: none;
   border-radius: 6px;
   font-size: 14px;
@@ -401,7 +401,7 @@
   display: inline-block;
   width: 16px;
   height: 16px;
-  border: 2px solid #e2e8f0;
+  border: 2px solid #e2e4ea;
   border-top-color: #1b2838;
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
@@ -418,12 +418,12 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  color: #64748b;
+  color: #6b6b82;
   text-decoration: none;
   font-size: 14px;
   margin-bottom: 16px;
 }
 
 .backLink:hover {
-  color: #1e293b;
+  color: #1a1a2e;
 }

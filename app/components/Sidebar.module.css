@@ -27,10 +27,10 @@
   display: flex;
   flex-direction: column;
   width: 256px;
-  padding-top: 12px;
+  padding-top: 0;
   padding-bottom: 16px;
-  background: white;
-  border-right: 1px solid #e5e7eb;
+  background: #ffffff;
+  border-right: 1px solid var(--color-border);
   height: 100vh;
   position: fixed;
   top: 0;
@@ -46,6 +46,43 @@
   width: 64px;
 }
 
+/* Brand logo area */
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 16px 8px 16px;
+  margin-bottom: 4px;
+}
+
+.brandCollapsed {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 8px 8px 8px;
+  margin-bottom: 4px;
+}
+
+.brandLogo {
+  width: 36px;
+  height: auto;
+  flex-shrink: 0;
+}
+
+.brandLogoCollapsed {
+  width: 28px;
+  height: auto;
+  flex-shrink: 0;
+}
+
+.brandName {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--color-text);
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+}
+
 /* Collapse toggle button */
 .collapseButton {
   display: flex;
@@ -54,9 +91,9 @@
   width: 32px;
   height: 32px;
   border-radius: 6px;
-  border: 1px solid #e5e7eb;
-  background: #f8fafc;
-  color: #64748b;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+  color: var(--color-text-light);
   cursor: pointer;
   margin: 4px auto 12px auto;
   transition: color 0.15s, background-color 0.15s, border-color 0.15s;
@@ -64,9 +101,9 @@
 }
 
 .collapseButton:hover {
-  color: #1e293b;
-  background-color: #e2e8f0;
-  border-color: #cbd5e1;
+  color: var(--color-text);
+  background-color: var(--color-bg-alt);
+  border-color: #c5c5d4;
 }
 
 .collapseButtonExpanded {
@@ -101,7 +138,7 @@
   border-radius: 6px;
   transition: background-color 0.15s, color 0.15s;
   text-decoration: none;
-  color: #4b5563;
+  color: var(--color-text-muted);
   border: none;
   cursor: pointer;
   white-space: nowrap;
@@ -109,21 +146,21 @@
 }
 
 .navItem:hover {
-  background-color: #f9fafb;
-  color: #111827;
+  background-color: var(--color-bg);
+  color: var(--color-text);
 }
 
-/* Active nav item */
+/* Active nav item — brand red */
 .navItemActive {
   composes: navItem;
-  background-color: #eff6ff;
-  border-right: 2px solid #3b82f6;
-  color: #1d4ed8;
+  background-color: var(--gd-red-light);
+  border-right: 2px solid var(--gd-red);
+  color: var(--gd-red);
 }
 
 .navItemActive:hover {
-  background-color: #eff6ff;
-  color: #1d4ed8;
+  background-color: var(--gd-red-light);
+  color: var(--gd-red);
 }
 
 /* Collapsed nav item — icon only, centered */
@@ -137,26 +174,26 @@
   border-radius: 6px;
   transition: background-color 0.15s, color 0.15s;
   text-decoration: none;
-  color: #4b5563;
+  color: var(--color-text-muted);
   border: none;
   cursor: pointer;
   position: relative;
 }
 
 .navItemCollapsed:hover {
-  background-color: #f9fafb;
-  color: #111827;
+  background-color: var(--color-bg);
+  color: var(--color-text);
 }
 
 .navItemCollapsedActive {
   composes: navItemCollapsed;
-  background-color: #eff6ff;
-  color: #1d4ed8;
+  background-color: var(--gd-red-light);
+  color: var(--gd-red);
 }
 
 .navItemCollapsedActive:hover {
-  background-color: #eff6ff;
-  color: #1d4ed8;
+  background-color: var(--gd-red-light);
+  color: var(--gd-red);
 }
 
 /* Tooltip for collapsed state */
@@ -172,7 +209,7 @@
   left: calc(100% + 8px);
   top: 50%;
   transform: translateX(-4px) translateY(-50%);
-  background: #1e293b;
+  background: var(--color-text);
   color: white;
   padding: 4px 10px;
   border-radius: 4px;
@@ -189,42 +226,42 @@
 /* Icon container */
 .navIcon {
   margin-right: 12px;
-  color: #9ca3af;
+  color: #9090a8;
   display: flex;
   align-items: center;
   flex-shrink: 0;
 }
 
 .navItemActive .navIcon {
-  color: #3b82f6;
+  color: var(--gd-red);
 }
 
 .navItem:hover .navIcon {
-  color: #6b7280;
+  color: var(--color-text-light);
 }
 
 .navItemActive:hover .navIcon {
-  color: #3b82f6;
+  color: var(--gd-red);
 }
 
 .navIconCollapsed {
   margin-right: 0;
-  color: #9ca3af;
+  color: #9090a8;
   display: flex;
   align-items: center;
   flex-shrink: 0;
 }
 
 .navItemCollapsedActive .navIconCollapsed {
-  color: #3b82f6;
+  color: var(--gd-red);
 }
 
 .navItemCollapsed:hover .navIconCollapsed {
-  color: #6b7280;
+  color: var(--color-text-light);
 }
 
 .navItemCollapsedActive:hover .navIconCollapsed {
-  color: #3b82f6;
+  color: var(--gd-red);
 }
 
 /* Text in nav items */
@@ -235,11 +272,12 @@
 
 .navDescription {
   font-size: 12px;
-  color: #6b7280;
+  color: var(--color-text-light);
 }
 
 .navItemActive .navDescription {
-  color: #3b82f6;
+  color: var(--gd-red);
+  opacity: 0.7;
 }
 
 /* Text container — hidden when collapsed */
@@ -252,14 +290,14 @@
 .settingsSection {
   padding: 0 16px;
   margin-top: 8px;
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid var(--color-border);
   padding-top: 8px;
 }
 
 .settingsSectionCollapsed {
   padding: 0 8px;
   margin-top: 8px;
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid var(--color-border);
   padding-top: 8px;
 }
 
@@ -267,20 +305,20 @@
 .platformsSection {
   flex-shrink: 0;
   padding: 16px;
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid var(--color-border);
   overflow: hidden;
 }
 
 .platformsSectionCollapsed {
   flex-shrink: 0;
   padding: 8px;
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid var(--color-border);
   overflow: hidden;
 }
 
 .platformsLabel {
   font-size: 12px;
-  color: #6b7280;
+  color: var(--color-text-light);
   margin-bottom: 8px;
 }
 
@@ -319,11 +357,11 @@
 }
 
 .platformNameText {
-  color: #4b5563;
+  color: var(--color-text-muted);
 }
 
 .platformCooldown {
-  color: #6b7280;
+  color: var(--color-text-light);
 }
 
 /* Collapsed platforms — just dots */
@@ -338,13 +376,13 @@
 .userSection {
   flex-shrink: 0;
   padding: 12px 16px;
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid var(--color-border);
 }
 
 .userSectionCollapsed {
   flex-shrink: 0;
   padding: 8px;
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid var(--color-border);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -363,7 +401,7 @@
 .userName {
   font-size: 14px;
   font-weight: 500;
-  color: #374151;
+  color: var(--color-text);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -371,7 +409,7 @@
 
 .userRole {
   font-size: 12px;
-  color: #6b7280;
+  color: var(--color-text-light);
   text-transform: capitalize;
 }
 
@@ -379,7 +417,7 @@
   margin-left: 8px;
   padding: 6px;
   border-radius: 6px;
-  color: #9ca3af;
+  color: #9090a8;
   background: none;
   border: none;
   cursor: pointer;
@@ -389,15 +427,15 @@
 }
 
 .signOutButton:hover {
-  color: #4b5563;
-  background-color: #f3f4f6;
+  color: var(--color-text-muted);
+  background-color: var(--color-bg);
 }
 
 .signOutButtonCollapsed {
   margin-left: 0;
   padding: 6px;
   border-radius: 6px;
-  color: #9ca3af;
+  color: #9090a8;
   background: none;
   border: none;
   cursor: pointer;
@@ -407,8 +445,8 @@
 }
 
 .signOutButtonCollapsed:hover {
-  color: #4b5563;
-  background-color: #f3f4f6;
+  color: var(--color-text-muted);
+  background-color: var(--color-bg);
 }
 
 /* User avatar for collapsed state */
@@ -416,8 +454,8 @@
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background: #e0e7ff;
-  color: #4338ca;
+  background: var(--gd-red-light);
+  color: var(--gd-red);
   display: flex;
   align-items: center;
   justify-content: center;

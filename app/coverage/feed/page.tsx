@@ -482,7 +482,7 @@ export default function CoverageFeedPage() {
             {canEdit && (
               <button
                 onClick={() => { resetAddForm(); setShowAddModal(true) }}
-                style={{ padding: '8px 18px', backgroundColor: '#2563eb', color: 'white', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+                style={{ padding: '8px 18px', backgroundColor: '#b8232f', color: 'white', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
               >
                 + Add Item
               </button>
@@ -497,9 +497,9 @@ export default function CoverageFeedPage() {
               onClick={() => setViewMode('all')}
               style={{
                 padding: '8px 16px', borderRadius: '8px', fontSize: '13px', fontWeight: 500, cursor: 'pointer',
-                backgroundColor: viewMode === 'all' ? '#2563eb' : 'white',
+                backgroundColor: viewMode === 'all' ? '#b8232f' : 'white',
                 color: viewMode === 'all' ? 'white' : '#475569',
-                border: viewMode === 'all' ? '1px solid #2563eb' : '1px solid #e2e8f0'
+                border: viewMode === 'all' ? '1px solid #b8232f' : '1px solid #e2e8f0'
               }}
             >
               All Coverage ({totalCount})
@@ -887,7 +887,7 @@ export default function CoverageFeedPage() {
                               href={item.url}
                               target="_blank"
                               rel="noopener noreferrer"
-                              style={{ color: '#2563eb', textDecoration: 'none', fontSize: '13px', lineHeight: '1.3', fontWeight: 500 }}
+                              style={{ color: '#b8232f', textDecoration: 'none', fontSize: '13px', lineHeight: '1.3', fontWeight: 500 }}
                               title={item.url}
                             >
                               {item.title}
@@ -1230,7 +1230,7 @@ export default function CoverageFeedPage() {
               <button
                 type="button"
                 onClick={() => setShowMoreOptions(!showMoreOptions)}
-                style={{ background: 'none', border: 'none', fontSize: '13px', color: '#2563eb', cursor: 'pointer', textAlign: 'left', padding: 0, fontWeight: 500 }}
+                style={{ background: 'none', border: 'none', fontSize: '13px', color: '#b8232f', cursor: 'pointer', textAlign: 'left', padding: 0, fontWeight: 500 }}
               >
                 {showMoreOptions ? '▾ Less options' : '▸ More options (client, game, review score...)'}
               </button>
@@ -1333,7 +1333,7 @@ export default function CoverageFeedPage() {
               <button
                 onClick={handleAddItem}
                 disabled={addingItem || !addUrl.trim() || !addTitle.trim()}
-                style={{ padding: '8px 24px', backgroundColor: '#2563eb', color: 'white', border: 'none', borderRadius: '6px', fontSize: '14px', fontWeight: 500, cursor: addingItem ? 'not-allowed' : 'pointer', opacity: (addingItem || !addUrl.trim() || !addTitle.trim()) ? 0.6 : 1 }}
+                style={{ padding: '8px 24px', backgroundColor: '#b8232f', color: 'white', border: 'none', borderRadius: '6px', fontSize: '14px', fontWeight: 500, cursor: addingItem ? 'not-allowed' : 'pointer', opacity: (addingItem || !addUrl.trim() || !addTitle.trim()) ? 0.6 : 1 }}
               >
                 {addingItem ? 'Adding...' : 'Add Item'}
               </button>

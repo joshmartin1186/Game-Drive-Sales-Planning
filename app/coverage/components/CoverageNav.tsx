@@ -142,7 +142,7 @@ export function CoverageNav() {
           return isActive ? (
             <div key={tab.href} style={{
               padding: '10px 20px', fontSize: '14px', fontWeight: 600,
-              color: '#2563eb', borderBottom: '2px solid #2563eb', marginBottom: '-2px'
+              color: '#b8232f', borderBottom: '2px solid #b8232f', marginBottom: '-2px'
             }}>
               {tab.label}
             </div>
@@ -217,7 +217,7 @@ export function CoverageNav() {
                     e.preventDefault()
                     document.getElementById(`help-step-${step.number}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
                   }}
-                  style={{ fontSize: '12px', color: '#3b82f6', textDecoration: 'none', padding: '4px 8px', borderRadius: '4px', backgroundColor: 'white', border: '1px solid #e2e8f0' }}
+                  style={{ fontSize: '12px', color: '#d22939', textDecoration: 'none', padding: '4px 8px', borderRadius: '4px', backgroundColor: 'white', border: '1px solid #e2e8f0' }}
                 >
                   {step.number}. {step.title}
                 </a>
@@ -228,7 +228,7 @@ export function CoverageNav() {
               {GUIDE_STEPS.map(step => (
                 <div key={step.number} id={`help-step-${step.number}`} style={{ display: 'flex', gap: '16px', padding: '16px', backgroundColor: '#f8fafc', borderRadius: '8px' }}>
                   <div style={{
-                    width: '32px', height: '32px', borderRadius: '50%', backgroundColor: '#2563eb',
+                    width: '32px', height: '32px', borderRadius: '50%', backgroundColor: '#b8232f',
                     color: 'white', fontSize: '14px', fontWeight: 700, display: 'flex',
                     alignItems: 'center', justifyContent: 'center', flexShrink: 0
                   }}>

@@ -131,6 +131,16 @@ export function Sidebar() {
   return (
     <div className={collapsed ? styles.sidebarWrapperCollapsed : styles.sidebarWrapper}>
       <div className={collapsed ? styles.sidebarCollapsed : styles.sidebar}>
+        {/* Brand logo */}
+        <div className={collapsed ? styles.brandCollapsed : styles.brand}>
+          <img
+            src="/images/GD_RGB.png"
+            alt="Game Drive"
+            className={collapsed ? styles.brandLogoCollapsed : styles.brandLogo}
+          />
+          {!collapsed && <span className={styles.brandName}>Game Drive</span>}
+        </div>
+
         {/* Collapse toggle */}
         <button
           onClick={toggleCollapse}

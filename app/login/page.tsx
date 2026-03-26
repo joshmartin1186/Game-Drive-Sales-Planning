@@ -36,8 +36,8 @@ export default function LoginPage() {
     <div className={styles.wrapper}>
       <div className={styles.card}>
         <div className={styles.header}>
-          <div className={styles.logo}>GD</div>
-          <h1 className={styles.title}>GameDrive</h1>
+          <img src="/images/GD_RGB.png" alt="Game Drive" className={styles.logo} />
+          <h1 className={styles.title}>Game Drive</h1>
           <p className={styles.subtitle}>Sign in to your account</p>
         </div>
 

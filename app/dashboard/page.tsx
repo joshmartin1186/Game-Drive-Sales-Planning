@@ -179,7 +179,7 @@ export default function DashboardPage() {
                       <span style={{ color: '#475569', flex: 1 }}>{p.name}</span>
                       <div style={{ display: 'flex', alignItems: 'center', flex: 1 }}>
                         <div style={barBg}>
-                          <div style={{ height: '100%', width: `${pct}%`, background: '#3b82f6', borderRadius: '4px' }} />
+                          <div style={{ height: '100%', width: `${pct}%`, background: '#d22939', borderRadius: '4px' }} />
                         </div>
                         <span style={{ fontWeight: 600, color: '#1e293b', marginLeft: '12px', minWidth: '80px', textAlign: 'right' }}>{formatCurrency(p.value)}</span>
                       </div>
@@ -229,7 +229,7 @@ export default function DashboardPage() {
                         <span style={{ fontSize: '12px', color: '#cbd5e1' }}>&#183;</span>
                         <span style={{ fontSize: '12px', color: '#94a3b8' }}>{i.publish_date || ''}</span>
                       </div>
-                      <a href={i.url} target="_blank" rel="noopener noreferrer" style={{ color: '#3b82f6', textDecoration: 'none', fontSize: '14px', fontWeight: 500 }}>
+                      <a href={i.url} target="_blank" rel="noopener noreferrer" style={{ color: '#d22939', textDecoration: 'none', fontSize: '14px', fontWeight: 500 }}>
                         {i.title || i.url}
                       </a>
                     </div>

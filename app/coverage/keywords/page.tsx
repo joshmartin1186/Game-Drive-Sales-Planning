@@ -470,7 +470,7 @@ export default function KeywordsPage() {
                                 />
                                 <button
                                   onClick={() => handleSaveEdit(kw.id)}
-                                  style={{ padding: '4px 10px', backgroundColor: '#2563eb', color: 'white', border: 'none', borderRadius: '4px', fontSize: '12px', cursor: 'pointer' }}
+                                  style={{ padding: '4px 10px', backgroundColor: '#b8232f', color: 'white', border: 'none', borderRadius: '4px', fontSize: '12px', cursor: 'pointer' }}
                                 >
                                   Save
                                 </button>
@@ -610,7 +610,7 @@ export default function KeywordsPage() {
                 onClick={handleBulkImport}
                 disabled={importing || !importText.trim()}
                 style={{
-                  padding: '8px 24px', backgroundColor: '#2563eb', color: 'white', border: 'none',
+                  padding: '8px 24px', backgroundColor: '#b8232f', color: 'white', border: 'none',
                   borderRadius: '6px', fontSize: '14px', fontWeight: 500,
                   cursor: importing || !importText.trim() ? 'not-allowed' : 'pointer',
                   opacity: importing || !importText.trim() ? 0.7 : 1

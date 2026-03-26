@@ -434,7 +434,7 @@ export default function CoveragePage() {
                   onClick={openAddForm}
                   style={{
                     padding: '10px 20px',
-                    backgroundColor: '#2563eb',
+                    backgroundColor: '#b8232f',
                     color: 'white',
                     border: 'none',
                     borderRadius: '8px',
@@ -662,7 +662,7 @@ export default function CoveragePage() {
                               href={`https://${outlet.domain}`}
                               target="_blank"
                               rel="noopener noreferrer"
-                              style={{ color: '#2563eb', textDecoration: 'none', fontSize: '14px' }}
+                              style={{ color: '#b8232f', textDecoration: 'none', fontSize: '14px' }}
                               title={`Open https://${outlet.domain}`}
                             >
                               {outlet.domain}
@@ -978,7 +978,7 @@ export default function CoveragePage() {
                 onClick={handleSave}
                 disabled={saving}
                 style={{
-                  padding: '8px 24px', backgroundColor: '#2563eb', color: 'white', border: 'none',
+                  padding: '8px 24px', backgroundColor: '#b8232f', color: 'white', border: 'none',
                   borderRadius: '6px', fontSize: '14px', fontWeight: 500, cursor: saving ? 'not-allowed' : 'pointer',
                   opacity: saving ? 0.7 : 1
                 }}
@@ -1080,7 +1080,7 @@ export default function CoveragePage() {
                 onClick={handleCSVImport}
                 disabled={importing || !csvText.trim()}
                 style={{
-                  padding: '8px 24px', backgroundColor: '#2563eb', color: 'white', border: 'none',
+                  padding: '8px 24px', backgroundColor: '#b8232f', color: 'white', border: 'none',
                   borderRadius: '6px', fontSize: '14px', fontWeight: 500,
                   cursor: importing || !csvText.trim() ? 'not-allowed' : 'pointer',
                   opacity: importing || !csvText.trim() ? 0.7 : 1

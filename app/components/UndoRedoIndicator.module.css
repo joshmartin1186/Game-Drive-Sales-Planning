@@ -32,7 +32,7 @@
 }
 
 .button:active:not(.disabled) {
-  background: #e5e7eb;
+  background: #e2e4ea;
 }
 
 .button.disabled {
@@ -60,7 +60,7 @@
 .divider {
   width: 1px;
   height: 24px;
-  background: #e5e7eb;
+  background: #e2e4ea;
   margin: 0 4px;
 }
 

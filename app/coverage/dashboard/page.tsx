@@ -347,9 +347,9 @@ export default function DashboardPage() {
                 onClick={() => setPeriod(p)}
                 style={{
                   padding: '6px 12px', borderRadius: '6px', fontSize: '12px', fontWeight: 500, cursor: 'pointer',
-                  backgroundColor: period === p ? '#2563eb' : 'white',
+                  backgroundColor: period === p ? '#b8232f' : 'white',
                   color: period === p ? 'white' : '#475569',
-                  border: period === p ? '1px solid #2563eb' : '1px solid #e2e8f0'
+                  border: period === p ? '1px solid #b8232f' : '1px solid #e2e8f0'
                 }}
               >
                 {p === '7d' ? '7 Days' : p === '30d' ? '30 Days' : p === '90d' ? '90 Days' : p === 'ytd' ? 'YTD' : 'Custom'}

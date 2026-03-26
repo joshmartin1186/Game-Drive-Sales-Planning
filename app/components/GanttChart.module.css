@@ -26,9 +26,9 @@
 
 /* Info message styling (for cascade shift notifications) */
 .validationError.infoMessage {
-  background: #eff6ff;
-  border-bottom: 1px solid #bfdbfe;
-  color: #2563eb;
+  background: rgba(210, 41, 57, 0.06);
+  border-bottom: 1px solid rgba(210, 41, 57, 0.15);
+  color: #b8232f;
 }
 
 .legend {
@@ -37,8 +37,8 @@
   gap: 1rem;
   padding: 0.75rem 1rem;
   margin: 0;
-  background: #f8fafc;
-  border-bottom: 1px solid #e2e8f0;
+  background: #f8f8fa;
+  border-bottom: 1px solid #e2e4ea;
   overflow-x: auto;
   flex-wrap: wrap;
 }
@@ -46,7 +46,7 @@
 .legendTitle {
   font-size: 0.75rem;
   font-weight: 600;
-  color: #64748b;
+  color: #6b6b82;
   text-transform: uppercase;
 }
 
@@ -55,7 +55,7 @@
   align-items: center;
   gap: 0.375rem;
   font-size: 0.75rem;
-  color: #475569;
+  color: #44445a;
   white-space: nowrap;
 }
 
@@ -76,7 +76,7 @@
 .legendToggle {
   background: none;
   border: none;
-  color: #64748b;
+  color: #6b6b82;
   font-size: 0.75rem;
   font-weight: 600;
   cursor: pointer;
@@ -88,7 +88,7 @@
 }
 
 .legendToggle:hover {
-  color: #1e293b;
+  color: #1a1a2e;
 }
 
 /* Legend Collapsed State */
@@ -109,11 +109,11 @@
   align-items: center;
   gap: 0.375rem;
   font-size: 0.75rem;
-  color: #475569;
+  color: #44445a;
   white-space: nowrap;
   margin-left: auto;
   padding-left: 1rem;
-  border-left: 1px solid #e2e8f0;
+  border-left: 1px solid #e2e4ea;
 }
 
 .legendLaunchColor {
@@ -193,9 +193,9 @@
 .contextMenuHeader {
   padding: 8px 12px;
   font-size: 0.75rem;
-  color: #64748b;
-  border-bottom: 1px solid #e2e8f0;
-  background: #f8fafc;
+  color: #6b6b82;
+  border-bottom: 1px solid #e2e4ea;
+  background: #f8f8fa;
 }
 
 .contextMenuPaste {
@@ -206,7 +206,7 @@
   background: none;
   text-align: left;
   font-size: 0.875rem;
-  color: #1e293b;
+  color: #1a1a2e;
   cursor: pointer;
   transition: background 0.1s;
 }
@@ -220,8 +220,8 @@
   padding: 6px 12px;
   font-size: 0.6875rem;
   color: #94a3b8;
-  border-top: 1px solid #e2e8f0;
-  background: #f8fafc;
+  border-top: 1px solid #e2e4ea;
+  background: #f8f8fa;
 }
 
 .contextMenuEmpty {
@@ -238,8 +238,8 @@
   gap: 12px;
   padding: 8px 16px;
   margin: 0;
-  background: #f8fafc;
-  border-bottom: 1px solid #e2e8f0;
+  background: #f8f8fa;
+  border-bottom: 1px solid #e2e4ea;
   user-select: none;
   flex-wrap: wrap;
 }
@@ -247,7 +247,7 @@
 .zoomLabel {
   font-size: 0.6875rem;
   font-weight: 600;
-  color: #64748b;
+  color: #6b6b82;
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
@@ -256,7 +256,7 @@
   display: flex;
   align-items: center;
   gap: 2px;
-  background: #e2e8f0;
+  background: #e2e4ea;
   border-radius: 6px;
   padding: 2px;
 }
@@ -266,7 +266,7 @@
   height: 26px;
   border: none;
   background: transparent;
-  color: #475569;
+  color: #44445a;
   font-size: 1rem;
   font-weight: 600;
   cursor: pointer;
@@ -279,7 +279,7 @@
 
 .zoomBtn:hover:not(:disabled) {
   background: #cbd5e1;
-  color: #1e293b;
+  color: #1a1a2e;
 }
 
 .zoomBtn:active:not(:disabled) {
@@ -297,7 +297,7 @@
   padding: 0 8px;
   border: none;
   background: transparent;
-  color: #64748b;
+  color: #6b6b82;
   font-size: 0.6875rem;
   font-weight: 600;
   cursor: pointer;
@@ -307,40 +307,40 @@
 
 .zoomPreset:hover {
   background: #cbd5e1;
-  color: #1e293b;
+  color: #1a1a2e;
 }
 
 .zoomPreset.zoomActive {
-  background: #3b82f6;
+  background: #d22939;
   color: white;
-  box-shadow: 0 1px 3px rgba(59, 130, 246, 0.3);
+  box-shadow: 0 1px 3px rgba(210, 41, 57, 0.3);
 }
 
 .zoomInfo {
   font-size: 0.6875rem;
-  color: #475569;
+  color: #44445a;
   font-weight: 500;
   white-space: nowrap;
-  background: #f1f5f9;
+  background: #f0f0f4;
   padding: 4px 10px;
   border-radius: 4px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid #e2e4ea;
 }
 
 .dateRange {
   font-size: 0.6875rem;
-  color: #64748b;
+  color: #6b6b82;
   margin-left: auto;
   white-space: nowrap;
-  background: #f1f5f9;
+  background: #f0f0f4;
   padding: 4px 10px;
   border-radius: 4px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid #e2e4ea;
 }
 
 .loadingIndicator {
   font-size: 0.625rem;
-  color: #3b82f6;
+  color: #d22939;
   font-weight: 500;
   animation: loadingPulse 1s ease-in-out infinite;
 }
@@ -359,18 +359,18 @@
   gap: 8px;
   padding: 6px 16px;
   margin: 0;
-  background: linear-gradient(to bottom, #f8fafc, #f1f5f9);
-  border-bottom: 1px solid #e2e8f0;
+  background: linear-gradient(to bottom, #f8f8fa, #f0f0f4);
+  border-bottom: 1px solid #e2e4ea;
   user-select: none;
   line-height: 1;
 }
 
 .scrollGrabBar:hover {
-  background: linear-gradient(to bottom, #f1f5f9, #e2e8f0);
+  background: linear-gradient(to bottom, #f0f0f4, #e2e4ea);
 }
 
 .scrollGrabBar.grabbing {
-  background: linear-gradient(to bottom, #e2e8f0, #cbd5e1);
+  background: linear-gradient(to bottom, #e2e4ea, #cbd5e1);
 }
 
 /* Today Button */
@@ -404,7 +404,7 @@
   min-width: 100px;
   height: 18px;
   margin: 0;
-  background: #e2e8f0;
+  background: #e2e4ea;
   border-radius: 10px;
   position: relative;
   overflow: hidden;
@@ -416,21 +416,21 @@
   position: absolute;
   top: 0;
   height: 100%;
-  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  background: linear-gradient(135deg, #d22939, #b8232f);
   border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3);
+  box-shadow: 0 2px 4px rgba(210, 41, 57, 0.3);
   cursor: grab;
 }
 
 .scrollGrabThumb:hover {
-  box-shadow: 0 3px 8px rgba(59, 130, 246, 0.4);
+  box-shadow: 0 3px 8px rgba(210, 41, 57, 0.4);
 }
 
 .scrollGrabBar.grabbing .scrollGrabThumb {
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.5);
+  box-shadow: 0 4px 12px rgba(210, 41, 57, 0.5);
   cursor: grabbing;
 }
 
@@ -456,7 +456,7 @@
   max-height: calc(100vh - 350px);
   margin: 0;
   padding: 0;
-  background: #f8fafc; /* Grey background to match UI */
+  background: #f8f8fa; /* Grey background to match UI */
   width: 100%;
 }
 
@@ -475,7 +475,7 @@
   position: sticky;
   top: 0;
   z-index: 20;
-  background: #f8fafc; /* Grey background to match UI */
+  background: #f8f8fa; /* Grey background to match UI */
   padding-left: 220px; /* Match the label column width */
   margin: 0;
 }
@@ -486,10 +486,10 @@
   text-align: center;
   font-size: 0.875rem;
   font-weight: 600;
-  color: #1e293b;
-  background: #f1f5f9;
-  border-bottom: 1px solid #e2e8f0;
-  border-right: 1px solid #e2e8f0;
+  color: #1a1a2e;
+  background: #f0f0f4;
+  border-bottom: 1px solid #e2e4ea;
+  border-right: 1px solid #e2e4ea;
   /* Handle small widths at high zoom out */
   overflow: hidden;
   text-overflow: ellipsis;
@@ -503,7 +503,7 @@
   position: sticky;
   top: 33px;
   z-index: 20;
-  background: #f8fafc; /* Grey background to match UI */
+  background: #f8f8fa; /* Grey background to match UI */
   padding-left: 220px; /* Match the label column width */
   margin: 0;
 }
@@ -514,10 +514,10 @@
   text-align: center;
   font-size: 0.625rem;
   font-weight: 500;
-  color: #64748b;
-  background: #f8fafc; /* Grey background to match UI */
-  border-bottom: 1px solid #e2e8f0;
-  border-right: 1px solid #f1f5f9;
+  color: #6b6b82;
+  background: #f8f8fa; /* Grey background to match UI */
+  border-bottom: 1px solid #e2e4ea;
+  border-right: 1px solid #f0f0f4;
   /* Ensure day cells handle small widths gracefully */
   overflow: hidden;
   min-width: 0;
@@ -525,7 +525,7 @@
 }
 
 .dayHeader.weekend {
-  background: #f1f5f9;
+  background: #f0f0f4;
   color: #94a3b8;
 }
 
@@ -565,7 +565,7 @@
   padding-left: 220px;
   margin: 0;
   background: #fefce8;
-  border-bottom: 2px solid #e2e8f0;
+  border-bottom: 2px solid #e2e4ea;
   height: 36px;
   min-height: 36px;
 }
@@ -583,8 +583,8 @@
   font-weight: 600;
   color: #92400e;
   background: #fefce8;
-  border-bottom: 2px solid #e2e8f0;
-  border-right: 1px solid #e2e8f0;
+  border-bottom: 2px solid #e2e4ea;
+  border-right: 1px solid #e2e4ea;
   gap: 6px;
   z-index: 2;
   text-transform: uppercase;
@@ -644,7 +644,7 @@
 .coverageMarkerTierA { background: #dc2626; }
 .coverageMarkerTierB { background: #d97706; }
 .coverageMarkerTierC { background: #2563eb; }
-.coverageMarkerTierD { background: #64748b; }
+.coverageMarkerTierD { background: #6b6b82; }
 
 .coverageMarkerMulti {
   min-width: 26px;
@@ -778,7 +778,7 @@
 }
 
 .coveragePopoverItemTitle a:hover {
-  color: #2563eb;
+  color: #b8232f;
   text-decoration: underline;
 }
 
@@ -817,7 +817,7 @@
   padding-left: 220px;
   margin: 0;
   background: #f0f4ff;
-  border-bottom: 2px solid #e2e8f0;
+  border-bottom: 2px solid #e2e4ea;
   height: 32px;
   min-height: 32px;
 }
@@ -835,8 +835,8 @@
   font-weight: 600;
   color: #1e40af;
   background: #f0f4ff;
-  border-bottom: 2px solid #e2e8f0;
-  border-right: 1px solid #e2e8f0;
+  border-bottom: 2px solid #e2e4ea;
+  border-right: 1px solid #e2e4ea;
   gap: 6px;
   z-index: 2;
   text-transform: uppercase;
@@ -856,12 +856,12 @@
 .annotationLaneDay {
   position: relative;
   height: 32px;
-  border-right: 1px solid rgba(37, 99, 235, 0.1);
+  border-right: 1px solid rgba(210, 41, 57, 0.1);
   flex-shrink: 0;
 }
 
 .annotationLaneDay.weekend {
-  background: rgba(37, 99, 235, 0.04);
+  background: rgba(210, 41, 57, 0.04);
 }
 
 /* Annotation marker dot */
@@ -912,7 +912,7 @@
   justify-content: space-between;
   padding: 10px 14px;
   background: #f0f4ff;
-  border-bottom: 1px solid #bfdbfe;
+  border-bottom: 1px solid rgba(210, 41, 57, 0.15);
   flex-shrink: 0;
 }
 
@@ -926,7 +926,7 @@
   display: flex;
   gap: 10px;
   font-size: 0.7rem;
-  color: #64748b;
+  color: #6b6b82;
 }
 
 .annotationPopoverStat {
@@ -965,7 +965,7 @@
   align-items: flex-start;
   gap: 10px;
   padding: 8px 14px;
-  border-bottom: 1px solid #f1f5f9;
+  border-bottom: 1px solid #f0f0f4;
   transition: background 0.1s;
 }
 
@@ -974,7 +974,7 @@
 }
 
 .annotationPopoverItem:hover {
-  background: #f8fafc;
+  background: #f8f8fa;
 }
 
 .annotationPopoverTypeBadge {
@@ -999,7 +999,7 @@
 .annotationPopoverItemTitle {
   font-size: 0.78rem;
   font-weight: 600;
-  color: #1e293b;
+  color: #1a1a2e;
   line-height: 1.3;
 }
 
@@ -1009,26 +1009,26 @@
   gap: 6px;
   margin-top: 2px;
   font-size: 0.68rem;
-  color: #64748b;
+  color: #6b6b82;
 }
 
 .annotationPopoverItemType {
-  background: #f1f5f9;
+  background: #f0f0f4;
   padding: 1px 5px;
   border-radius: 3px;
   font-size: 0.62rem;
   font-weight: 600;
   text-transform: uppercase;
-  color: #475569;
+  color: #44445a;
 }
 
 .annotationPopoverConfidence {
-  background: #f1f5f9;
+  background: #f0f0f4;
   padding: 1px 5px;
   border-radius: 3px;
   font-size: 0.62rem;
   font-weight: 600;
-  color: #475569;
+  color: #44445a;
 }
 
 /* Shift today indicator down when annotation lane is visible */
@@ -1074,14 +1074,14 @@
 }
 
 .gameGroup {
-  border-bottom: 2px solid #e2e8f0;
+  border-bottom: 2px solid #e2e4ea;
   margin: 0;
 }
 
 .gameHeader {
   display: flex;
-  background: #f8fafc;
-  border-bottom: 1px solid #e2e8f0;
+  background: #f8f8fa;
+  border-bottom: 1px solid #e2e4ea;
   margin: 0;
 }
 
@@ -1090,24 +1090,24 @@
   padding: 0.625rem 1rem;
   min-width: 220px;
   max-width: 220px;
-  background: #f1f5f9;
+  background: #f0f0f4;
 }
 
 .gameName {
   font-weight: 600;
   font-size: 0.875rem;
-  color: #1e293b;
+  color: #1a1a2e;
 }
 
 .clientName {
   font-size: 0.75rem;
-  color: #64748b;
+  color: #6b6b82;
   margin-left: 0.5rem;
 }
 
 /* Product Group - wraps product header + platform sub-rows */
 .productGroup {
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid #e2e4ea;
   margin: 0;
 }
 
@@ -1115,7 +1115,7 @@
 .productRow {
   display: flex;
   height: 40px;
-  border-bottom: 1px solid #f1f5f9;
+  border-bottom: 1px solid #f0f0f4;
   margin: 0;
 }
 
@@ -1134,7 +1134,7 @@
   padding: 0 0.75rem 0 1rem;
   margin: 0;
   background: white;
-  border-right: 1px solid #e2e8f0;
+  border-right: 1px solid #e2e4ea;
   position: sticky;
   left: 0;
   z-index: 10;
@@ -1202,7 +1202,7 @@
   width: 26px;
   height: 26px;
   border: none;
-  background: #f1f5f9;
+  background: #f0f0f4;
   border-radius: 4px;
   font-size: 0.75rem;
   cursor: pointer;
@@ -1214,7 +1214,7 @@
 }
 
 .generateButton:hover {
-  background: #e2e8f0;
+  background: #e2e4ea;
   transform: scale(1.05);
 }
 
@@ -1253,13 +1253,13 @@
 .platformRow {
   display: flex;
   height: 36px;
-  border-bottom: 1px solid #f8fafc;
+  border-bottom: 1px solid #f8f8fa;
   background: #fcfcfd;
   margin: 0;
 }
 
 .platformRow:hover {
-  background: #f8fafc;
+  background: #f8f8fa;
 }
 
 .platformRow:last-child {
@@ -1277,7 +1277,7 @@
   padding: 0 1rem 0 2rem;
   margin: 0;
   background: #fcfcfd;
-  border-right: 1px solid #e2e8f0;
+  border-right: 1px solid #e2e4ea;
   position: sticky;
   left: 0;
   z-index: 10;
@@ -1285,7 +1285,7 @@
 }
 
 .platformRow:hover .platformLabel {
-  background: #f8fafc;
+  background: #f8f8fa;
 }
 
 .platformIndicator {
@@ -1298,7 +1298,7 @@
 .platformName {
   font-size: 0.75rem;
   font-weight: 500;
-  color: #64748b;
+  color: #6b6b82;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1308,14 +1308,14 @@
 .gapBadge {
   font-size: 0.5625rem;
   font-weight: 500;
-  color: #3b82f6;
-  background: #eff6ff;
+  color: #d22939;
+  background: rgba(210, 41, 57, 0.06);
   padding: 1px 5px;
   border-radius: 3px;
   white-space: nowrap;
   margin-left: auto;
   flex-shrink: 0;
-  border: 1px solid #bfdbfe;
+  border: 1px solid rgba(210, 41, 57, 0.15);
 }
 
 .gapBadge.gapWarning {
@@ -1346,7 +1346,7 @@
   position: absolute;
   top: 0;
   height: 100%;
-  border-right: 1px solid #f1f5f9;
+  border-right: 1px solid #f0f0f4;
   box-sizing: border-box;
 }
 
@@ -1614,7 +1614,7 @@
 .platformEventLabel {
   font-size: 0.5625rem;
   font-weight: 600;
-  color: #475569;
+  color: #44445a;
   text-transform: uppercase;
   letter-spacing: 0.25px;
   white-space: nowrap;
@@ -1692,10 +1692,10 @@
   height: calc(100% - 8px);
   background: repeating-linear-gradient(
     45deg,
-    #f1f5f9,
-    #f1f5f9 4px,
-    #e2e8f0 4px,
-    #e2e8f0 8px
+    #f0f0f4,
+    #f0f0f4 4px,
+    #e2e4ea 4px,
+    #e2e4ea 8px
   );
   border-radius: 4px;
   display: flex;
@@ -1744,6 +1744,6 @@
   align-items: center;
   justify-content: center;
   min-height: 200px;
-  color: #64748b;
+  color: #6b6b82;
   font-size: 0.875rem;
 }

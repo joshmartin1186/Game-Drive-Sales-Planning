@@ -459,7 +459,7 @@ export default function CoverageReportPage() {
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #1e293b; font-size: 11px; }
   .page { padding: 40px; max-width: 1100px; margin: 0 auto; }
-  .header { text-align: center; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 3px solid #2563eb; }
+  .header { text-align: center; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 3px solid #b8232f; }
   .header h1 { font-size: 24px; color: #1e293b; margin-bottom: 4px; }
   .header .subtitle { font-size: 14px; color: #64748b; }
   .header .meta { font-size: 11px; color: #94a3b8; margin-top: 8px; }
@@ -596,7 +596,7 @@ export default function CoverageReportPage() {
             <td>${item.outlet?.name || '—'}</td>
             <td>${item.outlet?.tier ? `<span class="tier-badge tier-${item.outlet.tier}">${item.outlet.tier}</span>` : '—'}</td>
             <td>${item.coverage_type || '—'}</td>
-            <td>${item.url ? `<a href="${item.url}" target="_blank" rel="noopener noreferrer" style="color:#2563eb;text-decoration:none">${item.title}</a>` : item.title}</td>
+            <td>${item.url ? `<a href="${item.url}" target="_blank" rel="noopener noreferrer" style="color:#b8232f;text-decoration:none">${item.title}</a>` : item.title}</td>
             <td style="font-size:11px;color:#475569">${formatMetricsText(item)}</td>
             ${group.items.some(i => i.review_score) ? `<td style="text-align:center">${item.review_score || '—'}</td>` : ''}
           </tr>
@@ -743,7 +743,7 @@ export default function CoverageReportPage() {
               onClick={() => setReportMode('full')}
               style={{
                 padding: '8px 20px', fontSize: '13px', fontWeight: 500, border: 'none', cursor: 'pointer',
-                backgroundColor: reportMode === 'full' ? '#2563eb' : 'white',
+                backgroundColor: reportMode === 'full' ? '#b8232f' : 'white',
                 color: reportMode === 'full' ? 'white' : '#64748b'
               }}
             >
@@ -753,7 +753,7 @@ export default function CoverageReportPage() {
               onClick={() => setReportMode('simple')}
               style={{
                 padding: '8px 20px', fontSize: '13px', fontWeight: 500, border: 'none', cursor: 'pointer',
-                backgroundColor: reportMode === 'simple' ? '#2563eb' : 'white',
+                backgroundColor: reportMode === 'simple' ? '#b8232f' : 'white',
                 color: reportMode === 'simple' ? 'white' : '#64748b',
                 borderLeft: '1px solid #e2e8f0'
               }}
@@ -815,7 +815,7 @@ export default function CoverageReportPage() {
                   disabled={loading}
                   style={{
                     width: '100%', padding: '8px 16px',
-                    backgroundColor: loading ? '#93c5fd' : '#2563eb',
+                    backgroundColor: loading ? '#f4a4ab' : '#b8232f',
                     color: 'white', border: 'none', borderRadius: '6px',
                     fontSize: '14px', fontWeight: 500,
                     cursor: loading ? 'not-allowed' : 'pointer'
@@ -1278,7 +1278,7 @@ export default function CoverageReportPage() {
                               </td>
                               <td style={{ padding: '6px 12px', color: '#64748b', fontSize: '12px', textTransform: 'capitalize' }}>{item.coverage_type || '—'}</td>
                               <td style={{ padding: '6px 12px' }}>
-                                <a href={item.url} target="_blank" rel="noopener noreferrer" style={{ color: '#2563eb', textDecoration: 'none' }}>
+                                <a href={item.url} target="_blank" rel="noopener noreferrer" style={{ color: '#b8232f', textDecoration: 'none' }}>
                                   {item.title}
                                 </a>
                               </td>
@@ -1435,7 +1435,7 @@ export default function CoverageReportPage() {
                         table { width: 100%; border-collapse: collapse; font-size: 12px; }
                         th { text-align: left; padding: 8px 10px; background: #f8fafc; border-bottom: 2px solid #e2e8f0; font-weight: 600; color: #475569; }
                         td { padding: 8px 10px; border-bottom: 1px solid #f1f5f9; }
-                        a { color: #3b82f6; text-decoration: none; word-break: break-all; }
+                        a { color: #d22939; text-decoration: none; word-break: break-all; }
                         @media print { body { margin: 20px; } a { color: #1e293b; } @page { margin: 1cm; } }
                       </style></head><body>
                         <h1>Campaign Coverage Report</h1>
@@ -1487,7 +1487,7 @@ export default function CoverageReportPage() {
                           <td style={{ padding: '10px 14px', color: '#64748b' }}>{item.coverage_type || '-'}</td>
                           <td style={{ padding: '10px 14px' }}>{item.title}</td>
                           <td style={{ padding: '10px 14px' }}>
-                            <a href={item.url} target="_blank" rel="noopener noreferrer" style={{ color: '#2563eb', textDecoration: 'none', fontSize: '12px', wordBreak: 'break-all' }}>
+                            <a href={item.url} target="_blank" rel="noopener noreferrer" style={{ color: '#b8232f', textDecoration: 'none', fontSize: '12px', wordBreak: 'break-all' }}>
                               {item.url}
                             </a>
                           </td>

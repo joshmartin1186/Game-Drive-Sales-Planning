@@ -250,7 +250,7 @@ export default function CampaignReportPage() {
           table { width: 100%; border-collapse: collapse; font-size: 11px; }
           th { text-align: left; padding: 8px 10px; background: #f8fafc; border-bottom: 2px solid #e2e8f0; font-weight: 600; color: #475569; }
           td { padding: 8px 10px; border-bottom: 1px solid #f1f5f9; }
-          a { color: #3b82f6; text-decoration: none; word-break: break-all; }
+          a { color: #d22939; text-decoration: none; word-break: break-all; }
           @media print {
             body { margin: 20px; }
             a { color: #1e293b; }
@@ -313,7 +313,7 @@ export default function CampaignReportPage() {
             <Link href="/coverage/dashboard" style={{ padding: '10px 20px', fontSize: '14px', fontWeight: 500, color: '#64748b', textDecoration: 'none', marginBottom: '-2px' }}>Dashboard</Link>
             <Link href="/coverage/timeline" style={{ padding: '10px 20px', fontSize: '14px', fontWeight: 500, color: '#64748b', textDecoration: 'none', marginBottom: '-2px' }}>Timeline</Link>
             <Link href="/coverage/report" style={{ padding: '10px 20px', fontSize: '14px', fontWeight: 500, color: '#64748b', textDecoration: 'none', marginBottom: '-2px' }}>Export</Link>
-            <div style={{ padding: '10px 20px', fontSize: '14px', fontWeight: 600, color: '#2563eb', borderBottom: '2px solid #2563eb', marginBottom: '-2px' }}>Campaign Report</div>
+            <div style={{ padding: '10px 20px', fontSize: '14px', fontWeight: 600, color: '#b8232f', borderBottom: '2px solid #b8232f', marginBottom: '-2px' }}>Campaign Report</div>
             <Link href="/coverage/guide" style={{ padding: '10px 20px', fontSize: '14px', fontWeight: 500, color: '#64748b', textDecoration: 'none', marginBottom: '-2px' }}>Guide</Link>
           </div>
 

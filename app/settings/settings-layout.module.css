@@ -1,7 +1,7 @@
 /* Settings layout wrapper */
 .pageWrapper {
   min-height: 100vh;
-  background: #f8fafc;
+  background: #f8f8fa;
 }
 
 .layoutContainer {
@@ -24,12 +24,12 @@
 .header h1 {
   font-size: 28px;
   font-weight: 700;
-  color: #1e293b;
+  color: #1a1a2e;
   margin: 0 0 4px 0;
 }
 
 .header p {
-  color: #64748b;
+  color: #6b6b82;
   font-size: 14px;
   margin: 0;
 }
@@ -39,14 +39,14 @@
   display: flex;
   gap: 0;
   margin-bottom: 24px;
-  border-bottom: 2px solid #e2e8f0;
+  border-bottom: 2px solid #e2e4ea;
 }
 
 .tab {
   padding: 10px 20px;
   font-size: 14px;
   font-weight: 500;
-  color: #64748b;
+  color: #6b6b82;
   text-decoration: none;
   margin-bottom: -2px;
   border-bottom: 2px solid transparent;
@@ -56,18 +56,18 @@
 }
 
 .tab:hover {
-  color: #1e293b;
+  color: #1a1a2e;
 }
 
 .tabActive {
   composes: tab;
-  color: #2563eb;
+  color: #b8232f;
   font-weight: 600;
-  border-bottom-color: #2563eb;
+  border-bottom-color: #b8232f;
 }
 
 .tabActive:hover {
-  color: #2563eb;
+  color: #b8232f;
 }
 
 /* Content area */
@@ -81,5 +81,5 @@
   align-items: center;
   justify-content: center;
   padding: 60px;
-  color: #64748b;
+  color: #6b6b82;
 }

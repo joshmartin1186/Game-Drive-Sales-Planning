@@ -28,7 +28,7 @@
   justify-content: space-between;
   align-items: center;
   padding: 20px 24px;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid #e2e4ea;
 }
 
 .header h2 {
@@ -85,7 +85,7 @@
 .saveBtn {
   width: 100%;
   padding: 16px;
-  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  background: linear-gradient(135deg, #d22939 0%, #b8232f 100%);
   color: white;
   border: none;
   border-radius: 8px;
@@ -97,12 +97,12 @@
 
 .saveBtn:hover {
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+  box-shadow: 0 4px 12px rgba(210, 41, 57, 0.4);
 }
 
 .saveForm {
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background: #f8f8fa;
+  border: 1px solid #e2e4ea;
   border-radius: 8px;
   padding: 20px;
 }
@@ -138,8 +138,8 @@
 .formGroup input:focus,
 .formGroup textarea:focus {
   outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  border-color: #d22939;
+  box-shadow: 0 0 0 3px rgba(210, 41, 57, 0.1);
 }
 
 .currentStats {
@@ -172,7 +172,7 @@
 
 .confirmBtn {
   padding: 10px 20px;
-  background: #3b82f6;
+  background: #d22939;
   border: none;
   border-radius: 6px;
   color: white;
@@ -181,7 +181,7 @@
 }
 
 .confirmBtn:hover:not(:disabled) {
-  background: #2563eb;
+  background: #b8232f;
 }
 
 .confirmBtn:disabled {
@@ -215,7 +215,7 @@
 
 .skeletonCard {
   background: white;
-  border: 1px solid #e5e7eb;
+  border: 1px solid #e2e4ea;
   border-radius: 8px;
   padding: 16px;
   animation: pulse 1.5s ease-in-out infinite;
@@ -231,14 +231,14 @@
 .skeletonTitle {
   height: 20px;
   width: 60%;
-  background: #e5e7eb;
+  background: #e2e4ea;
   border-radius: 4px;
 }
 
 .skeletonDate {
   height: 12px;
   width: 80px;
-  background: #e5e7eb;
+  background: #e2e4ea;
   border-radius: 4px;
 }
 
@@ -251,7 +251,7 @@
 .skeletonStat {
   height: 16px;
   width: 70px;
-  background: #e5e7eb;
+  background: #e2e4ea;
   border-radius: 4px;
 }
 
@@ -264,7 +264,7 @@
 .skeletonBadge {
   height: 20px;
   width: 60px;
-  background: #e5e7eb;
+  background: #e2e4ea;
   border-radius: 4px;
 }
 
@@ -278,7 +278,7 @@
 .skeletonButton {
   height: 30px;
   width: 70px;
-  background: #e5e7eb;
+  background: #e2e4ea;
   border-radius: 4px;
 }
 
@@ -307,19 +307,19 @@
 
 .versionCard {
   background: white;
-  border: 1px solid #e5e7eb;
+  border: 1px solid #e2e4ea;
   border-radius: 8px;
   padding: 16px;
   transition: all 0.2s;
 }
 
 .versionCard:hover {
-  border-color: #3b82f6;
+  border-color: #d22939;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
 .versionCard.selected {
-  border-color: #3b82f6;
+  border-color: #d22939;
   background: #f0f9ff;
 }
 
@@ -395,12 +395,12 @@
 
 .previewBtn {
   background: #f3f4f6;
-  border: 1px solid #e5e7eb;
+  border: 1px solid #e2e4ea;
   color: #374151;
 }
 
 .previewBtn:hover {
-  background: #e5e7eb;
+  background: #e2e4ea;
 }
 
 .activateBtn {
@@ -438,8 +438,8 @@
 
 /* Preview Panel */
 .previewPanel {
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background: #f8f8fa;
+  border: 1px solid #e2e4ea;
   border-radius: 8px;
   padding: 16px;
   margin-top: 16px;
@@ -465,11 +465,11 @@
 .previewTable td {
   padding: 8px 12px;
   text-align: left;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid #e2e4ea;
 }
 
 .previewTable th {
-  background: #f1f5f9;
+  background: #f0f0f4;
   font-weight: 600;
   color: #374151;
 }
@@ -656,8 +656,8 @@
 .scopeIndicator {
   margin-bottom: 20px;
   padding: 12px 16px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background: #f8f8fa;
+  border: 1px solid #e2e4ea;
   border-radius: 8px;
   font-size: 0.9rem;
 }

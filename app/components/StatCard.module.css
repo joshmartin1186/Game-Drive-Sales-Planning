@@ -48,7 +48,7 @@
 .statContent h3 {
   font-size: 0.75rem;
   font-weight: 600;
-  color: #64748b;
+  color: #6b6b82;
   margin: 0 0 0.25rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -57,7 +57,7 @@
 .statValue {
   font-size: 1.75rem;
   font-weight: 700;
-  color: #1e293b;
+  color: #1a1a2e;
   margin: 0;
   line-height: 1.2;
 }
@@ -72,7 +72,7 @@
   position: absolute;
   left: 50%;
   transform: translateX(-50%);
-  background: #1e293b;
+  background: #1a1a2e;
   color: white;
   border-radius: 8px;
   padding: 0.75rem;
@@ -102,12 +102,12 @@
 
 .tooltip.bottom::before {
   top: -16px;
-  border-bottom-color: #1e293b;
+  border-bottom-color: #1a1a2e;
 }
 
 .tooltip.top::before {
   bottom: -16px;
-  border-top-color: #1e293b;
+  border-top-color: #1a1a2e;
 }
 
 .tooltipTitle {
@@ -180,6 +180,6 @@
   padding-top: 0.5rem;
   border-top: 1px solid rgba(255, 255, 255, 0.1);
   font-size: 0.7rem;
-  color: #60a5fa;
+  color: #e04555;
   text-align: center;
 }

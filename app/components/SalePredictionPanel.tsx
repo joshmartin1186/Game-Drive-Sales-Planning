@@ -203,7 +203,7 @@ export default function SalePredictionPanel({
                   <div style={{ fontSize: '11px', color: '#64748b' }}>Est. Revenue</div>
                 </div>
                 <div style={statCardStyle}>
-                  <div style={{ fontSize: '18px', fontWeight: 700, color: '#2563eb' }}>
+                  <div style={{ fontSize: '18px', fontWeight: 700, color: '#b8232f' }}>
                     {stat?.estimated_total_units?.toLocaleString() || '0'}
                   </div>
                   <div style={{ fontSize: '11px', color: '#64748b' }}>Est. Units</div>
@@ -271,9 +271,9 @@ export default function SalePredictionPanel({
               onClick={(e) => { e.stopPropagation(); fetchPrediction() }}
               style={{
                 fontSize: '12px',
-                color: '#2563eb',
+                color: '#b8232f',
                 background: 'none',
-                border: '1px solid #2563eb',
+                border: '1px solid #b8232f',
                 borderRadius: '4px',
                 padding: '4px 10px',
                 cursor: 'pointer',

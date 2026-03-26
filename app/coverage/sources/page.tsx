@@ -893,7 +893,7 @@ export default function SourcesPage() {
               </button>
               <button
                 onClick={() => openAddForm('rss')}
-                style={{ padding: '8px 14px', backgroundColor: '#2563eb', color: 'white', border: 'none', borderRadius: '6px', fontSize: '13px', cursor: 'pointer', fontWeight: 500 }}
+                style={{ padding: '8px 14px', backgroundColor: '#b8232f', color: 'white', border: 'none', borderRadius: '6px', fontSize: '13px', cursor: 'pointer', fontWeight: 500 }}
               >
                 + Add RSS Feed
               </button>
@@ -961,7 +961,7 @@ export default function SourcesPage() {
               </button>
               <button
                 onClick={() => openAddForm('tavily')}
-                style={{ padding: '8px 14px', backgroundColor: '#2563eb', color: 'white', border: 'none', borderRadius: '6px', fontSize: '13px', cursor: 'pointer', fontWeight: 500 }}
+                style={{ padding: '8px 14px', backgroundColor: '#b8232f', color: 'white', border: 'none', borderRadius: '6px', fontSize: '13px', cursor: 'pointer', fontWeight: 500 }}
               >
                 + Add Domain Monitor
               </button>
@@ -1018,7 +1018,7 @@ export default function SourcesPage() {
             {canEdit && (
               <button
                 onClick={() => openAddForm(type)}
-                style={{ padding: '6px 12px', backgroundColor: '#2563eb', color: 'white', border: 'none', borderRadius: '6px', fontSize: '12px', cursor: 'pointer', fontWeight: 500 }}
+                style={{ padding: '6px 12px', backgroundColor: '#b8232f', color: 'white', border: 'none', borderRadius: '6px', fontSize: '12px', cursor: 'pointer', fontWeight: 500 }}
               >
                 + Add
               </button>
@@ -1071,7 +1071,7 @@ export default function SourcesPage() {
               </span>
             </div>
             {!hasApifyKey && (
-              <Link href="/settings/system-keys" style={{ fontSize: '13px', color: '#2563eb', textDecoration: 'none', fontWeight: 500 }}>
+              <Link href="/settings/system-keys" style={{ fontSize: '13px', color: '#b8232f', textDecoration: 'none', fontWeight: 500 }}>
                 Configure API Key →
               </Link>
             )}
@@ -1127,7 +1127,7 @@ export default function SourcesPage() {
                 </button>
                 <button
                   onClick={() => openAddForm('sullygnome')}
-                  style={{ padding: '6px 12px', backgroundColor: '#2563eb', color: 'white', border: 'none', borderRadius: '6px', fontSize: '12px', cursor: 'pointer', fontWeight: 500 }}
+                  style={{ padding: '6px 12px', backgroundColor: '#b8232f', color: 'white', border: 'none', borderRadius: '6px', fontSize: '12px', cursor: 'pointer', fontWeight: 500 }}
                 >
                   + Add
                 </button>
@@ -1269,11 +1269,11 @@ export default function SourcesPage() {
                 key={tab}
                 onClick={() => setActiveTab(tab)}
                 style={{
-                  backgroundColor: activeTab === tab ? '#2563eb' : 'white',
+                  backgroundColor: activeTab === tab ? '#b8232f' : 'white',
                   color: activeTab === tab ? 'white' : '#1e293b',
                   borderRadius: '10px',
                   padding: '16px',
-                  border: activeTab === tab ? '1px solid #2563eb' : '1px solid #e2e8f0',
+                  border: activeTab === tab ? '1px solid #b8232f' : '1px solid #e2e8f0',
                   boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
                   cursor: 'pointer',
                   textAlign: 'left'
@@ -1435,7 +1435,7 @@ export default function SourcesPage() {
                 onClick={handleSave}
                 disabled={saving}
                 style={{
-                  padding: '8px 24px', backgroundColor: '#2563eb', color: 'white', border: 'none',
+                  padding: '8px 24px', backgroundColor: '#b8232f', color: 'white', border: 'none',
                   borderRadius: '6px', fontSize: '14px', fontWeight: 500, cursor: saving ? 'not-allowed' : 'pointer',
                   opacity: saving ? 0.7 : 1
                 }}
@@ -1508,7 +1508,7 @@ export default function SourcesPage() {
                 onClick={handleBulkImport}
                 disabled={bulkImporting || !bulkText.trim()}
                 style={{
-                  padding: '8px 24px', backgroundColor: '#2563eb', color: 'white', border: 'none',
+                  padding: '8px 24px', backgroundColor: '#b8232f', color: 'white', border: 'none',
                   borderRadius: '6px', fontSize: '14px', fontWeight: 500,
                   cursor: bulkImporting || !bulkText.trim() ? 'not-allowed' : 'pointer',
                   opacity: bulkImporting || !bulkText.trim() ? 0.7 : 1

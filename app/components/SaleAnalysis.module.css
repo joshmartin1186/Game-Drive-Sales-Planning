@@ -19,7 +19,7 @@
 
 .metricCard {
   background: white;
-  border: 1px solid #e2e8f0;
+  border: 1px solid #e2e4ea;
   border-radius: 10px;
   padding: 16px;
   text-align: center;
@@ -28,13 +28,13 @@
 .metricValue {
   font-size: 24px;
   font-weight: 700;
-  color: #1e293b;
+  color: #1a1a2e;
   line-height: 1.2;
 }
 
 .metricLabel {
   font-size: 12px;
-  color: #64748b;
+  color: #6b6b82;
   margin-top: 4px;
   font-weight: 500;
 }
@@ -61,7 +61,7 @@
 
 .panel {
   background: white;
-  border: 1px solid #e2e8f0;
+  border: 1px solid #e2e4ea;
   border-radius: 10px;
   padding: 16px;
 }
@@ -76,7 +76,7 @@
 .panelSubtitle {
   font-size: 13px;
   font-weight: 600;
-  color: #475569;
+  color: #44445a;
   margin: 16px 0 8px;
 }
 
@@ -96,7 +96,7 @@
 .barLabel {
   min-width: 100px;
   font-size: 13px;
-  color: #475569;
+  color: #44445a;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -121,7 +121,7 @@
 .clientTag {
   font-size: 10px;
   color: #94a3b8;
-  background: #f8fafc;
+  background: #f8f8fa;
   padding: 1px 5px;
   border-radius: 3px;
   white-space: nowrap;
@@ -130,7 +130,7 @@
 .barTrack {
   flex: 1;
   height: 8px;
-  background: #f1f5f9;
+  background: #f0f0f4;
   border-radius: 4px;
   overflow: hidden;
 }
@@ -145,7 +145,7 @@
 .barCount {
   font-size: 13px;
   font-weight: 600;
-  color: #1e293b;
+  color: #1a1a2e;
   min-width: 24px;
   text-align: right;
 }
@@ -165,7 +165,7 @@
 
 .statusBar {
   height: 6px;
-  background: #f1f5f9;
+  background: #f0f0f4;
   border-radius: 3px;
   overflow: hidden;
 }
@@ -178,7 +178,7 @@
 
 .statusLabel {
   font-size: 12px;
-  color: #64748b;
+  color: #6b6b82;
 }
 
 /* Goals */
@@ -201,13 +201,13 @@
   font-size: 12px;
   font-weight: 500;
   text-transform: capitalize;
-  background: #f1f5f9;
-  color: #64748b;
+  background: #f0f0f4;
+  color: #6b6b82;
 }
 
 .goalBadge.acquisition {
-  background: #dbeafe;
-  color: #1d4ed8;
+  background: rgba(210, 41, 57, 0.08);
+  color: #b8232f;
 }
 
 .goalBadge.visibility {
@@ -228,7 +228,7 @@
 .goalCount {
   font-size: 13px;
   font-weight: 600;
-  color: #475569;
+  color: #44445a;
 }
 
 /* Comparison Section */

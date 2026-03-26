@@ -727,8 +727,8 @@ export default function SettingsClientsPage() {
                                       onClick={() => setGameTab(prev => ({ ...prev, [game.id]: 'products' }))}
                                       style={{
                                         padding: '6px 14px', fontSize: '12px', fontWeight: 600, border: 'none', cursor: 'pointer',
-                                        borderBottom: (gameTab[game.id] || 'products') === 'products' ? '2px solid #2563eb' : '2px solid transparent',
-                                        color: (gameTab[game.id] || 'products') === 'products' ? '#2563eb' : '#64748b',
+                                        borderBottom: (gameTab[game.id] || 'products') === 'products' ? '2px solid #b8232f' : '2px solid transparent',
+                                        color: (gameTab[game.id] || 'products') === 'products' ? '#b8232f' : '#64748b',
                                         background: 'none'
                                       }}
                                     >

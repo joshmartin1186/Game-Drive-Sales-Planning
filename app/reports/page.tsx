@@ -364,7 +364,7 @@ export default function ReportsPage() {
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #1a1a2e; background: #fff; padding: 40px; }
-  .header { text-align: center; margin-bottom: 32px; padding-bottom: 24px; border-bottom: 3px solid #3b82f6; }
+  .header { text-align: center; margin-bottom: 32px; padding-bottom: 24px; border-bottom: 3px solid #d22939; }
   .header h1 { font-size: 28px; color: #1e293b; margin-bottom: 4px; }
   .header .subtitle { font-size: 14px; color: #64748b; }
   .section { margin-bottom: 32px; page-break-inside: avoid; }
@@ -385,7 +385,7 @@ export default function ReportsPage() {
   .tier-badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; }
   .tier-A { background: #dcfce7; color: #166534; } .tier-B { background: #dbeafe; color: #1e40af; }
   .tier-C { background: #fef3c7; color: #92400e; } .tier-D { background: #f3f4f6; color: #374151; }
-  .annotation { background: #f8fafc; border-left: 4px solid #3b82f6; padding: 16px; margin: 16px 0; border-radius: 0 8px 8px 0; font-size: 14px; color: #334155; white-space: pre-wrap; }
+  .annotation { background: #f8fafc; border-left: 4px solid #d22939; padding: 16px; margin: 16px 0; border-radius: 0 8px 8px 0; font-size: 14px; color: #334155; white-space: pre-wrap; }
   .footer { text-align: center; margin-top: 40px; padding-top: 20px; border-top: 1px solid #e2e8f0; font-size: 11px; color: #94a3b8; }
   @media print { body { padding: 20px; } .stats-grid { grid-template-columns: repeat(4, 1fr); } }
 </style></head><body>
@@ -433,7 +433,7 @@ ${cov ? `
   </tbody></table>` : ''}
 
   ${cov.items.length > 0 ? `<h3>Coverage Items</h3><table><thead><tr><th>Date</th><th>Outlet</th><th>Title</th><th>Territory</th><th>Type</th></tr></thead><tbody>
-    ${cov.items.slice(0, 50).map(i => `<tr><td>${i.publish_date || ''}</td><td>${(i.outlet as unknown as Record<string, string>)?.name || ''}</td><td>${i.url ? `<a href="${i.url}" target="_blank" rel="noopener noreferrer" style="color:#2563eb;text-decoration:none">${i.title || ''}</a>` : (i.title || '')}</td><td>${i.territory || ''}</td><td>${i.coverage_type || ''}</td></tr>`).join('')}
+    ${cov.items.slice(0, 50).map(i => `<tr><td>${i.publish_date || ''}</td><td>${(i.outlet as unknown as Record<string, string>)?.name || ''}</td><td>${i.url ? `<a href="${i.url}" target="_blank" rel="noopener noreferrer" style="color:#b8232f;text-decoration:none">${i.title || ''}</a>` : (i.title || '')}</td><td>${i.territory || ''}</td><td>${i.coverage_type || ''}</td></tr>`).join('')}
   </tbody></table>` : ''}
   ${annotations.pr_coverage ? `<div class="annotation">${annotations.pr_coverage}</div>` : ''}
 </div>` : ''}
@@ -686,8 +686,8 @@ ${social && social.total_posts > 0 ? `
   const labelStyle: React.CSSProperties = { display: 'block', fontSize: '12px', fontWeight: 600, color: '#64748b', marginBottom: '4px' }
   const selectStyle: React.CSSProperties = { padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: '8px', fontSize: '14px', minWidth: '180px', background: '#fff' }
   const inputStyle: React.CSSProperties = { padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: '8px', fontSize: '14px' }
-  const btnPrimary: React.CSSProperties = { padding: '8px 20px', background: '#3b82f6', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }
-  const btnOutline: React.CSSProperties = { padding: '8px 16px', background: '#fff', color: '#3b82f6', border: '1px solid #3b82f6', borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }
+  const btnPrimary: React.CSSProperties = { padding: '8px 20px', background: '#d22939', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }
+  const btnOutline: React.CSSProperties = { padding: '8px 16px', background: '#fff', color: '#d22939', border: '1px solid #d22939', borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }
   const tabBar: React.CSSProperties = { display: 'flex', borderBottom: '2px solid #e2e8f0', marginBottom: '24px' }
   const statGrid: React.CSSProperties = { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginBottom: '24px' }
   const statCard: React.CSSProperties = { background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '16px', textAlign: 'center' }
@@ -813,8 +813,8 @@ ${social && social.total_posts > 0 ? `
           <div style={tabBar}>
             {TABS.map(tab => (
               <button key={tab} onClick={() => setActiveTab(tab)} style={{
-                padding: '10px 20px', background: 'none', border: 'none', borderBottom: activeTab === tab ? '2px solid #3b82f6' : '2px solid transparent',
-                color: activeTab === tab ? '#3b82f6' : '#64748b', fontWeight: activeTab === tab ? 600 : 400, fontSize: '14px', cursor: 'pointer', marginBottom: '-2px',
+                padding: '10px 20px', background: 'none', border: 'none', borderBottom: activeTab === tab ? '2px solid #d22939' : '2px solid transparent',
+                color: activeTab === tab ? '#d22939' : '#64748b', fontWeight: activeTab === tab ? 600 : 400, fontSize: '14px', cursor: 'pointer', marginBottom: '-2px',
               }}>{tab}</button>
             ))}
           </div>
@@ -1133,7 +1133,7 @@ ${social && social.total_posts > 0 ? `
                               </span>
                             </td>
                             <td style={{ ...tdStyle, maxWidth: '300px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                              {item.url ? <a href={item.url} target="_blank" rel="noopener noreferrer" style={{ color: '#3b82f6', textDecoration: 'none' }}>{item.title || item.url}</a> : (item.title || '-')}
+                              {item.url ? <a href={item.url} target="_blank" rel="noopener noreferrer" style={{ color: '#d22939', textDecoration: 'none' }}>{item.title || item.url}</a> : (item.title || '-')}
                             </td>
                             <td style={tdStyle}>{item.territory || '-'}</td>
                             <td style={tdStyle}>{item.coverage_type || '-'}</td>
@@ -1279,7 +1279,7 @@ ${social && social.total_posts > 0 ? `
                       <div style={breakTitle}>Best Performing Posts</div>
                       {reportData.social.top_posts.slice(0, 5).map(post => (
                         <div key={post.id} style={{ ...breakItem, flexDirection: 'column', gap: '2px' }}>
-                          <a href={post.url} target="_blank" rel="noopener noreferrer" style={{ color: '#3b82f6', textDecoration: 'none', fontSize: '13px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%', display: 'block' }}>
+                          <a href={post.url} target="_blank" rel="noopener noreferrer" style={{ color: '#d22939', textDecoration: 'none', fontSize: '13px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%', display: 'block' }}>
                             {post.title.length > 60 ? post.title.substring(0, 60) + '...' : post.title}
                           </a>
                           <span style={{ fontSize: '11px', color: '#64748b' }}>
@@ -1312,7 +1312,7 @@ ${social && social.total_posts > 0 ? `
                               <td style={{ ...tdStyle, textTransform: 'capitalize' }}>{post.source_type}</td>
                               <td style={tdStyle}>{post.outlet_name || '-'}</td>
                               <td style={{ ...tdStyle, maxWidth: '250px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                <a href={post.url} target="_blank" rel="noopener noreferrer" style={{ color: '#3b82f6', textDecoration: 'none' }}>
+                                <a href={post.url} target="_blank" rel="noopener noreferrer" style={{ color: '#d22939', textDecoration: 'none' }}>
                                   {post.title.length > 50 ? post.title.substring(0, 50) + '...' : post.title}
                                 </a>
                               </td>

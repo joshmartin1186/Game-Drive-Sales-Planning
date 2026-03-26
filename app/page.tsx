@@ -674,7 +674,7 @@ export default function GameDriveDashboard() {
 
       <div className={styles.statsGrid}>
         <StatCard icon="📊" iconColor="#10b981" title="TOTAL SALES" value={filteredSales.length} subtitle={upcomingSalesDetails.length > 0 ? `${upcomingSalesDetails.length} upcoming in 30 days` : 'Across all platforms'} tooltipTitle="Sales by Platform" tooltipItems={salesByPlatformDetails} tooltipEmptyMessage="No sales scheduled" />
-        <StatCard icon="🎮" iconColor="#3b82f6" title="PRODUCTS" value={filteredProducts.length} subtitle="Games and DLCs" tooltipTitle="Products by Type" tooltipItems={productsByTypeDetails} tooltipEmptyMessage="No products configured" />
+        <StatCard icon="🎮" iconColor="#d22939" title="PRODUCTS" value={filteredProducts.length} subtitle="Games and DLCs" tooltipTitle="Products by Type" tooltipItems={productsByTypeDetails} tooltipEmptyMessage="No products configured" />
         <StatCard icon="📅" iconColor="#8b5cf6" title="PLATFORM EVENTS" value={upcomingEventsCount} subtitle="Upcoming sales events" tooltipTitle="Upcoming Platform Events" tooltipItems={upcomingEventDetails} tooltipEmptyMessage="No upcoming platform events" />
         <StatCard icon={conflicts > 0 ? '⚠️' : '✅'} iconColor={conflicts > 0 ? '#ef4444' : '#22c55e'} title="CONFLICTS" value={conflicts} subtitle={conflicts === 0 ? 'All platforms clear' : 'Needs attention'} warning={conflicts > 0} tooltipTitle="Launch Sale Conflicts" tooltipItems={conflictDetails.map(c => ({ label: c.productName, sublabel: `${c.eventName} (${c.overlapDays}d overlap)`, warning: true }))} tooltipEmptyMessage="No conflicts detected" />
       </div>

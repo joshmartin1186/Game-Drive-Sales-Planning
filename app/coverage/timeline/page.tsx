@@ -955,7 +955,7 @@ export default function TimelinePage() {
                               <div key={sale.id} title={`${sale.sale_name || sale.sale_type} — ${sale.product?.name || ''}`}
                                 style={{
                                   position: 'absolute', left, width, top: 0, height: '100%',
-                                  backgroundColor: '#3b82f6', opacity: 0.08, borderRadius: '2px',
+                                  backgroundColor: '#d22939', opacity: 0.08, borderRadius: '2px',
                                   zIndex: 1,
                                 }}
                               />
@@ -1119,7 +1119,7 @@ export default function TimelinePage() {
                     <span>{l}</span>
                   </div>
                 ))}
-                {showSales && <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><div style={{ width: '14px', height: '10px', backgroundColor: '#3b82f6', opacity: 0.15, borderRadius: '2px' }} /><span>Sale period</span></div>}
+                {showSales && <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><div style={{ width: '14px', height: '10px', backgroundColor: '#d22939', opacity: 0.15, borderRadius: '2px' }} /><span>Sale period</span></div>}
                 {showAnnotations && <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><div style={{ width: '8px', height: '8px', backgroundColor: '#f59e0b', borderRadius: '50%' }} /><span>Annotation</span></div>}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><div style={{ width: '2px', height: '10px', backgroundColor: '#f97316' }} /><span>Today</span></div>
               </div>
@@ -1297,7 +1297,7 @@ export default function TimelinePage() {
                             </div>
                           </td>
                           <td style={{ padding: '8px 12px', fontSize: '12px', color: '#1e293b', maxWidth: '300px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            <a href={item.url} target="_blank" rel="noopener noreferrer" style={{ color: '#2563eb', textDecoration: 'none' }}>
+                            <a href={item.url} target="_blank" rel="noopener noreferrer" style={{ color: '#b8232f', textDecoration: 'none' }}>
                               {item.title}
                             </a>
                           </td>
@@ -1343,7 +1343,7 @@ export default function TimelinePage() {
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
               <a href={selectedItem.url} target="_blank" rel="noopener noreferrer"
-                style={{ fontSize: '15px', fontWeight: 600, color: '#2563eb', textDecoration: 'none', flex: 1 }}>
+                style={{ fontSize: '15px', fontWeight: 600, color: '#b8232f', textDecoration: 'none', flex: 1 }}>
                 {selectedItem.title}
               </a>
               <button onClick={() => setSelectedItem(null)}
