@@ -1,0 +1,345 @@
+/* Coverage Health Dashboard */
+
+.container {
+  margin-bottom: 24px;
+}
+
+.toggleBar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.toggleButton {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: #1e1e32;
+  border: 1px solid #2a2a3e;
+  border-radius: 8px;
+  color: #e0e0e8;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.toggleButton:hover {
+  border-color: #d22939;
+  background: #252540;
+}
+
+.toggleButtonActive {
+  composes: toggleButton;
+  border-color: #d22939;
+  background: rgba(210, 41, 57, 0.12);
+  color: #d22939;
+}
+
+.toggleIcon {
+  font-size: 16px;
+  line-height: 1;
+}
+
+/* Summary Bar */
+.summaryBar {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.summaryCard {
+  flex: 1;
+  min-width: 160px;
+  padding: 16px 20px;
+  background: #1e1e32;
+  border: 1px solid #2a2a3e;
+  border-radius: 10px;
+}
+
+.summaryLabel {
+  font-size: 12px;
+  color: #8888a0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+}
+
+.summaryValue {
+  font-size: 28px;
+  font-weight: 700;
+  color: #e0e0e8;
+  line-height: 1;
+}
+
+.summaryValueAttention {
+  composes: summaryValue;
+  color: #f59e0b;
+}
+
+/* Game Health Grid */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 16px;
+}
+
+/* Game Card */
+.card {
+  background: #1e1e32;
+  border: 1px solid #2a2a3e;
+  border-radius: 10px;
+  padding: 20px;
+  transition: border-color 0.15s;
+}
+
+.card:hover {
+  border-color: #3a3a52;
+}
+
+.cardHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 16px;
+}
+
+.gameInfo {
+  flex: 1;
+  min-width: 0;
+}
+
+.gameName {
+  font-size: 15px;
+  font-weight: 600;
+  color: #e0e0e8;
+  margin: 0 0 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.clientName {
+  font-size: 12px;
+  color: #8888a0;
+  margin: 0;
+}
+
+/* Staleness dot */
+.stalenessDot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 4px;
+}
+
+.stalenessActive {
+  composes: stalenessDot;
+  background: #10b981;
+  box-shadow: 0 0 6px rgba(16, 185, 129, 0.4);
+}
+
+.stalenessRecent {
+  composes: stalenessDot;
+  background: #f59e0b;
+  box-shadow: 0 0 6px rgba(245, 158, 11, 0.3);
+}
+
+.stalenessStale {
+  composes: stalenessDot;
+  background: #f97316;
+  box-shadow: 0 0 6px rgba(249, 115, 22, 0.3);
+}
+
+.stalenessDormant {
+  composes: stalenessDot;
+  background: #ef4444;
+  box-shadow: 0 0 6px rgba(239, 68, 68, 0.3);
+}
+
+/* Metrics Row */
+.metricsRow {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.metric {
+  flex: 1;
+  text-align: center;
+}
+
+.metricValue {
+  font-size: 22px;
+  font-weight: 700;
+  color: #e0e0e8;
+  line-height: 1;
+  margin-bottom: 2px;
+}
+
+.metricLabel {
+  font-size: 11px;
+  color: #8888a0;
+}
+
+/* Trend indicator */
+.trendRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+  font-size: 13px;
+}
+
+.trendUp {
+  color: #10b981;
+  font-weight: 600;
+}
+
+.trendDown {
+  color: #ef4444;
+  font-weight: 600;
+}
+
+.trendFlat {
+  color: #8888a0;
+  font-weight: 500;
+}
+
+.trendLabel {
+  color: #8888a0;
+  font-size: 12px;
+}
+
+/* Source diversity bar */
+.diversitySection {
+  margin-bottom: 14px;
+}
+
+.diversityLabel {
+  font-size: 11px;
+  color: #8888a0;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.diversityBar {
+  display: flex;
+  height: 6px;
+  border-radius: 3px;
+  overflow: hidden;
+  background: #2a2a3e;
+}
+
+.diversitySegment {
+  height: 100%;
+  min-width: 2px;
+  transition: width 0.3s;
+}
+
+.diversityLegend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.diversityItem {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  color: #8888a0;
+}
+
+.diversityDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+/* Warnings */
+.warningBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  background: rgba(245, 158, 11, 0.15);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-radius: 4px;
+  font-size: 11px;
+  color: #f59e0b;
+  font-weight: 500;
+}
+
+/* Footer row */
+.cardFooter {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid #2a2a3e;
+}
+
+.lastDiscovery {
+  font-size: 11px;
+  color: #8888a0;
+}
+
+/* Loading */
+.loading {
+  text-align: center;
+  padding: 40px;
+  color: #8888a0;
+  font-size: 14px;
+}
+
+.error {
+  text-align: center;
+  padding: 24px;
+  color: #ef4444;
+  font-size: 14px;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: 8px;
+}
+
+/* Empty state */
+.emptyState {
+  text-align: center;
+  padding: 40px;
+  color: #8888a0;
+  font-size: 14px;
+}
+
+/* Staleness label */
+.stalenessLabel {
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.stalenessLabelActive {
+  composes: stalenessLabel;
+  color: #10b981;
+}
+
+.stalenessLabelRecent {
+  composes: stalenessLabel;
+  color: #f59e0b;
+}
+
+.stalenessLabelStale {
+  composes: stalenessLabel;
+  color: #f97316;
+}
+
+.stalenessLabelDormant {
+  composes: stalenessLabel;
+  color: #ef4444;
+}

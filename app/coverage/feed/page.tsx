@@ -4,8 +4,10 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { Sidebar } from '../../components/Sidebar'
 import { useAuth } from '@/lib/auth-context'
 import { CoverageNav } from '../components/CoverageNav'
+import { CoverageImporter } from '../components/CoverageImporter'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import AnnotationSidebar, { CorrelationCandidate } from '@/app/components/AnnotationSidebar'
+import CoverageHealth from '../components/CoverageHealth'
 
 function getOutletDisplayName(item: CoverageItem): string {
   if (item.outlet?.name && item.outlet.name !== 'Unknown') return item.outlet.name
@@ -169,6 +171,9 @@ export default function CoverageFeedPage() {
 
   // Selection
   const [selected, setSelected] = useState<Set<string>>(new Set())
+
+  // Import modal
+  const [showImporter, setShowImporter] = useState(false)
 
   // Manual add modal
   const [showAddModal, setShowAddModal] = useState(false)
@@ -493,16 +498,27 @@ export default function CoverageFeedPage() {
               </p>
             </div>
             {canEdit && (
-              <button
-                onClick={() => { resetAddForm(); setShowAddModal(true) }}
-                style={{ padding: '8px 18px', backgroundColor: '#b8232f', color: 'white', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
-              >
-                + Add Item
-              </button>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  onClick={() => setShowImporter(true)}
+                  style={{ padding: '8px 18px', backgroundColor: '#22223a', color: '#e0e0e8', border: '1px solid #2a2a3e', borderRadius: '8px', fontSize: '14px', fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+                >
+                  Import CSV
+                </button>
+                <button
+                  onClick={() => { resetAddForm(); setShowAddModal(true) }}
+                  style={{ padding: '8px 18px', backgroundColor: '#b8232f', color: 'white', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+                >
+                  + Add Item
+                </button>
+              </div>
             )}
           </div>
 
           <CoverageNav />
+
+          {/* Coverage Health Dashboard */}
+          <CoverageHealth />
 
           {/* View mode toggle + stats */}
           <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', alignItems: 'center' }}>
@@ -1143,6 +1159,15 @@ export default function CoverageFeedPage() {
           direction: selectedCandidate.direction,
           confidence: selectedCandidate.detection_confidence >= 0.7 ? 'high' : selectedCandidate.detection_confidence >= 0.4 ? 'medium' : 'low',
         } : undefined}
+      />
+
+      {/* CSV Import Modal */}
+      <CoverageImporter
+        isOpen={showImporter}
+        onClose={() => setShowImporter(false)}
+        clients={clients}
+        games={games}
+        onImportComplete={fetchItems}
       />
 
       {/* Manual Add Item Modal */}

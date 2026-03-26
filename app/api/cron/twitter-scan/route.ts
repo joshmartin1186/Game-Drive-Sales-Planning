@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSupabase } from '@/lib/supabase'
 import { inferTerritory } from '@/lib/territory'
 import { detectOutletCountry } from '@/lib/outlet-country'
+import { checkApifyCredits, notifyLowCredits } from '@/lib/apify-utils'
 
 function getSupabase() {
   return getServerSupabase()
@@ -37,6 +38,18 @@ export async function GET(request: NextRequest) {
     }
 
     const apifyKey = keyData.api_key
+
+    // Check Apify credits before proceeding
+    const creditCheck = await checkApifyCredits(apifyKey)
+    if (!creditCheck.hasCredits) {
+      if (creditCheck.remainingUsd !== null) {
+        await notifyLowCredits(creditCheck.remainingUsd)
+      }
+      return NextResponse.json({
+        message: `Apify credits low ($${creditCheck.remainingUsd?.toFixed(2) ?? 'unknown'} remaining), skipping scan`,
+        credits_remaining: creditCheck.remainingUsd
+      })
+    }
 
     // Get whitelist keywords grouped by client+game
     const { data: keywords } = await supabase

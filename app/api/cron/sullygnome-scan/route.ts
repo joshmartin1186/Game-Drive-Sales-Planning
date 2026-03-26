@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSupabase } from '@/lib/supabase'
 import { buildSullyGnomeUrl } from '@/lib/sullygnome'
+import { checkApifyCredits, notifyLowCredits } from '@/lib/apify-utils'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -131,6 +132,18 @@ async function handleScan(request: NextRequest) {
     }
 
     const apifyKey = keyData.api_key
+
+    // Check Apify credits before proceeding
+    const creditCheck = await checkApifyCredits(apifyKey)
+    if (!creditCheck.hasCredits) {
+      if (creditCheck.remainingUsd !== null) {
+        await notifyLowCredits(creditCheck.remainingUsd)
+      }
+      return NextResponse.json({
+        message: `Apify credits low ($${creditCheck.remainingUsd?.toFixed(2) ?? 'unknown'} remaining), skipping scan`,
+        credits_remaining: creditCheck.remainingUsd
+      })
+    }
 
     // 2. Get active SullyGnome sources
     let sourceQuery = supabase
