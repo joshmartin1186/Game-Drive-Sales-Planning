@@ -5,6 +5,7 @@ import { inferTerritory } from '@/lib/territory'
 import { domainToOutletName } from '@/lib/outlet-utils'
 import { detectOutletCountry } from '@/lib/outlet-country'
 import { matchGameFromContent, classifyCoverageType } from '@/lib/coverage-utils'
+import { autoDiscoverAndCreateRssSource } from '@/lib/rss-discovery'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -198,6 +199,32 @@ export async function GET(request: Request) {
       for (const item of existingItems) existingUrls.add(normalizeUrl(item.url))
     }
 
+    // ─── Coverage Waterfall Strategy ─────────────────────────────────────────
+    // Tavily is the PAID tier of the coverage waterfall — use sparingly:
+    //   1. RSS feeds (free) — covers ~88 outlets automatically
+    //   2. Web scraping (free) — covers Tier A/B outlets without RSS
+    //   3. Tavily search (paid, HERE) — broad game-name search for remaining gaps
+    // Daily budget target: ~$1-2/day across all games
+    // ──────────────────────────────────────────────────────────────────────────
+
+    // Daily cost cap: stop if we've already spent too much today
+    const DAILY_COST_CAP = 2.00 // $2/day max
+    const { data: todayRuns } = await supabase
+      .from('coverage_sources')
+      .select('last_run_at, items_found_last_run')
+      .eq('source_type', 'tavily')
+      .gte('last_run_at', new Date(new Date().setHours(0, 0, 0, 0)).toISOString())
+
+    // Rough estimate: each run costs ~$0.02-0.03
+    const todayRunCount = todayRuns?.length || 0
+    const estimatedTodayCost = todayRunCount * 0.025
+    if (estimatedTodayCost >= DAILY_COST_CAP) {
+      return NextResponse.json({
+        message: `Tavily daily cost cap reached (~$${estimatedTodayCost.toFixed(2)} spent today from ${todayRunCount} runs)`,
+        stats: { scanned: 0, cost_cap_hit: true, estimated_today_cost: estimatedTodayCost }
+      })
+    }
+
     // 6. Process each Tavily source
     const stats = {
       sources_scanned: 0,
@@ -208,8 +235,12 @@ export async function GET(request: Request) {
       items_duplicate: 0,
       items_no_game: 0,
       estimated_cost: 0,
+      rss_discovered: 0,
       errors: [] as string[]
     }
+
+    // Track newly created outlets for RSS discovery at the end
+    const newOutlets: Array<{ id: string; domain: string; name: string }> = []
 
     // Process up to 8 sources per cron run
     const batch = dueForScan.slice(0, 8)
@@ -366,7 +397,13 @@ export async function GET(request: Request) {
                       })
                       .select('id')
                       .single()
-                    if (newOutlet) outletId = newOutlet.id
+                    if (newOutlet) {
+                      outletId = newOutlet.id
+                      // Track for RSS auto-discovery at end of scan
+                      if (!newOutlets.some(o => o.domain === resultDomain)) {
+                        newOutlets.push({ id: newOutlet.id, domain: resultDomain, name: outletName })
+                      }
+                    }
                   }
                 }
               } catch (outletErr) {
@@ -468,6 +505,29 @@ export async function GET(request: Request) {
       console.log(`[Tavily Scan] Estimated cost: $${stats.estimated_cost.toFixed(3)}`)
     }
 
+    // 8. Auto-discover RSS feeds for newly created outlets (non-blocking)
+    // Run in background — don't hold up the response
+    if (newOutlets.length > 0) {
+      const rssPromises = newOutlets.slice(0, 5).map(async (outlet) => {
+        try {
+          const result = await autoDiscoverAndCreateRssSource(
+            outlet.id, outlet.domain, outlet.name, supabase
+          )
+          if (result.found) stats.rss_discovered++
+        } catch (err) {
+          console.warn(`[Tavily Scan] RSS discovery failed for ${outlet.domain}:`, err)
+        }
+      })
+      // Wait up to 10s for RSS discovery, then move on
+      await Promise.race([
+        Promise.allSettled(rssPromises),
+        new Promise(resolve => setTimeout(resolve, 10000))
+      ])
+      if (stats.rss_discovered > 0) {
+        console.log(`[Tavily Scan] Auto-discovered ${stats.rss_discovered} RSS feeds from ${newOutlets.length} new outlets`)
+      }
+    }
+
     const duration = Date.now() - startTime
     return NextResponse.json({
       message: 'Tavily scan complete',
@@ -477,6 +537,7 @@ export async function GET(request: Request) {
         due_for_scan: dueForScan.length,
         batch_size: batch.length,
         auto_provisioned: autoProvisioned,
+        new_outlets: newOutlets.length,
         ...stats
       }
     })

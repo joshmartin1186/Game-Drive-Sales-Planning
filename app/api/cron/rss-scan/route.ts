@@ -5,6 +5,7 @@ import { inferTerritory } from '@/lib/territory'
 import { domainToOutletName } from '@/lib/outlet-utils'
 import { detectOutletCountry } from '@/lib/outlet-country'
 import { matchGameFromContent, classifyCoverageType } from '@/lib/coverage-utils'
+import { autoDiscoverAndCreateRssSource } from '@/lib/rss-discovery'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -253,8 +254,12 @@ export async function GET(request: Request) {
       items_inserted: 0,
       items_duplicate: 0,
       items_no_game: 0,
+      rss_discovered: 0,
       errors: [] as string[]
     }
+
+    // Track newly created outlets for RSS auto-discovery
+    const newOutlets: Array<{ id: string; domain: string; name: string }> = []
 
     // Limit to 10 sources per cron run to stay within 60s
     const batch = dueForScan.slice(0, 10)
@@ -398,7 +403,13 @@ export async function GET(request: Request) {
                   })
                   .select('id')
                   .single()
-                if (newOutlet) outletId = newOutlet.id
+                if (newOutlet) {
+                  outletId = newOutlet.id
+                  // Track for RSS auto-discovery at end of scan
+                  if (!newOutlets.some(o => o.domain === articleDomain)) {
+                    newOutlets.push({ id: newOutlet.id, domain: articleDomain, name: outletName })
+                  }
+                }
               }
             }
           } catch (outletErr) {
@@ -488,6 +499,27 @@ export async function GET(request: Request) {
       }
     }
 
+    // Auto-discover RSS feeds for newly created outlets (non-blocking)
+    if (newOutlets.length > 0) {
+      const rssPromises = newOutlets.slice(0, 5).map(async (outlet) => {
+        try {
+          const result = await autoDiscoverAndCreateRssSource(
+            outlet.id, outlet.domain, outlet.name, supabase
+          )
+          if (result.found) stats.rss_discovered++
+        } catch (err) {
+          console.warn(`[RSS Scan] RSS discovery failed for ${outlet.domain}:`, err)
+        }
+      })
+      await Promise.race([
+        Promise.allSettled(rssPromises),
+        new Promise(resolve => setTimeout(resolve, 10000))
+      ])
+      if (stats.rss_discovered > 0) {
+        console.log(`[RSS Scan] Auto-discovered ${stats.rss_discovered} RSS feeds from ${newOutlets.length} new outlets`)
+      }
+    }
+
     const duration = Date.now() - startTime
     console.log(`[RSS Scan] Completed in ${duration}ms:`, stats)
 
@@ -498,6 +530,7 @@ export async function GET(request: Request) {
         total_active_sources: sources.length,
         due_for_scan: dueForScan.length,
         batch_size: batch.length,
+        new_outlets: newOutlets.length,
         ...stats
       }
     })
