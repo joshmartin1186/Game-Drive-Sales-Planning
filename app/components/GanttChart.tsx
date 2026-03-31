@@ -2020,7 +2020,14 @@ export default function GanttChart(props: GanttChartProps) {
                     const launchSaleBlock = getLaunchSaleBlock(product)
                     
                     return (
-                      <div key={product.id} className={styles.productGroup}>
+                      <div key={product.id} className={styles.productGroup} style={{ position: 'relative' }}>
+                        {/* Full-height continuous launch date line spanning all rows */}
+                        {launchPosition && (
+                          <div
+                            className={styles.launchLineFullHeight}
+                            style={{ left: 220 + launchPosition.left + dayWidth / 2 - 1 }}
+                          />
+                        )}
                         <div className={styles.productRow}>
                           <div className={styles.productLabel}>
                             <div className={styles.productLabelContent}>
@@ -2161,12 +2168,7 @@ export default function GanttChart(props: GanttChartProps) {
                                   )
                                 })}
                                 
-                                {launchPosition && (
-                                  <div
-                                    className={styles.launchMarkerLineExtension}
-                                    style={{ left: launchPosition.left + dayWidth / 2 - 1 }}
-                                  />
-                                )}
+                                {/* Launch line now rendered at productGroup level for continuity */}
                                 
                                 {selectionStyle && (
                                   <div

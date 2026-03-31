@@ -1459,6 +1459,18 @@
   transition: left 0.15s ease-out;
 }
 
+/* Full-height continuous green launch line spanning entire product group */
+.launchLineFullHeight {
+  position: absolute;
+  top: 0;
+  width: 2px;
+  height: 100%;
+  background: #22c55e;
+  z-index: 4;
+  pointer-events: none;
+  transition: left 0.15s ease-out;
+}
+
 /* LAUNCH SALE BLOCK - Special styling distinct from regular sales */
 .launchSaleBlock {
   position: absolute;
