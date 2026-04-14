@@ -57,7 +57,10 @@ export async function GET(
         outlet:outlets(id, name, domain, tier, monthly_unique_visitors, country),
         campaign:coverage_campaigns(id, name)
       `)
-      .eq('game_id', game.id)
+      // Also include items with null game_id whose title contains the game name —
+      // these are auto-discovered items that got ingested via keyword scan before
+      // the game_id linkage was corrected
+      .or(`game_id.eq.${game.id},and(game_id.is.null,title.ilike.%${game.name.replace(/[%_]/g, '\\$&')}%)`)
       .in('approval_status', ['auto_approved', 'manually_approved'])
       .order('publish_date', { ascending: false })
 

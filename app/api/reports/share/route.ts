@@ -42,10 +42,12 @@ export async function POST(request: NextRequest) {
 
     if (error) throw error
 
-    // Build the shareable URL
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || process.env.VERCEL_URL
-      ? `https://${process.env.VERCEL_URL}`
-      : 'http://localhost:3003'
+    // Build the shareable URL — evaluate in priority order:
+    // 1. NEXT_PUBLIC_BASE_URL (custom domain, e.g. https://tool.game-drive.nl)
+    // 2. VERCEL_URL (auto-generated deployment URL, no https prefix in env)
+    // 3. localhost fallback for dev
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL
+      || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3003')
     const shareUrl = `${baseUrl}/reports/shared/${token}`
 
     return NextResponse.json({ ...data, share_url: shareUrl })
