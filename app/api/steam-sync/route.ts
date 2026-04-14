@@ -187,6 +187,8 @@ export async function POST(request: Request) {
         const storeResult = await storeSalesData(client_id, salesResult.results, salesResult.metadata);
         totalImported += storeResult.imported;
         totalSkipped += storeResult.skipped;
+        // Also extract and store any bundle line items into steam_bundles
+        await storeBundleData(client_id, salesResult.results, salesResult.metadata);
       } else if (salesResult.error) {
         errors.push(`${date}: ${salesResult.error}`);
       }
@@ -559,6 +561,85 @@ async function storeSalesData(
   }
 
   return { imported, skipped };
+}
+
+// Extract bundle line items from Steam financial data and upsert into steam_bundles.
+// Steam returns one row per country per bundle per day — we aggregate to a daily total.
+async function storeBundleData(
+  clientId: string,
+  results: SteamDetailedSalesResult[],
+  metadata?: { packages: Map<number, string>; apps: Map<number, string> }
+): Promise<void> {
+  // Only process rows that have a bundleid
+  const bundleRows = results.filter(r => r.bundleid)
+  if (bundleRows.length === 0) return
+
+  // Build a lookup: Steam app_id string → game UUID
+  const appIds = Array.from(new Set(
+    bundleRows.map(r => r.primary_appid?.toString() || r.appid?.toString()).filter(Boolean)
+  )) as string[]
+
+  const gameIdByAppId = new Map<string, string>()
+  if (appIds.length > 0) {
+    const { data: games } = await supabase
+      .from('games')
+      .select('id, steam_app_id')
+      .in('steam_app_id', appIds)
+      .eq('client_id', clientId)
+    if (games) {
+      for (const g of games) {
+        if (g.steam_app_id) gameIdByAppId.set(g.steam_app_id, g.id)
+      }
+    }
+  }
+
+  // Aggregate by bundleid + date + primary_appid
+  const agg = new Map<string, {
+    bundleId: number; bundleName: string; date: string
+    gameId: string | null; grossUnits: number; netUnits: number
+    grossRevenue: number; netRevenue: number
+  }>()
+
+  for (const r of bundleRows) {
+    const date = r.date.replace(/\//g, '-')
+    const appIdStr = r.primary_appid?.toString() || r.appid?.toString() || ''
+    const key = `${r.bundleid}|${date}|${appIdStr}`
+    const bundleName = r.bundleid && metadata?.packages.get(r.bundleid)
+      ? metadata.packages.get(r.bundleid)!
+      : `Bundle #${r.bundleid}`
+
+    if (!agg.has(key)) {
+      agg.set(key, {
+        bundleId: r.bundleid!,
+        bundleName,
+        date,
+        gameId: gameIdByAppId.get(appIdStr) || null,
+        grossUnits: 0, netUnits: 0, grossRevenue: 0, netRevenue: 0,
+      })
+    }
+    const row = agg.get(key)!
+    row.grossUnits += r.gross_units_sold || 0
+    row.netUnits += r.net_units_sold || 0
+    row.grossRevenue += parseFloat(r.gross_sales_usd || '0')
+    row.netRevenue += parseFloat(r.net_sales_usd || '0')
+  }
+
+  const upsertRows = Array.from(agg.values()).map(r => ({
+    client_id: clientId,
+    game_id: r.gameId,
+    bundle_name: r.bundleName,
+    bundle_id: r.bundleId.toString(),
+    date: r.date,
+    gross_units: r.grossUnits,
+    net_units: r.netUnits,
+    gross_revenue_usd: r.grossRevenue,
+    net_revenue_usd: r.netRevenue,
+    source: 'steam_api',
+  }))
+
+  if (upsertRows.length > 0) {
+    await supabase.from('steam_bundles').upsert(upsertRows, { onConflict: 'game_id,bundle_name,date' })
+  }
 }
 
 // Test if the Financial API key is valid
