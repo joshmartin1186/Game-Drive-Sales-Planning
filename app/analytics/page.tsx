@@ -55,6 +55,12 @@ export default function AnalyticsPage() {
   const [platforms, setPlatforms] = useState<string[]>([])
   const [showImportModal, setShowImportModal] = useState(false)
   const [dataAvailable, setDataAvailable] = useState(false)
+  const [showBundleImportModal, setShowBundleImportModal] = useState(false)
+  const [bundleImportGames, setBundleImportGames] = useState<{id: string; name: string; client_id: string}[]>([])
+  const [bundleImportGameId, setBundleImportGameId] = useState('')
+  const [bundleImportFile, setBundleImportFile] = useState<File | null>(null)
+  const [bundleImporting, setBundleImporting] = useState(false)
+  const [bundleImportError, setBundleImportError] = useState<string | null>(null)
   
   // Editable dashboard state
   const [isEditMode, setIsEditMode] = useState(false)
@@ -2581,6 +2587,63 @@ export default function AnalyticsPage() {
     )
   }
 
+  // Open bundle import modal — fetch games on demand
+  const openBundleImport = async () => {
+    if (bundleImportGames.length === 0) {
+      const { data } = await supabase.from('games').select('id, name, client_id').order('name')
+      if (data) setBundleImportGames(data as {id: string; name: string; client_id: string}[])
+    }
+    setBundleImportGameId('')
+    setBundleImportFile(null)
+    setBundleImportError(null)
+    setShowBundleImportModal(true)
+  }
+
+  const handleBundleImport = async () => {
+    if (!bundleImportGameId || !bundleImportFile) {
+      setBundleImportError('Please select a game and a CSV file.')
+      return
+    }
+    const game = bundleImportGames.find(g => g.id === bundleImportGameId)
+    if (!game) return
+    setBundleImporting(true)
+    setBundleImportError(null)
+    try {
+      const fd = new FormData()
+      fd.append('file', bundleImportFile)
+      fd.append('game_id', game.id)
+      fd.append('client_id', game.client_id)
+      const res = await fetch('/api/steam-bundles', { method: 'POST', body: fd })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error || 'Import failed')
+      setShowBundleImportModal(false)
+      // Refresh bundle data
+      setBundleData([])
+      const { data: blRes } = await supabase
+        .from('steam_bundles')
+        .select('bundle_name, game_id, date, net_units, net_revenue_usd, game:games(name, client_id)')
+        .order('date', { ascending: true })
+        .limit(1000)
+      if (blRes) {
+        setBundleData(blRes.map(r => {
+          const gameObj = (r as Record<string, unknown>).game as { name: string } | null
+          return {
+            bundleName: r.bundle_name as string,
+            gameId: r.game_id as string,
+            game: gameObj?.name || 'Unknown',
+            date: r.date as string,
+            netUnits: Number(r.net_units) || 0,
+            netRevenue: Number(r.net_revenue_usd) || 0,
+          }
+        }))
+      }
+    } catch (err) {
+      setBundleImportError(err instanceof Error ? err.message : 'Import failed')
+    } finally {
+      setBundleImporting(false)
+    }
+  }
+
   // Render widget based on type
   const renderWidget = (widget: DashboardWidget) => {
     switch (widget.type) {
@@ -2662,6 +2725,12 @@ export default function AnalyticsPage() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
                   </svg>
                   Import CSV
+                </button>
+                <button className={styles.importButton} onClick={openBundleImport}>
+                  <svg className={styles.buttonIcon} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                  </svg>
+                  Import Bundles
                 </button>
                 <button className={styles.refreshButton} onClick={fetchPerformanceData} disabled={isLoading}>
                   <svg className={`${styles.buttonIcon} ${isLoading ? styles.spinning : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2985,6 +3054,58 @@ export default function AnalyticsPage() {
             }}
             clients={clients}
           />
+        )}
+
+        {showBundleImportModal && (
+          <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+            <div style={{ backgroundColor: 'white', borderRadius: '12px', padding: '32px', width: '440px', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
+              <h2 style={{ fontSize: '18px', fontWeight: 700, color: '#1e293b', marginBottom: '20px' }}>Import Bundle Data</h2>
+              <p style={{ fontSize: '13px', color: '#64748b', marginBottom: '20px', lineHeight: 1.5 }}>
+                Upload a Steam bundle CSV. Expected columns:<br />
+                <code style={{ fontSize: '12px', color: '#475569' }}>Date, Bundle Name, Bundle ID, Gross Units, Net Units, Gross Revenue, Net Revenue</code>
+              </p>
+
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#374151', marginBottom: '6px' }}>Game</label>
+              <select
+                value={bundleImportGameId}
+                onChange={e => setBundleImportGameId(e.target.value)}
+                style={{ width: '100%', padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: '8px', fontSize: '14px', marginBottom: '16px', outline: 'none' }}
+              >
+                <option value="">Select a game…</option>
+                {bundleImportGames.map(g => (
+                  <option key={g.id} value={g.id}>{g.name}</option>
+                ))}
+              </select>
+
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#374151', marginBottom: '6px' }}>CSV File</label>
+              <input
+                type="file"
+                accept=".csv"
+                onChange={e => setBundleImportFile(e.target.files?.[0] || null)}
+                style={{ width: '100%', marginBottom: '16px', fontSize: '13px' }}
+              />
+
+              {bundleImportError && (
+                <p style={{ fontSize: '13px', color: '#dc2626', marginBottom: '12px' }}>{bundleImportError}</p>
+              )}
+
+              <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                <button
+                  onClick={() => setShowBundleImportModal(false)}
+                  style={{ padding: '8px 18px', border: '1px solid #d1d5db', borderRadius: '8px', fontSize: '14px', cursor: 'pointer', backgroundColor: 'white', color: '#374151' }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleBundleImport}
+                  disabled={bundleImporting}
+                  style={{ padding: '8px 18px', backgroundColor: bundleImporting ? '#94a3b8' : '#7c3aed', color: 'white', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: bundleImporting ? 'not-allowed' : 'pointer' }}
+                >
+                  {bundleImporting ? 'Importing…' : 'Import'}
+                </button>
+              </div>
+            </div>
+          </div>
         )}
 
         {showAddWidgetModal && (
