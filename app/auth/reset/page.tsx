@@ -16,38 +16,52 @@ function ResetPasswordInner() {
   const searchParams = useSearchParams()
   const supabase = createClientComponentClient()
 
-  // Supabase recovery emails can deliver the token in two forms:
-  //   1. New: `?token_hash=...&type=recovery` (verifyOtp)
-  //   2. Legacy: `#access_token=...&refresh_token=...&type=recovery` (hash fragment)
-  // We support both so older email templates still work.
+  // Supabase recovery emails deliver the token in one of three forms:
+  //   1. PKCE: `?code=...` -> exchangeCodeForSession
+  //   2. New OTP: `?token_hash=...&type=recovery` -> verifyOtp
+  //   3. Legacy implicit: `#access_token=...&refresh_token=...&type=recovery`
+  //      -> auth-helpers auto-detects on load
+  // Try each in order until a session lands. Whichever the user has, we recover.
   useEffect(() => {
     async function establishSession() {
+      const code = searchParams.get('code')
       const tokenHash = searchParams.get('token_hash')
       const type = searchParams.get('type')
 
+      // PKCE flow
+      if (code) {
+        const { error } = await supabase.auth.exchangeCodeForSession(code)
+        if (!error) {
+          setReady(true)
+          setVerifying(false)
+          return
+        }
+      }
+
+      // OTP flow
       if (tokenHash && type === 'recovery') {
         const { error } = await supabase.auth.verifyOtp({
           token_hash: tokenHash,
           type: 'recovery',
         })
-        if (error) {
-          setError('This reset link is invalid or has expired. Request a new one from the sign-in page.')
+        if (!error) {
+          setReady(true)
           setVerifying(false)
           return
         }
+      }
+
+      // Implicit / hash-fragment flow: auth-helpers auto-detects, we just check.
+      // Give it a tick to process the hash before reading session.
+      await new Promise((r) => setTimeout(r, 50))
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session) {
         setReady(true)
         setVerifying(false)
         return
       }
 
-      // Fallback: legacy hash fragment flow. Supabase auto-detects on load,
-      // so we just need to confirm a session was established.
-      const { data: { session } } = await supabase.auth.getSession()
-      if (session) {
-        setReady(true)
-      } else {
-        setError('No reset session found. Open the password reset link from your email again.')
-      }
+      setError('This reset link is invalid or has expired. Request a new one from the sign-in page.')
       setVerifying(false)
     }
 

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { useRouter } from 'next/navigation'
 import styles from './login.module.css'
@@ -16,6 +16,23 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const router = useRouter()
   const supabase = createClientComponentClient()
+
+  // Catch users dropped on /login by Supabase's recovery redirect.
+  // Supabase appends recovery tokens either as a hash fragment (#access_token=…&type=recovery)
+  // or a query string (?code=… or ?token_hash=…&type=recovery). The reset UI lives at
+  // /auth/reset, so forward the URL there preserving everything after the path.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const { hash, search } = window.location
+    const looksLikeRecovery =
+      hash.includes('type=recovery') ||
+      hash.includes('access_token=') ||
+      search.includes('type=recovery') ||
+      /[?&]code=/.test(search)
+    if (looksLikeRecovery) {
+      window.location.replace(`/auth/reset${search}${hash}`)
+    }
+  }, [])
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
